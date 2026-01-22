@@ -5,6 +5,153 @@ All notable changes to Loa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-01-23 — Recursive JIT Context System
+
+### Why This Release
+
+Introduces the **Recursive JIT Context System** — a comprehensive solution for context management in long-running agent sessions. This release addresses the fundamental challenge of Claude Code's automatic context summarization by providing semantic caching, intelligent condensation, and continuous synthesis to persistent ledgers.
+
+*"The code remembers what the context forgets."*
+
+### Added
+
+- **Recursive JIT Context System** (`.claude/scripts/`)
+  - `cache-manager.sh` — Semantic result caching with mtime-based invalidation
+    - LRU eviction, TTL expiration (30 days default)
+    - Secret pattern detection on write
+    - Integrity verification with SHA256 hashes
+  - `condense.sh` — Result condensation engine
+    - Strategies: `structured_verdict` (~50 tokens), `identifiers_only` (~20), `summary` (~100)
+    - Full result externalization to `.claude/cache/full/`
+  - `early-exit.sh` — Parallel subagent coordination
+    - File-based "first-to-finish wins" protocol
+    - Session management, agent registration, result passing
+  - `synthesize-to-ledger.sh` — Continuous synthesis trigger
+    - Writes decisions to NOTES.md and trajectory at RLM trigger points
+    - Survives Claude Code's automatic context summarization
+
+- **Continuous Synthesis** — Anti-platform-summarization defense
+  - RLM operations (cache set, condense, early-exit) trigger automatic ledger writes
+  - Decisions externalized to NOTES.md Decision Log
+  - Trajectory entries for audit trail
+  - Optional bead comment injection (when `br` available)
+  - Configuration in `.loa.config.yaml`:
+    ```yaml
+    recursive_jit:
+      continuous_synthesis:
+        enabled: true
+        on_cache_set: true
+        on_condense: true
+        on_early_exit: true
+        update_bead: true
+    ```
+
+- **Post-Upgrade Health Check** (`upgrade-health-check.sh`)
+  - Detects bd → br migration status
+  - Finds deprecated references in settings.local.json
+  - Identifies new config sections available
+  - Suggests recommended permissions for new features
+  - Auto-fix mode: `--fix` flag applies safe corrections
+  - Runs automatically after `update.sh`
+
+- **Upgrade Completion Banner** (`upgrade-banner.sh`)
+  - Cyberpunk-themed ASCII art completion message
+  - Rotating quotes from Neuromancer, Blade Runner, The Matrix, Ghost in the Shell
+  - Original Loa-themed quotes about synthesis and context management
+  - CHANGELOG highlights parsing (when available)
+  - Mount mode vs upgrade mode with appropriate next steps
+  - JSON output for scripting: `--json`
+
+- **beads_rust Integration** with Continuous Synthesis
+  - Active bead detection from NOTES.md Session Continuity
+  - Automatic `[Synthesis] <message>` comment injection
+  - Redundant persistence: NOTES.md + trajectory + bead comments
+
+- **Protocol Documentation**
+  - `.claude/protocols/recursive-context.md` — Full RLM system documentation
+  - Architecture diagrams, integration patterns, configuration reference
+
+### Changed
+
+- **Opt-Out Defaults** — All RLM features now enabled by default
+  - Scripts use `// true` fallbacks instead of `// false`
+  - Users can disable features in config rather than needing to enable them
+  - Ships with sane defaults for immediate benefit
+
+- **CLAUDE.md** — Updated with Recursive JIT Context section
+  - New scripts documented in Helper Scripts table
+  - Protocol references added
+
+### Technical Details
+
+- **Two-Level Context Management**
+  - Platform level: Claude Code's automatic summarization (outside Loa's control)
+  - Framework level: Loa's protocols for proactive externalization (full control)
+  - Solution: Write to ledgers BEFORE platform summarization occurs
+
+- **Performance Targets**
+  - Cache hit rate: >30% over 30 days
+  - Context reduction: 30-40% via condensation
+  - Cache lookup: <100ms
+  - Condensation: <50ms
+
+### Migration Notes
+
+No migration required. All features are enabled by default and backward compatible.
+
+Run `upgrade-health-check.sh` after upgrading to check for:
+- Legacy `bd` references that should be `br`
+- Missing config sections
+- Recommended permission additions
+
+## [1.4.0] - 2026-01-22 — Clean Upgrade & CLAUDE.md Diet
+
+### Why This Release
+
+Eliminates git history pollution during framework upgrades and dramatically reduces CLAUDE.md size for better Claude Code context efficiency.
+
+### Added
+
+- **Clean Upgrade Commits**: Framework upgrades now create single atomic commits
+  - `mount-loa.sh` and `update.sh` create conventional commits: `chore(loa): upgrade framework v{OLD} -> v{NEW}`
+  - Version tags: `loa@v{VERSION}` for easy upgrade history tracking
+  - Query history with `git tag -l 'loa@*'`
+  - Rollback with `git revert HEAD` or `git checkout loa@v{VERSION} -- .claude`
+
+- **Upgrade Configuration**: New `.loa.config.yaml` section
+  ```yaml
+  upgrade:
+    auto_commit: true   # Create git commit after upgrade
+    auto_tag: true      # Create version tag
+    commit_prefix: "chore"  # Conventional commit prefix
+  ```
+
+- **`--no-commit` Flag**: Skip automatic commit creation
+  - `mount-loa.sh --no-commit`
+  - `update.sh --no-commit`
+
+- **Protocol Documentation**
+  - `.claude/protocols/helper-scripts.md` - Comprehensive script documentation
+  - `.claude/protocols/upgrade-process.md` - 12-stage upgrade workflow documentation
+
+### Changed
+
+- **CLAUDE.md**: Reduced from 1,157 lines to 321 lines (72% reduction)
+  - Core instructions remain in CLAUDE.md
+  - Detailed documentation moved to protocol files
+  - References added for JIT loading when needed
+
+### Technical Details
+
+- **Stealth Mode**: No commits created in stealth persistence mode
+- **Tag Handling**: Existing tags are not overwritten
+- **Dirty Tree**: Warnings shown but upgrades continue
+- **Config Priority**: CLI flags > config file > defaults
+
+### Migration Notes
+
+No migration required. Existing installations will gain clean upgrade behavior automatically on next update.
+
 ## [1.3.1] - 2026-01-20 — Gitignore Hardening
 
 ### Why This Release
