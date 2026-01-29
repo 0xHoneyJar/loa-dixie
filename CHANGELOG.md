@@ -5,6 +5,127 @@ All notable changes to Loa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-01-29 — Claude Code 2.1.x Feature Adoption
+
+### Why This Release
+
+This release aligns Loa with Claude Code 2.1.x platform capabilities, adding async hooks for improved performance and context cleanup automation.
+
+*"Async where possible, blocking only when necessary."*
+
+### Added
+
+- **Async Hooks** - Non-blocking hooks for improved session performance
+  - `SessionStart` → `check-updates.sh` (async: true)
+  - `PermissionRequest` → `permission-audit.sh` (async: true)
+  - `PreToolUse` hooks remain blocking when they must complete before execution
+
+- **Context Cleanup Hook** - Auto-archive previous cycle context before `/plan-and-analyze`
+  - Detects existing PRD/SDD/sprint files from previous cycles
+  - Prompts user: Archive (Y), Keep (n), or Abort (q)
+  - Archives to cycle's archive directory with timestamp
+  - Prevents stale context from polluting new development cycles
+
+- **One-Time Hooks** - `once: true` flag prevents duplicate runs per session
+  - Update check only runs once on session start
+
+- **Session ID Tracking** - `${CLAUDE_SESSION_ID}` now logged in trajectory files
+  - Enables cross-session correlation and debugging
+
+- **Skill Forking Protocol** - Documentation for `context: fork` pattern
+  - Read-only skills like `/ride` use isolated execution context
+  - Prevents context pollution from exploration tasks
+
+### Changed
+
+- **Settings.json** - Updated with async flags and cleanup hook configuration
+- **Recommended Hooks Protocol** - Expanded documentation for async patterns
+
+---
+
+## [1.8.0] - 2026-01-28 — Memory Stack
+
+### Why This Release
+
+This release introduces the **Memory Stack** - a vector database with PreToolUse hook system for mid-stream semantic grounding during Claude Code sessions. All security vulnerabilities identified in the comprehensive audit have been remediated.
+
+*"Learnings that persist. Context that recalls itself."*
+
+### Added
+
+- **Vector Database** (`memory-admin.sh`)
+  - SQLite + sentence-transformers embeddings (all-MiniLM-L6-v2, 384 dimensions)
+  - CLI for managing memories: add, search, list, delete, prune
+  - Semantic similarity search with configurable threshold
+
+- **PreToolUse Hook** (`memory-inject.sh`)
+  - Mid-stream memory injection during Read/Glob/Grep/WebFetch/WebSearch
+  - Extracts last N characters from thinking block as query
+  - Deduplication via SHA-256 hash to prevent repeated queries
+  - Configurable timeout (default 500ms) for latency control
+
+- **NOTES.md Sync** (`memory-sync.sh`)
+  - Automatic extraction of learnings section to vector database
+  - Runs on session start if `auto_sync: true`
+  - Incremental sync - only new learnings added
+
+- **QMD Integration** (`qmd-sync.sh`)
+  - Document search with semantic or grep fallback
+  - Indexes grimoires/loa for searchable project context
+  - Collection-based organization
+
+- **Setup Wizard** (`memory-setup.sh`)
+  - First-time setup with dependency checking
+  - Interactive configuration prompts
+  - Validates Python + sentence-transformers installation
+
+### Security Remediation
+
+| Issue | Severity | Fix |
+|-------|----------|-----|
+| SQL Injection in memory queries | HIGH | Python parameterized queries |
+| Command Injection via query | HIGH | Environment variable passing instead of shell interpolation |
+| Path Traversal in file operations | HIGH | realpath validation |
+| Input Sanitization | MEDIUM | Control character + ANSI escape removal |
+| Temp File Security | MEDIUM | mktemp with random suffix |
+| Trajectory Sensitivity | MEDIUM | Documentation + .gitignore coverage |
+
+### Configuration
+
+```yaml
+# .loa.config.yaml
+memory:
+  pretooluse_hook:
+    enabled: false  # Opt-in for safety
+    thinking_chars: 1500
+    similarity_threshold: 0.35
+    max_memories: 3
+    timeout_ms: 500
+    tools:
+      - Read
+      - Glob
+      - Grep
+      - WebFetch
+      - WebSearch
+
+  vector_db:
+    path: .loa/memory.db
+    model: all-MiniLM-L6-v2
+    dimension: 384
+
+  auto_sync: false  # Sync NOTES.md learnings on session start
+```
+
+### Research References
+
+| Paper | Relevance |
+|-------|-----------|
+| [Retrieval-Augmented Generation for LLM Agents](https://arxiv.org/abs/2312.10997) | RAG patterns for agent workflows |
+| [Self-RAG: Learning to Retrieve, Generate, and Critique](https://arxiv.org/abs/2310.11511) | Self-reflective retrieval |
+| [Semantic Caching for LLM Applications](https://arxiv.org/abs/2311.04934) | Query deduplication via hashing |
+
+---
+
 ## [1.7.2] - 2026-01-28 — Issues Remediation
 
 ### Fixed

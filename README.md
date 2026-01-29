@@ -1,8 +1,8 @@
 # Loa
 
-[![Version](https://img.shields.io/badge/version-1.7.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.9.0-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE.md)
-[![Release](https://img.shields.io/badge/release-Issues%20Remediation-purple.svg)](CHANGELOG.md#172---2026-01-28--issues-remediation)
+[![Release](https://img.shields.io/badge/release-Claude%20Code%202.1.x%20Features-purple.svg)](CHANGELOG.md#190---2026-01-29--claude-code-21x-feature-adoption)
 
 > *"The Loa are pragmatic entities... They're not worshipped for salvation—they're worked with for practical results."*
 
@@ -69,6 +69,8 @@ Loa uses a **three-zone model** inspired by AWS Projen and Google's ADK:
 
 | Feature | Description | Documentation |
 |---------|-------------|---------------|
+| **Memory Stack** | Vector database + mid-stream semantic grounding | [INSTALLATION.md](INSTALLATION.md#memory-stack-optional) |
+| **Context Cleanup** | Auto-archive previous cycle before new `/plan-and-analyze` | [CLAUDE.md](CLAUDE.md#claude-code-21x-features) |
 | **Run Mode** | Autonomous sprint execution with draft PRs | [CLAUDE.md](CLAUDE.md#run-mode) |
 | **Simstim** | Telegram bridge for remote monitoring | [simstim/README.md](simstim/README.md) |
 | **Goal Traceability** | PRD goals tracked through implementation | [CLAUDE.md](CLAUDE.md#goal-traceability) |
@@ -76,8 +78,8 @@ Loa uses a **three-zone model** inspired by AWS Projen and Google's ADK:
 | **Loa Constructs** | Commercial skill packs from registry | [INSTALLATION.md](INSTALLATION.md#loa-constructs-commercial-skills) |
 | **Sprint Ledger** | Global sprint numbering across cycles | [CLAUDE.md](CLAUDE.md#sprint-ledger) |
 | **Structured Memory** | Persistent working memory in NOTES.md | [PROCESS.md](PROCESS.md#structured-agentic-memory) |
-| **beads_rust** | Persistent task graph across sessions | [INSTALLATION.md](INSTALLATION.md) |
-| **ck Search** | Semantic code search | [INSTALLATION.md](INSTALLATION.md#optional-enhancements) |
+| **beads_rust** | Persistent task graph across sessions | [INSTALLATION.md](INSTALLATION.md#beads_rust-optional) |
+| **ck Search** | Semantic code search | [INSTALLATION.md](INSTALLATION.md#ck-semantic-code-search) |
 | **Quality Gates** | Two-phase review: Tech Lead + Security Auditor | [PROCESS.md](PROCESS.md#agent-to-agent-communication) |
 
 ## Documentation
