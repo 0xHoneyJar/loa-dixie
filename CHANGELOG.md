@@ -5,6 +5,121 @@ All notable changes to Loa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.0] - 2026-02-07 — Bridgebuilder Release
+
+### Why This Release
+
+This is the largest Loa release to date — **27 PRs** spanning developer experience, security hardening, cross-model adversarial review, and a complete documentation overhaul. The headline: **Golden Path** gives 90% of users 5 zero-arg commands, while **Adversarial Flatline Dissent** adds cross-model challenge to code review and security audit.
+
+The README and INSTALLATION.md have been rewritten with input from the Bridgebuilder persona — optimized for both human onboarding and AI agent consumption.
+
+### Added
+
+#### Golden Path — 5 Commands for 90% of Users (#219)
+
+Five zero-argument porcelain commands wrapping the full truename workflow:
+
+| Command | What It Does |
+|---------|-------------|
+| `/loa` | Where am I? What's next? |
+| `/plan` | Requirements → Architecture → Sprints |
+| `/build` | Build the current sprint |
+| `/review` | Code review + security audit |
+| `/ship` | Deploy and archive |
+
+Design follows the git porcelain/plumbing model — Golden Path for most users, truenames for power users.
+
+#### Error Code Registry & `/loa doctor` (#218)
+
+Structured error codes (LOA-E001+) with human-readable explanations and fix suggestions. `/loa doctor` provides comprehensive system health diagnostics with CI-friendly JSON output.
+
+#### Adversarial Flatline Dissent (#235)
+
+Cross-model adversarial challenge during code review and security audit. GPT-5.2-Codex acts as independent dissenter against Claude's findings with:
+- Priority-based diff truncation with P0-P3 file classification
+- Context escalation for security-critical files
+- Secret scanning with configurable allowlists
+- Anchor validation and severity demotion for ungrounded findings
+- Budget pre-check to prevent runaway API costs
+- Graceful degradation on API failure
+
+#### GPT Review: System Zone Detection & Priority Truncation (#233)
+
+GPT review now detects `.claude/` system zone modifications and applies priority-based diff truncation to stay within token limits while ensuring security-critical files are always reviewed first.
+
+#### Cross-Repo Pattern Extraction (#227)
+
+25 reusable shell patterns extracted into 5 library modules:
+- `lib-validate.sh` — Input validation, path safety, schema checking
+- `lib-log.sh` — Structured logging with levels and JSON output
+- `lib-config.sh` — YAML config loading with defaults
+- `lib-git.sh` — Git operations, branch detection, upstream safety
+- `lib-io.sh` — File I/O, atomic writes, temp file management
+
+#### DRY Constraint Registry (#225)
+
+Single-source constraint definitions in `.claude/data/constraints.json` with generated CLAUDE.md tables. Eliminates constraint drift between documentation and enforcement.
+
+#### Portable Persistence Framework (#220)
+
+WAL-based key-value persistence for shell scripts with pluggable backends and circuit breakers.
+
+#### Cross-Platform Shell Scripting Protocol (#210)
+
+Portable compatibility layer handling macOS vs Linux differences (BSD date, sed, stat, mktemp). Eliminates `%N` nanosecond and other platform-specific failures.
+
+#### Construct Manifest Standard (#213)
+
+Standardized manifest format for Loa Constructs with event-driven contracts, tool dependency declarations, and JSON schema validation.
+
+#### MLP-Informed Beads Enhancements (#209)
+
+Beads enhanced with gap detection, lineage tracking, task classification, and context compilation — informed by Machine Learning Pipeline (MLP) patterns.
+
+#### Opus 4.6 & GPT-5.3-Codex Model Support (#202)
+
+Model registry updated with Claude Opus 4.6 and GPT-5.3-Codex pricing and capabilities.
+
+#### Run Mode `--local` Flag (#201)
+
+`--local` flag for run mode to skip git push. Configurable via `auto_push` setting for offline or local-only workflows.
+
+#### Beads TypeScript Runtime Patterns (#191)
+
+TypeScript patterns for beads_rust integration in application code.
+
+#### CODEOWNERS (#206)
+
+Added `.github/CODEOWNERS` for automatic PR review assignment.
+
+### Changed
+
+- Layered process enforcement prevents AI from bypassing implement/review/audit gates (#221)
+- README.md rewritten: Golden Path prominent, value proposition section, agent-readable metadata, 17 skills listed, updated feature table
+- INSTALLATION.md overhauled: TOC added, Claude Code install instructions, yq ambiguity fixed (mikefarah/yq only), `/loa doctor` verification step, beads-first language
+
+### Fixed
+
+- Event bus bash version guard for non-bash shell sourcing (#234)
+- Beads-health.sh zero output and event-bus.sh flock detection (#231)
+- Event bus hardened against jq injection, DLQ diagnostics improved (#215)
+- Backward compatibility aliases for renamed scripts + Opus 4.6 sweep (#207)
+- Heredoc corruption of `${...}` template literals in generated source files (#203, #200)
+- macOS `date %N` incompatibility breaking Flatline Protocol (#199)
+- Simstim Plan Mode hijacking orchestration workflows (#196)
+- Constructs URL migration, multi-pack UI, and smart routing (#189)
+
+### Security
+
+- Critical and high findings from security audit remediated (#232)
+- 56-finding comprehensive audit remediated — supply chain, secrets, injection, CI hardening (#212)
+
+### Performance
+
+- Beads isomorphic optimizations: WAL, batch queries, and circuit breaker (#205)
+
+---
+
 ## [1.29.0] - 2026-02-05 — Beads-First Infrastructure
 
 ### Why This Release
