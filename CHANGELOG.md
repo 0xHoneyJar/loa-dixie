@@ -5,6 +5,22 @@ All notable changes to Loa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.33.1] - 2026-02-12
+
+### Fixed
+
+#### Update Safety — Workflow File Propagation (#288)
+
+`/update-loa` no longer propagates `.github/workflows/` files to downstream projects:
+
+- **`.gitattributes`**: Added `merge=ours` rules for `.github/workflows/*.yml` and `.yaml` — prevents upstream workflow files from overwriting downstream versions during `git merge loa/main`
+- **`/update-loa` Phase 5.5**: New post-merge revert step detects and removes workflow files added by upstream (handles new files that `merge=ours` cannot protect)
+- **Eval**: Added `gitattributes-workflow-protection` framework test (23 total), updated fixture and baseline
+
+**Root cause**: v1.33.0 introduced `.github/workflows/eval.yml` which propagated to downstream projects. GitHub requires the `workflow` OAuth scope to push workflow changes, blocking users without that scope.
+
+---
+
 ## [1.33.0] - 2026-02-11 — Garde Release
 
 ### Why This Release
