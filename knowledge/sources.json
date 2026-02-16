@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "default_budget_tokens": 30000,
+  "glossary_terms": {
+    "hounfour": ["technical", "architectural"],
+    "péristyle": ["architectural"],
+    "peristyle": ["architectural"],
+    "mibera": ["philosophical"],
+    "finnNFT": ["technical", "architectural"],
+    "finnnft": ["technical", "architectural"],
+    "loa": ["architectural", "philosophical"],
+    "arrakis": ["architectural", "technical"],
+    "spice gate": ["architectural"],
+    "bridgebuilder": ["technical", "architectural"],
+    "web4": ["philosophical"],
+    "monetary pluralism": ["philosophical"],
+    "conservation invariant": ["architectural", "philosophical"],
+    "permission scape": ["philosophical", "architectural"],
+    "dlq": ["technical"],
+    "dead letter queue": ["technical"],
+    "cheval": ["technical"],
+    "billing": ["technical", "architectural"],
+    "oracle": ["technical", "architectural"],
+    "ensemble": ["technical"],
+    "byok": ["technical"]
+  },
+  "sources": [
+    {
+      "id": "glossary",
+      "type": "local",
+      "path": "grimoires/oracle/glossary.md",
+      "format": "markdown",
+      "tags": ["core"],
+      "priority": 1,
+      "maxTokens": 2000,
+      "required": true,
+      "max_age_days": 90
+    },
+    {
+      "id": "ecosystem-architecture",
+      "type": "local",
+      "path": "grimoires/oracle/ecosystem-architecture.md",
+      "format": "markdown",
+      "tags": ["core", "architectural"],
+      "priority": 2,
+      "maxTokens": 8000,
+      "required": true,
+      "max_age_days": 60
+    },
+    {
+      "id": "code-reality-finn",
+      "type": "local",
+      "path": "grimoires/oracle/code-reality-finn.md",
+      "format": "markdown",
+      "tags": ["technical"],
+      "priority": 3,
+      "maxTokens": 10000,
+      "required": true,
+      "max_age_days": 30
+    },
+    {
+      "id": "code-reality-hounfour",
+      "type": "local",
+      "path": "grimoires/oracle/code-reality-hounfour.md",
+      "format": "markdown",
+      "tags": ["technical"],
+      "priority": 4,
+      "maxTokens": 8000,
+      "required": false,
+      "max_age_days": 30
+    },
+    {
+      "id": "code-reality-arrakis",
+      "type": "local",
+      "path": "grimoires/oracle/code-reality-arrakis.md",
+      "format": "markdown",
+      "tags": ["technical", "architectural"],
+      "priority": 5,
+      "maxTokens": 5000,
+      "required": false,
+      "max_age_days": 30
+    },
+    {
+      "id": "development-history",
+      "type": "local",
+      "path": "grimoires/oracle/development-history.md",
+      "format": "markdown",
+      "tags": ["architectural", "philosophical"],
+      "priority": 6,
+      "maxTokens": 5000,
+      "required": false,
+      "max_age_days": 90
+    },
+    {
+      "id": "rfcs",
+      "type": "local",
+      "path": "grimoires/oracle/rfcs.md",
+      "format": "markdown",
+      "tags": ["architectural", "technical"],
+      "priority": 7,
+      "maxTokens": 12000,
+      "required": false,
+      "max_age_days": 60
+    },
+    {
+      "id": "bridgebuilder-reports",
+      "type": "local",
+      "path": "grimoires/oracle/bridgebuilder-reports.md",
+      "format": "markdown",
+      "tags": ["architectural", "philosophical"],
+      "priority": 8,
+      "maxTokens": 15000,
+      "required": false,
+      "max_age_days": 90
+    },
+    {
+      "id": "web4-manifesto",
+      "type": "local",
+      "path": "grimoires/oracle/web4-manifesto.md",
+      "format": "markdown",
+      "tags": ["philosophical"],
+      "priority": 9,
+      "maxTokens": 3000,
+      "required": false,
+      "max_age_days": 180
+    },
+    {
+      "id": "meeting-geometries",
+      "type": "local",
+      "path": "grimoires/oracle/meeting-geometries.md",
+      "format": "markdown",
+      "tags": ["philosophical"],
+      "priority": 10,
+      "maxTokens": 4000,
+      "required": false,
+      "max_age_days": 180
+    }
+  ]
+}
