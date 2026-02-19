@@ -31,7 +31,7 @@ loa-finn (enrichment engine)
   Hounfour Routing   — Model selection, provider abstraction
   Trust Boundaries   — <reference_material> anti-instruction envelope
 
-arrakis (economics)
+loa-freeside (economics)
   Credit Ledger      — FIFO lot management, atomic reserve-finalize
   x402 Middleware     — Pay-per-question micropayments
   BYOK Proxy         — Community-funded model access
@@ -66,8 +66,8 @@ Spirits (loa) ride horses (cheval) in the temple (hounfour). Models are spirits,
 **Neuromancer (finn, flatline, dixie, simstim, ICE)**
 The Finn knows the street. The Dixie Flatline is a ROM construct — a recorded consciousness that can be consulted. Simstim lets you experience another's sensorium. ICE protects boundaries.
 
-**Dune (arrakis, spice gate, mentat)**
-Arrakis is where the spice flows. The billing system controls the flow of value — the spice must flow, but through metered gates.
+**Dune (loa-freeside, spice gate, mentat)**
+loa-freeside is where the spice flows. The billing system controls the flow of value — the spice must flow, but through metered gates.
 
 loa-dixie is the Dixie Flatline of the ecosystem: institutional memory in queryable form.
 
@@ -85,12 +85,19 @@ See [docs/rfc.md](docs/rfc.md) for the full product vision and phased implementa
 | Repo | Role | Key Issues/PRs |
 |------|------|----------------|
 | [loa-finn](https://github.com/0xHoneyJar/loa-finn) | Knowledge enrichment pipeline | PR #75 (Oracle), Issue #31 (Permission Scape), Issue #66 (Launch) |
-| [arrakis](https://github.com/0xHoneyJar/arrakis) | Billing & identity | Issue #62 (Billing), PR #63 (Credit Ledger) |
+| [loa-freeside](https://github.com/0xHoneyJar/loa-freeside) | Billing & identity | Issue #62 (Billing), PR #63 (Credit Ledger) |
 | [loa-hounfour](https://github.com/0xHoneyJar/loa-hounfour) | Protocol types | PR #1 (Types), PR #2 (Agent Economy) |
 | [loa](https://github.com/0xHoneyJar/loa) | Framework & ceremonies | Issue #247 (Meeting Geometries) |
+
+## Maintainer
+
+[@janitooor](https://github.com/janitooor)
 
 ## License
 
 [AGPL-3.0](LICENSE.md) — Use, modify, distribute freely. Network service deployments must release source code.
 
-Commercial licenses are available for organizations that wish to use loa-dixie without AGPL obligations.
+Commercial licenses are available for organizations that wish to use Loa without AGPL obligations.
+
+
+Ridden with [Loa](https://github.com/0xHoneyJar/loa)
