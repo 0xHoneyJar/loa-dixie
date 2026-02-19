@@ -91,4 +91,6 @@ See [docs/rfc.md](docs/rfc.md) for the full product vision and phased implementa
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+[AGPL-3.0](LICENSE.md) — Use, modify, distribute freely. Network service deployments must release source code.
+
+Commercial licenses are available for organizations that wish to use loa-dixie without AGPL obligations.
