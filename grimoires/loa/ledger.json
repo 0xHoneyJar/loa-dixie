@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "active_cycle": null,
-  "global_sprint_counter": 13,
+  "active_cycle": "cycle-027",
+  "global_sprint_counter": 18,
   "cycles": [
     {
       "id": "cycle-025",
@@ -31,7 +31,9 @@
           "status": "completed"
         }
       ],
-      "bugs_fixed": ["BUG-359"]
+      "bugs_fixed": [
+        "BUG-359"
+      ]
     },
     {
       "id": "cycle-bug-20260217-i361-140a19",
@@ -41,7 +43,9 @@
       "source_issue": "https://github.com/0xHoneyJar/loa/issues/361",
       "completed_at": "2026-02-17T18:35:00Z",
       "created_at": "2026-02-17T18:00:00Z",
-      "sprints": ["sprint-bug-4"],
+      "sprints": [
+        "sprint-bug-4"
+      ],
       "triage": "grimoires/loa/a2a/bug-20260217-i361-140a19/triage.md",
       "sprint_plan": "grimoires/loa/a2a/bug-20260217-i361-140a19/sprint.md"
     },
@@ -129,9 +133,61 @@
       "source_issue": "https://github.com/0xHoneyJar/loa/issues/367",
       "created_at": "2026-02-19T02:15:00Z",
       "completed_at": "2026-02-19T03:20:00Z",
-      "sprints": ["sprint-bug-5"],
+      "sprints": [
+        "sprint-bug-5"
+      ],
       "triage": "grimoires/loa/a2a/bug-20260219-i367-ed7140/triage.md",
       "sprint_plan": "grimoires/loa/a2a/bug-20260219-i367-ed7140/sprint.md"
+    },
+    {
+      "id": "cycle-027",
+      "label": "Broader QMD Integration Across Core Skills",
+      "status": "active",
+      "created": "2026-02-19T04:00:00Z",
+      "prd": "grimoires/loa/prd.md",
+      "sdd": "grimoires/loa/sdd.md",
+      "source_issue": 364,
+      "sprints": [
+        {
+          "local_id": "sprint-1",
+          "global_id": "sprint-14",
+          "label": "Unified Context Query Interface",
+          "status": "completed"
+        },
+        {
+          "local_id": "sprint-2",
+          "global_id": "sprint-15",
+          "label": "Skill Integrations",
+          "status": "completed"
+        },
+        {
+          "local_id": "sprint-3",
+          "global_id": "sprint-16",
+          "label": "Configuration and Validation",
+          "status": "completed"
+        },
+        {
+          "local_id": "sprint-4",
+          "global_id": "sprint-17",
+          "label": "Security and Correctness Hardening (Bridge Iter 2)",
+          "status": "completed"
+        },
+        {
+          "local_id": "sprint-5",
+          "global_id": "sprint-18",
+          "label": "Test Coverage and Documentation (Bridge Iter 2)",
+          "status": "completed"
+        }
+      ],
+      "pr": 373,
+      "bridge": {
+        "id": "bridge-20260219-7f28c4",
+        "iterations": 2,
+        "findings_addressed": 7,
+        "score_trajectory": "14 → 0",
+        "tests_final": 49,
+        "flatline": true
+      }
     }
   ]
 }
