@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { MessageBubble } from './MessageBubble';
+import { OracleIdentityCard } from './OracleIdentityCard';
 import type { ChatMessage } from '../hooks/useChat';
 
 interface Props {
@@ -49,7 +50,10 @@ export const Chat: React.FC<Props> = ({
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400">
-            <div className="text-center">
+            <div className="text-center max-w-sm">
+              <div className="mb-4">
+                <OracleIdentityCard dismissible={false} />
+              </div>
               <p className="text-4xl mb-4">🐝</p>
               <p className="text-lg font-medium">Ask the Oracle</p>
               <p className="text-sm mt-1">

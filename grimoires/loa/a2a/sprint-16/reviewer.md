@@ -1,85 +1,92 @@
-# Sprint 3 (sprint-16) Implementation Report: Configuration and Validation
+# Sprint 16 Implementation Report: Tool Use Visualization & Experience Layer
 
-## Executive Summary
+## Sprint Overview
 
-Added `qmd_context` configuration section to `.loa.config.yaml.example`, enhanced config parsing with `--skill` flag for per-skill overrides, validated all tests pass end-to-end, and updated NOTES.md with architectural decisions and learnings. All 46 tests pass (24 unit + 22 integration). No regressions.
+| Field | Value |
+|-------|-------|
+| Sprint ID | sprint-16 (global) |
+| Label | Tool Use Visualization & Experience Layer |
+| Tasks | 4 |
+| Status | COMPLETED |
+| Backend Tests | 152 (unchanged) |
+| Web Tests Before | 0 |
+| Web Tests After | 20 (+20) |
 
 ## Tasks Completed
 
-### BB-414: Configuration Section in `.loa.config.yaml.example`
-- **File**: `.loa.config.yaml.example:1621-1673`
-- **Approach**: Added comprehensive `qmd_context` section after the bridgebuilder configuration block. Includes all config keys documented in SDD section 6.1.
-- **Content**:
-  - `enabled`: Master switch (default true)
-  - `default_budget`: Global budget default (2000)
-  - `timeout_seconds`: Per-tier timeout (5)
-  - `scopes`: All 4 scope definitions (grimoires, skills, notes, reality) with QMD collection, CK path, and grep paths
-  - `skill_overrides`: Per-skill budget and scope overrides for all 5 integrated skills (implement, review_sprint, ride, run_bridge, gate0)
-  - Comments explaining each option
-  - Style matches existing config sections
+### Task 16.1: Parse tool_call and tool_result streaming events
+**File**: `web/src/lib/ws.ts` (existing — verified and tested)
 
-### BB-415: Config Parsing in Query Script
-- **File**: `.claude/scripts/qmd-context-query.sh:29-36` (new variables), `87-91` (new --skill flag), `161-176` (skill override parsing)
-- **Approach**: Added `--skill` flag to CLI that reads `qmd_context.skill_overrides.<name>.budget` and `.scope` from config. CLI flags take precedence (tracked via `BUDGET_EXPLICIT` and `SCOPE_EXPLICIT` booleans).
-- **Config keys parsed**:
-  - `qmd_context.enabled` (pre-existing)
-  - `qmd_context.default_budget` (pre-existing, fixed sentinel logic)
-  - `qmd_context.timeout_seconds` (pre-existing)
-  - `qmd_context.scopes.*` (pre-existing)
-  - `qmd_context.skill_overrides.<name>.budget` (NEW)
-  - `qmd_context.skill_overrides.<name>.scope` (NEW)
-- **Precedence**: `--budget` flag > `skill_overrides` > `default_budget` > hardcoded default (2000)
+The WebSocket streaming layer already handles `tool_call` events with the correct interface:
+- `ToolCallEvent` type with `name`, `args`, `status` ('running' | 'done'), and optional `result`
+- Events parsed in `connectChatStream` and dispatched via callback
+- Auto-reconnect with exponential backoff (1s → 2s → 4s → 8s max)
 
-### BB-416: End-to-End Validation
-- **Tests run**:
-  - Unit tests (Sprint 1): 24/24 PASS
-  - Integration tests (Sprint 2): 22/22 PASS
-  - Manual grep-only test (no config, temp directory): PASS
-  - Disabled config test: PASS (returns `[]`)
-  - All existing pre-commit hooks pass (verified by commit)
-- **Validation matrix**:
-  | Scenario | Status |
-  |----------|--------|
-  | Full config present | PASS |
-  | No config file (defaults) | PASS |
-  | No QMD, no CK (grep-only) | PASS |
-  | `qmd_context.enabled: false` | PASS (empty array) |
-  | Invalid scope | PASS (empty array) |
-  | Zero budget | PASS (empty array) |
+**Tests added**: `web/src/lib/__tests__/ws.test.ts` (7 tests)
+- Parse chunk event, tool_call with running status, tool_result with done status
+- Accumulate multiple tool calls, knowledge event, done event, error event
 
-### BB-417: NOTES.md Update
-- **File**: `grimoires/loa/NOTES.md`
-- **Updates**:
-  - Current Focus: Updated to cycle-027, sprint-16
-  - Decisions: Added D-007 through D-011 documenting architectural choices (three-tier fallback, jq reduce for budget, SKILL.md instruction pattern, per-skill budgets, --skill flag)
-  - Learnings: Added L-009 through L-011 documenting keyword sanitization pattern, path traversal prevention, and bridge context call site gap
+### Task 16.2: Create ToolUseDisplay component
+**File**: `web/src/components/ToolUseDisplay.tsx` (existing — verified and tested)
 
-## Technical Highlights
+Renders tool call events as expandable inline blocks:
+- Spinning border animation while tool is running
+- Green checkmark when done
+- Click to expand full args and result output
+- Args truncated to 60 chars in collapsed view
+- Results truncated to 500 chars with expand option
 
-### Config Precedence
-Clean three-level precedence chain:
-1. CLI flags (`--budget`, `--scope`) — highest priority, tracked via `*_EXPLICIT` booleans
-2. Skill overrides (`--skill` + config) — middle priority
-3. Global config + hardcoded defaults — lowest priority
+**Tests added**: `web/src/components/__tests__/ToolUseDisplay.test.tsx` (6 tests)
+- Empty toolCalls renders nothing
+- Single tool call with name and status
+- Multiple stacked tool blocks
+- Spinner for running state
+- Expand/collapse on click
+- Truncation of long args
 
-### No Breaking Changes
-- New `--skill` flag is optional — all existing callers continue to work
-- Config section is additive — no existing config keys modified
-- `BUDGET_EXPLICIT`/`SCOPE_EXPLICIT` tracking replaces fragile sentinel comparison
+### Task 16.3: Integrate tool use into chat flow
+**Files**: `web/src/hooks/useChat.ts`, `web/src/components/MessageBubble.tsx` (existing — verified and tested)
 
-## Testing Summary
+Integration already complete:
+- `useChat` hook accumulates `tool_call` events in `message.toolCalls[]` array
+- `MessageBubble` conditionally renders `ToolUseDisplay` when toolCalls exist
+- Tool calls appear inline after message content, before citations
+- Streaming indicator (pulse) coexists with tool spinner
 
-| Suite | Tests | Status |
-|-------|-------|--------|
-| Unit tests (Sprint 1) | 24/24 | PASS |
-| Integration tests (Sprint 2) | 22/22 | PASS |
-| E2E validation (Sprint 3) | manual | PASS |
-| **Total** | **46/46** | **PASS** |
+**Tests added**: `web/src/components/__tests__/MessageBubble.test.tsx` (4 tests)
+- Assistant message with inline tool calls
+- Tool calls + citations together
+- Streaming indicator + running tool spinner
+- User message without tool calls
 
-## Verification Steps
+### Task 16.4: Surface BEAUVOIR personality in Oracle identity
+**File**: `web/src/components/OracleIdentityCard.tsx` (NEW)
 
-1. Run unit tests: `bash .claude/scripts/qmd-context-query-tests.sh` → 24/24
-2. Run integration tests: `bash .claude/scripts/qmd-context-integration-tests.sh` → 22/22
-3. Verify config example: `grep -c 'qmd_context' .loa.config.yaml.example` → should show section exists
-4. Verify --skill flag: `.claude/scripts/qmd-context-query.sh --help` → shows --skill option
-5. Verify NOTES.md: `grep 'D-007\|D-008\|D-009\|D-010\|D-011' grimoires/loa/NOTES.md` → all decisions present
+Created Oracle Identity Card component:
+- Fetches identity from `GET /api/identity/oracle`
+- Displays Oracle name, nftId, personality traits from dAMP-96 summary
+- Shows truncated BEAUVOIR hash with full hash in tooltip
+- Dismissible with X button (configurable via `dismissible` prop)
+- Graceful degradation: hidden on error or missing data
+- Integrated into Chat.tsx: appears in empty chat state
+
+**Tests added**: `web/src/components/__tests__/OracleIdentityCard.test.tsx` (3 tests)
+- Renders identity card with personality data and BEAUVOIR hash
+- Hidden when identity endpoint returns error
+- Can be dismissed
+
+## Test Infrastructure
+
+Set up Vitest test environment for the web directory:
+- Added `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `jsdom` as devDependencies
+- Created `web/src/test-setup.ts` for jest-dom matchers
+- Added `test` config to `vite.config.ts` with jsdom environment
+- Added `test` script to `web/package.json`
+
+## Key Insights
+
+1. **Existing code was well-architected**: Tasks 16.1-16.3 required tests, not implementation. The streaming event pipeline was already fully wired from `ws.ts` → `useChat.ts` → `MessageBubble.tsx` → `ToolUseDisplay.tsx`.
+
+2. **Test infrastructure was the real gap**: The web directory had zero tests. Setting up Vitest with jsdom + React Testing Library enables future sprint testing.
+
+3. **OracleIdentityCard graceful degradation**: The component handles all failure modes (network error, empty data, null dAMP-96 summary) by simply hiding itself, matching the acceptance criteria.
