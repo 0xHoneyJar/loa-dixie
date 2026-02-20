@@ -9,6 +9,7 @@
     "finnNFT": ["technical", "architectural"],
     "finnnft": ["technical", "architectural"],
     "loa": ["architectural", "philosophical"],
+    "freeside": ["architectural", "technical"],
     "arrakis": ["architectural", "technical"],
     "spice gate": ["architectural"],
     "bridgebuilder": ["technical", "architectural"],
@@ -22,7 +23,21 @@
     "billing": ["technical", "architectural"],
     "oracle": ["technical", "architectural"],
     "ensemble": ["technical"],
-    "byok": ["technical"]
+    "byok": ["technical"],
+    "damp": ["technical", "architectural"],
+    "damp-96": ["technical", "architectural"],
+    "beauvoir": ["technical", "philosophical"],
+    "x402": ["technical", "architectural"],
+    "conviction": ["architectural", "philosophical"],
+    "identity graph": ["technical", "architectural"],
+    "siwe": ["technical"],
+    "lot": ["technical"],
+    "settlement": ["technical"],
+    "stability tier": ["technical"],
+    "neuromancer codex": ["philosophical"],
+    "s2s jwt": ["technical"],
+    "waf": ["technical"],
+    "dixie": ["technical", "architectural"]
   },
   "sources": [
     {
@@ -70,9 +85,9 @@
       "max_age_days": 30
     },
     {
-      "id": "code-reality-arrakis",
+      "id": "code-reality-freeside",
       "type": "local",
-      "path": "grimoires/oracle/code-reality-arrakis.md",
+      "path": "grimoires/oracle/code-reality-freeside.md",
       "format": "markdown",
       "tags": ["technical", "architectural"],
       "priority": 5,
@@ -134,6 +149,116 @@
       "maxTokens": 4000,
       "required": false,
       "max_age_days": 180
+    },
+    {
+      "id": "damp-96-personality",
+      "type": "local",
+      "path": "grimoires/oracle/damp-96-personality.md",
+      "format": "markdown",
+      "tags": ["technical", "architectural"],
+      "priority": 11,
+      "maxTokens": 3000,
+      "required": false,
+      "max_age_days": 60
+    },
+    {
+      "id": "x402-payment-flow",
+      "type": "local",
+      "path": "grimoires/oracle/x402-payment-flow.md",
+      "format": "markdown",
+      "tags": ["technical", "architectural"],
+      "priority": 12,
+      "maxTokens": 3000,
+      "required": false,
+      "max_age_days": 60
+    },
+    {
+      "id": "identity-graph",
+      "type": "local",
+      "path": "grimoires/oracle/identity-graph.md",
+      "format": "markdown",
+      "tags": ["technical", "architectural"],
+      "priority": 13,
+      "maxTokens": 3000,
+      "required": false,
+      "max_age_days": 60
+    },
+    {
+      "id": "governance-model",
+      "type": "local",
+      "path": "grimoires/oracle/governance-model.md",
+      "format": "markdown",
+      "tags": ["architectural", "philosophical"],
+      "priority": 14,
+      "maxTokens": 3000,
+      "required": false,
+      "max_age_days": 90
+    },
+    {
+      "id": "freeside-api-reference",
+      "type": "local",
+      "path": "grimoires/oracle/freeside-api-reference.md",
+      "format": "markdown",
+      "tags": ["technical", "architectural"],
+      "priority": 15,
+      "maxTokens": 2000,
+      "required": false,
+      "max_age_days": 60
+    },
+    {
+      "id": "freeside-economics",
+      "type": "local",
+      "path": "grimoires/oracle/freeside-economics.md",
+      "format": "markdown",
+      "tags": ["architectural", "philosophical"],
+      "priority": 16,
+      "maxTokens": 2000,
+      "required": false,
+      "max_age_days": 90
+    },
+    {
+      "id": "freeside-event-protocol",
+      "type": "local",
+      "path": "grimoires/oracle/freeside-event-protocol.md",
+      "format": "markdown",
+      "tags": ["technical"],
+      "priority": 17,
+      "maxTokens": 2000,
+      "required": false,
+      "max_age_days": 60
+    },
+    {
+      "id": "freeside-infrastructure",
+      "type": "local",
+      "path": "grimoires/oracle/freeside-infrastructure.md",
+      "format": "markdown",
+      "tags": ["technical", "architectural"],
+      "priority": 18,
+      "maxTokens": 3000,
+      "required": false,
+      "max_age_days": 60
+    },
+    {
+      "id": "freeside-glossary",
+      "type": "local",
+      "path": "grimoires/oracle/freeside-glossary.md",
+      "format": "markdown",
+      "tags": ["core"],
+      "priority": 19,
+      "maxTokens": 2000,
+      "required": false,
+      "max_age_days": 90
+    },
+    {
+      "id": "dixie-architecture",
+      "type": "local",
+      "path": "grimoires/oracle/dixie-architecture.md",
+      "format": "markdown",
+      "tags": ["technical", "architectural"],
+      "priority": 20,
+      "maxTokens": 3000,
+      "required": false,
+      "max_age_days": 30
     }
   ]
 }
