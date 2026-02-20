@@ -40,7 +40,7 @@ export function useChat() {
   const sendMessage = useCallback(
     async (text: string) => {
       const userMsg: ChatMessage = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${crypto.randomUUID()}`,
         role: 'user',
         content: text,
       };

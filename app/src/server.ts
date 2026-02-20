@@ -9,6 +9,7 @@ import { createTracing } from './middleware/tracing.js';
 import { createLogger } from './middleware/logger.js';
 import { createBodyLimit } from './middleware/body-limit.js';
 import { createPaymentGate } from './middleware/payment.js';
+import { createWalletBridge } from './middleware/wallet-bridge.js';
 import { createHealthRoutes } from './routes/health.js';
 import { createAuthRoutes } from './routes/auth.js';
 import { createAdminRoutes } from './routes/admin.js';
@@ -94,6 +95,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
 
   // --- Auth middleware (extract wallet from JWT, set on context) ---
   app.use('/api/*', createJwtMiddleware(config.jwtPrivateKey, 'dixie-bff'));
+
+  // --- Wallet bridge (SEC-003: copy wallet from context to request header) ---
+  // JWT middleware stores wallet via c.set('wallet'), but Hono sub-app boundaries
+  // reset typed context. Route handlers read x-wallet-address header.
+  app.use('/api/*', createWalletBridge());
 
   // --- Rate limiting ---
   app.use('/api/*', createRateLimit(config.rateLimitRpm));

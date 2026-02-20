@@ -28,6 +28,14 @@ export function createAdminRoutes(
 
   // Admin auth middleware
   app.use('*', async (c, next) => {
+    // SEC-001: Defense-in-depth — reject all requests when admin key is unconfigured.
+    // Prevents safeEqual('', '') === true from granting access.
+    if (!adminKey) {
+      return c.json(
+        { error: 'forbidden', message: 'Admin API not configured' },
+        403,
+      );
+    }
     const authHeader = c.req.header('authorization');
     if (!authHeader) {
       return c.json(

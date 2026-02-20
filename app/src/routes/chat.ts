@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import type { FinnClient } from '../proxy/finn-client.js';
+import { isValidPathParam } from '../validation.js';
 
 /**
  * ADR: Hono sub-app typing
@@ -16,10 +18,14 @@ import type { FinnClient } from '../proxy/finn-client.js';
  * search for "ADR: Hono sub-app typing" to find all files that can be simplified.
  */
 
-export interface ChatRequest {
-  prompt: string;
-  sessionId?: string;
-}
+// ARCH-002: Runtime body validation — TypeScript generics are erased at compile time.
+// Zod schemas provide runtime guarantees that incoming JSON matches expected shapes.
+const ChatRequestSchema = z.object({
+  prompt: z.string().min(1).max(10000),
+  sessionId: z.string().regex(/^[a-zA-Z0-9_-]+$/).max(128).optional(),
+});
+
+export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
 export interface ChatResponse {
   sessionId: string;
@@ -34,14 +40,15 @@ export function createChatRoutes(finnClient: FinnClient): Hono {
 
   /** POST / — Send a chat message */
   app.post('/', async (c) => {
-    const body = await c.req.json<ChatRequest>();
-
-    if (!body.prompt?.trim()) {
+    const raw = await c.req.json().catch(() => null);
+    const parsed = ChatRequestSchema.safeParse(raw);
+    if (!parsed.success) {
       return c.json(
-        { error: 'invalid_request', message: 'prompt is required' },
+        { error: 'invalid_request', message: parsed.error.issues[0]?.message ?? 'Invalid request body' },
         400,
       );
     }
+    const body = parsed.data;
 
     // Read from response headers set by middleware (typed context doesn't span Hono instances)
     const wallet = c.req.header('x-wallet-address');
@@ -49,6 +56,13 @@ export function createChatRoutes(finnClient: FinnClient): Hono {
 
     try {
       if (body.sessionId) {
+        // SEC-002: Validate sessionId before URL interpolation to prevent path traversal
+        if (!isValidPathParam(body.sessionId)) {
+          return c.json(
+            { error: 'invalid_request', message: 'Invalid session ID format' },
+            400,
+          );
+        }
         // Send message to existing session
         const result = await finnClient.request<ChatResponse>(
           'POST',

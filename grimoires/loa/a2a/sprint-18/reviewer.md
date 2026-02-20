@@ -1,91 +1,90 @@
-# Implementation Report: Sprint 5 (sprint-18) — Test Coverage and Documentation
-
-**Sprint**: sprint-18 (sprint-5 of cycle-027, Bridge Iteration 2)
-**Source**: Bridgebuilder review bridge-20260219-7f28c4, iteration 1 (LOW findings)
-**Date**: 2026-02-19
-
----
+# Sprint 18: Security Hardening III (Bridge Iteration 1)
 
 ## Summary
 
-All 4 tasks completed addressing 3 LOW findings. Also discovered and fixed a pre-existing bug where `enabled: false` in config was silently ignored due to yq's `//` operator treating boolean false as falsy. Test count increased from 24 to 27 unit tests.
+Sprint 18 addresses HIGH and key MEDIUM findings from Bridgebuilder review (bridge-20260220-451207, iteration 1). All 5 tasks completed with 153 backend tests and 20 web tests passing.
 
----
+## Source
 
-## Task Implementation
+Generated from bridge findings: `.run/bridge-reviews/bridge-20260220-451207-iter1-full.md`
 
-### BB-422: Make CONFIG_FILE Injectable via Environment Variable (low-1)
+## Tasks Completed
 
-**Status**: COMPLETED
+### Task 18.1: SEC-001 — Admin API Empty-Key Bypass (HIGH)
 
-**Changes**: `.claude/scripts/qmd-context-query.sh:26`
-- Changed `CONFIG_FILE="${PROJECT_ROOT}/.loa.config.yaml"` to `CONFIG_FILE="${QMD_CONFIG_FILE:-${PROJECT_ROOT}/.loa.config.yaml}"`
-- When `QMD_CONFIG_FILE` env var is set, the script uses that path instead of the default
-- Default behavior unchanged when env var is unset
+**Finding**: `safeEqual('', '')` returns `true` because `timingSafeEqual` on two zero-length buffers succeeds and `0 === 0`.
 
-**Bug Found**: While implementing the injectable test, discovered that `yq -r '.qmd_context.enabled // true'` was broken — the `//` operator in jq/yq means "if null **or false**, use right operand", so `false // true` evaluates to `true`. The `enabled: false` config flag was silently ignored. Fixed by using `yq -r '.qmd_context.enabled'` directly and checking for `"false"` string in bash.
+**Fix**:
+- `app/src/config.ts:59-62`: Added production-time validation that throws if `DIXIE_ADMIN_KEY` is empty
+- `app/src/routes/admin.ts`: Added defense-in-depth runtime guard — if `!adminKey`, returns 403 immediately
+- `app/tests/unit/config.test.ts`: Added test for empty admin key in production
 
-**Verification**: `test_disabled_returns_empty()` now exercises the real disabled config path via `QMD_CONFIG_FILE` injection and confirms `[]` output.
+**Acceptance**: Config throws in production with empty key; admin routes return 403 if key is empty at runtime.
 
----
+### Task 18.2: SEC-002 — Path Parameter Injection (HIGH)
 
-### BB-423: Add --skill Override Precedence Tests (low-2)
+**Finding**: `sessionId` interpolated into URL paths (`/api/sessions/${body.sessionId}/message`) without validation enables SSRF-adjacent path traversal.
 
-**Status**: COMPLETED
+**Fix**:
+- `app/src/validation.ts` (NEW): Created `isValidPathParam()` with `/^[a-zA-Z0-9_-]+$/` regex, length bounds 1-128
+- `app/src/routes/chat.ts:60-65`: Added validation before sessionId URL interpolation
+- `app/src/routes/sessions.ts:54-60`: Added validation before id URL interpolation
 
-**Changes**: `.claude/scripts/qmd-context-query-tests.sh`
-- Added 3 new tests:
-  1. `test_skill_override_wins_over_default`: Creates temp config with skill override budget 500 and default 3000, verifies skill override is loaded
-  2. `test_cli_budget_wins_over_skill_override`: Verifies explicit `--budget` flag wins over skill override from config
-  3. `test_invalid_skill_rejected`: Verifies `--skill '../inject'` produces a WARNING and is rejected
+**Acceptance**: Path params validated against strict alphanumeric pattern before any URL interpolation.
 
-**Verification**: All 3 tests use `QMD_CONFIG_FILE` injection for isolated config testing.
+### Task 18.3: SEC-003 — Wallet Not Propagated from JWT to Routes (HIGH)
 
----
+**Finding**: JWT middleware stores wallet via `c.set('wallet')`, but Hono sub-app boundaries reset typed context. Route handlers read `x-wallet-address` header, but nothing bridges the two.
 
-### BB-424: Add Config Skill Override Cross-Reference Documentation (low-3)
+**Fix**:
+- `app/src/middleware/wallet-bridge.ts` (NEW): Middleware that reads wallet from Hono context and sets `x-wallet-address` request header
+- `app/src/server.ts:99-102`: Registered after JWT middleware, before rate limiting
 
-**Status**: COMPLETED
+**Acceptance**: Wallet extracted by JWT middleware is available to all downstream route handlers via `x-wallet-address` header.
 
-**Changes**: `.loa.config.yaml.example:1661-1667`
-- Added 5-line comment above `skill_overrides:` mapping each key to its skill invocation:
-  - `implement` -> `/implement` (implementing-tasks/SKILL.md)
-  - `review_sprint` -> `/review-sprint` (reviewing-code/SKILL.md)
-  - `ride` -> `/ride` (riding-codebase/SKILL.md)
-  - `run_bridge` -> `/run-bridge` (bridge-orchestrator.sh)
-  - `gate0` -> `preflight.sh run_integrity_checks()`
+### Task 18.4: ARCH-002 — Runtime Body Validation with Zod (MEDIUM)
 
----
+**Finding**: `c.req.json<T>()` uses TypeScript generics erased at compile time — no runtime validation of request bodies.
 
-### BB-425: Full Test Suite Validation
+**Fix**:
+- Installed `zod` as dependency
+- `app/src/routes/chat.ts:23-28`: Added `ChatRequestSchema` with Zod, replaced manual body parsing with `safeParse()`
+- `app/src/routes/auth.ts:17-20`: Added `SiweRequestSchema` with Zod, replaced generic `c.req.json<T>()` with `safeParse()`
 
-**Status**: COMPLETED
+**Acceptance**: All POST endpoints validate request bodies at runtime with Zod schemas.
 
-| Suite | Previous | Current | Delta |
-|-------|----------|---------|-------|
-| Unit tests | 24 | 27 | +3 |
-| Integration tests | 22 | 22 | 0 |
-| **Total** | **46** | **49** | **+3** |
+### Task 18.5: Frontend Fixes (RES-002, CODE-004, CODE-003)
 
-All 49 tests pass. Zero regressions. The disabled config test now exercises the real code path instead of passing unconditionally.
+**RES-002 — WebSocket Reconnect Counter**:
+- `web/src/lib/ws.ts:110`: Added `ws.onopen` handler to reset `reconnectAttempts` to 0 on successful connection
 
----
+**CODE-004 — OracleIdentityCard Auth**:
+- `web/src/components/OracleIdentityCard.tsx:33-38`: Added auth token to identity fetch via `getAuthToken()`
+
+**CODE-003 — Message ID Collision**:
+- `web/src/hooks/useChat.ts:43`: Changed `Date.now()` to `crypto.randomUUID()` for message IDs
+
+**Acceptance**: WS reconnect counter resets properly; identity card authenticates; message IDs use UUIDs.
+
+## Test Results
+
+- Backend: 153 passed, 0 failed (23 test files)
+- Web: 20 passed, 0 failed (4 test files)
+- TypeScript: compiles clean (`npx tsc --noEmit`)
 
 ## Files Changed
 
-| File | Lines Changed | Type |
-|------|---------------|------|
-| `.claude/scripts/qmd-context-query.sh` | +2 -2 | Config injectable + enabled flag fix |
-| `.claude/scripts/qmd-context-query-tests.sh` | +55 -5 | 3 new tests + disabled test rewrite |
-| `.loa.config.yaml.example` | +5 | Cross-reference documentation |
-
----
-
-## Bonus Fix: enabled: false Bug
-
-The `QMD_CONFIG_FILE` injection exposed a pre-existing bug that the previous no-op test could not catch:
-
-**Bug**: `yq -r '.qmd_context.enabled // true'` always returned `true` even when config had `enabled: false`
-**Root Cause**: yq's `//` (alternative) operator treats boolean `false` as falsy, same as `null`
-**Fix**: Changed to `yq -r '.qmd_context.enabled'` and compare result string to `"false"` in bash
-**Impact**: Config disable flag now actually works
+| File | Change |
+|------|--------|
+| `app/src/config.ts` | Admin key validation in production |
+| `app/src/routes/admin.ts` | Defense-in-depth empty-key guard |
+| `app/src/validation.ts` | NEW — path parameter validation |
+| `app/src/routes/chat.ts` | Zod validation + path param check |
+| `app/src/routes/sessions.ts` | Path param validation |
+| `app/src/routes/auth.ts` | Zod validation for SIWE body |
+| `app/src/middleware/wallet-bridge.ts` | NEW — wallet context→header bridge |
+| `app/src/server.ts` | Wallet bridge middleware registration |
+| `web/src/lib/ws.ts` | Reconnect counter reset on open |
+| `web/src/components/OracleIdentityCard.tsx` | Auth token for identity fetch |
+| `web/src/hooks/useChat.ts` | UUID message IDs |
+| `app/tests/unit/config.test.ts` | Admin key production validation test |

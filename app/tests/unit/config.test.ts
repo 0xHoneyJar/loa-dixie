@@ -76,7 +76,16 @@ describe('loadConfig', () => {
     process.env.FINN_URL = 'http://finn:4000';
     process.env.NODE_ENV = 'production';
     process.env.DIXIE_JWT_PRIVATE_KEY = 'a'.repeat(32);
+    process.env.DIXIE_ADMIN_KEY = 'test-admin-key';
     const config = loadConfig();
     expect(config.jwtPrivateKey).toBe('a'.repeat(32));
+  });
+
+  it('throws when admin key is empty in production', () => {
+    process.env.FINN_URL = 'http://finn:4000';
+    process.env.NODE_ENV = 'production';
+    process.env.DIXIE_JWT_PRIVATE_KEY = 'a'.repeat(32);
+    process.env.DIXIE_ADMIN_KEY = '';
+    expect(() => loadConfig()).toThrow('DIXIE_ADMIN_KEY is required in production');
   });
 });

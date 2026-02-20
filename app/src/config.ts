@@ -54,6 +54,13 @@ export function loadConfig(): DixieConfig {
   const finnWsUrl = process.env.FINN_WS_URL
     ?? finnUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
 
+  // SEC-001: Validate admin key is non-empty in production.
+  // An empty DIXIE_ADMIN_KEY combined with safeEqual('','') === true opens the admin API.
+  const adminKey = process.env.DIXIE_ADMIN_KEY ?? '';
+  if (!adminKey && nodeEnv === 'production') {
+    throw new Error('DIXIE_ADMIN_KEY is required in production (empty key allows unauthenticated admin access)');
+  }
+
   const corsOriginsRaw = process.env.DIXIE_CORS_ORIGINS ?? `http://localhost:${port}`;
   const corsOrigins = corsOriginsRaw.split(',').map(o => o.trim());
 
@@ -63,7 +70,7 @@ export function loadConfig(): DixieConfig {
     finnWsUrl,
     corsOrigins,
     allowlistPath: process.env.DIXIE_ALLOWLIST_PATH ?? '/data/allowlist.json',
-    adminKey: process.env.DIXIE_ADMIN_KEY ?? '',
+    adminKey,
     jwtPrivateKey,
     nodeEnv,
     logLevel: process.env.LOG_LEVEL ?? 'info',

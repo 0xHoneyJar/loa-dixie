@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { SiweMessage } from 'siwe';
 import * as jose from 'jose';
 import type { AllowlistStore } from '../middleware/allowlist.js';
@@ -8,6 +9,13 @@ export interface AuthConfig {
   issuer: string;
   expiresIn: string;
 }
+
+// ARCH-002: Runtime body validation — TypeScript generics are erased at compile time.
+// Zod schemas provide runtime guarantees that incoming JSON matches expected shapes.
+const SiweRequestSchema = z.object({
+  message: z.string().min(1),
+  signature: z.string().min(1),
+});
 
 /**
  * Auth routes for SIWE-based wallet authentication.
@@ -22,14 +30,15 @@ export function createAuthRoutes(
    * POST /siwe — Verify SIWE signature and issue JWT
    */
   app.post('/siwe', async (c) => {
-    const body = await c.req.json<{ message: string; signature: string }>();
-
-    if (!body.message || !body.signature) {
+    const raw = await c.req.json().catch(() => null);
+    const parsed = SiweRequestSchema.safeParse(raw);
+    if (!parsed.success) {
       return c.json(
-        { error: 'invalid_request', message: 'message and signature required' },
+        { error: 'invalid_request', message: parsed.error.issues[0]?.message ?? 'message and signature required' },
         400,
       );
     }
+    const body = parsed.data;
 
     // Verify SIWE signature
     let siweMessage: SiweMessage;

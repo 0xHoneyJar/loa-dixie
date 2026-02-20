@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { FinnClient } from '../proxy/finn-client.js';
+import { isValidPathParam } from '../validation.js';
 
 /**
  * ADR: Hono sub-app typing
@@ -50,6 +51,13 @@ export function createSessionRoutes(finnClient: FinnClient): Hono {
   /** GET /:id — Get session details */
   app.get('/:id', async (c) => {
     const id = c.req.param('id');
+    // SEC-002: Validate path param before URL interpolation
+    if (!isValidPathParam(id)) {
+      return c.json(
+        { error: 'invalid_request', message: 'Invalid session ID format' },
+        400,
+      );
+    }
     const requestId = c.req.header('x-request-id') ?? '';
 
     try {

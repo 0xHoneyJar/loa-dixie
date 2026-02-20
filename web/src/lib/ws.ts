@@ -106,6 +106,8 @@ export function connectChatStream(
         ws = new WebSocket(url);
         ws.onmessage = handleMessage;
         ws.onclose = handleClose;
+        // RES-002: Reset reconnect counter on successful connection
+        ws.onopen = () => { reconnectAttempts = 0; };
       })
       .catch(() => {
         // Ticket acquisition failed — treat as connection failure

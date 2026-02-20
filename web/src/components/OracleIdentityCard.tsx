@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getAuthToken } from '../lib/api';
 
 interface OracleIdentity {
   nftId: string;
@@ -29,7 +30,14 @@ export const OracleIdentityCard: React.FC<Props> = ({ dismissible = true }) => {
   useEffect(() => {
     let cancelled = false;
 
-    fetch('/api/identity/oracle')
+    // CODE-004: Use auth token for identity fetch (endpoint is behind allowlist)
+    const headers: Record<string, string> = {};
+    const token = getAuthToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    fetch('/api/identity/oracle', { headers })
       .then((res) => {
         if (!res.ok) throw new Error('Identity fetch failed');
         return res.json() as Promise<OracleIdentity>;
