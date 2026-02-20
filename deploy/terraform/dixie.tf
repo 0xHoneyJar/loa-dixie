@@ -438,6 +438,136 @@ resource "aws_appautoscaling_policy" "dixie_cpu" {
 }
 
 # -------------------------------------------------------------------
+# SNS Topic for Alarms
+# -------------------------------------------------------------------
+
+resource "aws_sns_topic" "dixie_alarms" {
+  name = "dixie-alarms"
+
+  tags = {
+    Service     = "dixie-bff"
+    Environment = var.environment
+  }
+}
+
+# -------------------------------------------------------------------
+# CloudWatch Alarms
+# -------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "dixie_unhealthy" {
+  alarm_name          = "DixieBFFUnhealthy"
+  alarm_description   = "Dixie BFF health check failing for 3 consecutive evaluations"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 3
+  metric_name         = "HealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Minimum"
+  threshold           = 1
+
+  dimensions = {
+    TargetGroup  = aws_lb_target_group.dixie.arn_suffix
+    LoadBalancer = "" # Populated by root module
+  }
+
+  alarm_actions = [aws_sns_topic.dixie_alarms.arn]
+  ok_actions    = [aws_sns_topic.dixie_alarms.arn]
+
+  tags = {
+    Service     = "dixie-bff"
+    Environment = var.environment
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "dixie_finn_latency_high" {
+  alarm_name          = "DixieFinnLatencyHigh"
+  alarm_description   = "loa-finn proxy latency p95 exceeds 5 seconds for 5 minutes"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 5
+  metric_name         = "TargetResponseTime"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  extended_statistic  = "p95"
+  threshold           = 5
+
+  dimensions = {
+    TargetGroup  = aws_lb_target_group.dixie.arn_suffix
+    LoadBalancer = ""
+  }
+
+  alarm_actions = [aws_sns_topic.dixie_alarms.arn]
+  ok_actions    = [aws_sns_topic.dixie_alarms.arn]
+
+  tags = {
+    Service     = "dixie-bff"
+    Environment = var.environment
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "dixie_circuit_open" {
+  name           = "DixieCircuitOpen"
+  pattern        = "{ $.circuit_state = \"open\" }"
+  log_group_name = aws_cloudwatch_log_group.dixie.name
+
+  metric_transformation {
+    name      = "CircuitBreakerOpen"
+    namespace = "Dixie/BFF"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "dixie_circuit_open" {
+  alarm_name          = "DixieFinnCircuitOpen"
+  alarm_description   = "Circuit breaker to loa-finn has been open for over 1 minute"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "CircuitBreakerOpen"
+  namespace           = "Dixie/BFF"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 0
+
+  alarm_actions = [aws_sns_topic.dixie_alarms.arn]
+  ok_actions    = [aws_sns_topic.dixie_alarms.arn]
+
+  tags = {
+    Service     = "dixie-bff"
+    Environment = var.environment
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "dixie_allowlist_denied" {
+  name           = "DixieAllowlistDenied"
+  pattern        = "{ $.auth_type = \"none\" && $.action = \"denied\" }"
+  log_group_name = aws_cloudwatch_log_group.dixie.name
+
+  metric_transformation {
+    name      = "AllowlistDenied"
+    namespace = "Dixie/BFF"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "dixie_allowlist_denied_spike" {
+  alarm_name          = "DixieAllowlistDeniedSpike"
+  alarm_description   = "More than 50 unauthorized requests denied in 5 minutes"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "AllowlistDenied"
+  namespace           = "Dixie/BFF"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 50
+
+  alarm_actions = [aws_sns_topic.dixie_alarms.arn]
+
+  tags = {
+    Service     = "dixie-bff"
+    Environment = var.environment
+  }
+}
+
+# -------------------------------------------------------------------
 # Outputs
 # -------------------------------------------------------------------
 
