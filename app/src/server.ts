@@ -32,13 +32,15 @@ export interface DixieApp {
  */
 export function createDixieApp(config: DixieConfig): DixieApp {
   const app = new Hono();
-  const finnClient = new FinnClient(config.finnUrl);
-  const allowlistStore = new AllowlistStore(config.allowlistPath);
-  const ticketStore = new TicketStore();
-  const { middleware: loggerMiddleware } = createLogger(
+  const { middleware: loggerMiddleware, log } = createLogger(
     'dixie-bff',
     (config.logLevel || 'info') as LogLevel,
   );
+  const finnClient = new FinnClient(config.finnUrl, { log });
+  const allowlistStore = new AllowlistStore(config.allowlistPath, {
+    watch: config.nodeEnv !== 'test',
+  });
+  const ticketStore = new TicketStore();
 
   // --- Global middleware ---
   app.use('*', requestId());

@@ -66,6 +66,106 @@ describe('FinnClient', () => {
     });
   });
 
+  describe('circuit breaker transition logging', () => {
+    it('logs closed→open transition at error level', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('down'));
+      const logs: Array<{ level: string; data: Record<string, unknown> }> = [];
+      const log = (level: string, data: Record<string, unknown>) => logs.push({ level, data });
+
+      const client = new FinnClient('http://finn:4000', {
+        maxFailures: 3,
+        windowMs: 60_000,
+        log: log as any,
+      });
+
+      for (let i = 0; i < 3; i++) {
+        await expect(client.getHealth()).rejects.toBeTruthy();
+      }
+
+      const transition = logs.find((l) => l.data.event === 'circuit_breaker_transition');
+      expect(transition).toBeDefined();
+      expect(transition!.level).toBe('error');
+      expect(transition!.data.from).toBe('closed');
+      expect(transition!.data.to).toBe('open');
+      expect(transition!.data.circuit_state).toBe('open');
+      expect(transition!.data.service).toBe('loa-finn');
+    });
+
+    it('logs open→half-open transition at warn level', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('down'));
+      const logs: Array<{ level: string; data: Record<string, unknown> }> = [];
+      const log = (level: string, data: Record<string, unknown>) => logs.push({ level, data });
+
+      const client = new FinnClient('http://finn:4000', {
+        maxFailures: 3,
+        windowMs: 60_000,
+        cooldownMs: 0,
+        log: log as any,
+      });
+
+      // Trip the circuit
+      for (let i = 0; i < 3; i++) {
+        await expect(client.getHealth()).rejects.toBeTruthy();
+      }
+
+      // Clear logs, then trigger half-open check (will fail, but the transition is logged)
+      logs.length = 0;
+      try { await client.getHealth(); } catch { /* expected */ }
+
+      const transition = logs.find(
+        (l) => l.data.event === 'circuit_breaker_transition' && l.data.to === 'half-open',
+      );
+      expect(transition).toBeDefined();
+      expect(transition!.level).toBe('warn');
+    });
+
+    it('logs half-open→closed transition at info level', async () => {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('down'));
+      const logs: Array<{ level: string; data: Record<string, unknown> }> = [];
+      const log = (level: string, data: Record<string, unknown>) => logs.push({ level, data });
+
+      const client = new FinnClient('http://finn:4000', {
+        maxFailures: 3,
+        windowMs: 60_000,
+        cooldownMs: 0,
+        log: log as any,
+      });
+
+      // Trip the circuit
+      for (let i = 0; i < 3; i++) {
+        await expect(client.getHealth()).rejects.toBeTruthy();
+      }
+
+      // Success closes the circuit
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'ok' }), { status: 200 }));
+      logs.length = 0;
+      await client.getHealth();
+
+      const closedTransition = logs.find(
+        (l) => l.data.event === 'circuit_breaker_transition' && l.data.to === 'closed',
+      );
+      expect(closedTransition).toBeDefined();
+      expect(closedTransition!.level).toBe('info');
+    });
+
+    it('does not log when state is unchanged', async () => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+        new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+      );
+      const logs: Array<{ level: string; data: Record<string, unknown> }> = [];
+      const log = (level: string, data: Record<string, unknown>) => logs.push({ level, data });
+
+      const client = new FinnClient('http://finn:4000', { log: log as any });
+
+      // Two successful requests — both stay in closed, no transition logged
+      await client.getHealth();
+      await client.getHealth();
+
+      const transitions = logs.filter((l) => l.data.event === 'circuit_breaker_transition');
+      expect(transitions).toHaveLength(0);
+    });
+  });
+
   it('resets circuit on success', async () => {
     const failFetch = vi
       .spyOn(globalThis, 'fetch')

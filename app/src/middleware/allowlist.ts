@@ -23,16 +23,28 @@ export interface AuditEntry {
 }
 
 /**
- * In-memory allowlist with file persistence.
+ * In-memory allowlist with file persistence, bounded audit log,
+ * and optional file-watcher for multi-instance consistency.
  */
 export class AllowlistStore {
   private data: AllowlistData;
   private readonly filePath: string;
   private readonly auditLog: AuditEntry[] = [];
+  private readonly maxAuditEntries: number;
+  private lastWriteTimestamp = 0;
+  private watcher: fs.FSWatcher | null = null;
+  private pollInterval: ReturnType<typeof setInterval> | null = null;
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(filePath: string) {
+  constructor(filePath: string, opts?: { maxAuditEntries?: number; watch?: boolean }) {
     this.filePath = filePath;
+    this.maxAuditEntries = opts?.maxAuditEntries ?? 10_000;
     this.data = this.loadFromDisk();
+
+    // Start file-watcher for multi-instance consistency (opt-in)
+    if (opts?.watch === true && filePath) {
+      this.startWatching();
+    }
   }
 
   /** Check if an API key is in the allowlist */
@@ -100,14 +112,106 @@ export class AllowlistStore {
     return { ...this.data };
   }
 
-  /** Record an audit entry */
+  /** Record an audit entry with bounded ring buffer. */
   audit(entry: AuditEntry): void {
     this.auditLog.push(entry);
+
+    // Ring buffer: emit oldest entries to structured log on overflow
+    while (this.auditLog.length > this.maxAuditEntries) {
+      const evicted = this.auditLog.shift()!;
+      process.stdout.write(
+        JSON.stringify({
+          level: 'info',
+          event: 'audit_overflow',
+          overflow_at: new Date().toISOString(),
+          service: 'dixie-bff',
+          ...evicted,
+        }) + '\n',
+      );
+    }
   }
 
-  /** Get recent audit entries (for testing) */
+  /** Get current in-memory audit entries. */
   getAuditLog(): AuditEntry[] {
     return [...this.auditLog];
+  }
+
+  /** Clean up watcher and poll interval. */
+  close(): void {
+    if (this.watcher) {
+      this.watcher.close();
+      this.watcher = null;
+    }
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+  }
+
+  /**
+   * Start watching the allowlist file for external changes.
+   * Uses fs.watch with polling fallback for EFS/NFS compatibility.
+   */
+  private startWatching(): void {
+    const usePolling = process.env.DIXIE_ALLOWLIST_POLL === '1';
+
+    if (usePolling) {
+      this.startPolling();
+      return;
+    }
+
+    try {
+      this.watcher = fs.watch(this.filePath, { persistent: false }, (_eventType) => {
+        this.debouncedReload();
+      });
+      this.watcher.on('error', () => {
+        // fs.watch failed — fall back to polling
+        this.watcher?.close();
+        this.watcher = null;
+        this.startPolling();
+      });
+    } catch {
+      // fs.watch not available — fall back to polling
+      this.startPolling();
+    }
+  }
+
+  /** Polling fallback for environments where fs.watch is unreliable. */
+  private startPolling(): void {
+    let lastMtime = 0;
+    try {
+      lastMtime = fs.statSync(this.filePath).mtimeMs;
+    } catch { /* file may not exist yet */ }
+
+    this.pollInterval = setInterval(() => {
+      try {
+        const mtime = fs.statSync(this.filePath).mtimeMs;
+        if (mtime > lastMtime) {
+          lastMtime = mtime;
+          this.debouncedReload();
+        }
+      } catch { /* file temporarily missing during write */ }
+    }, 30_000);
+    this.pollInterval.unref();
+  }
+
+  /** Debounced reload — ignore rapid successive events within 500ms. */
+  private debouncedReload(): void {
+    if (this.debounceTimer) return;
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
+
+      // Self-write detection: skip reload if file changed within 100ms of our own write
+      if (Date.now() - this.lastWriteTimestamp < 100) return;
+
+      try {
+        this.data = this.loadFromDisk();
+      } catch { /* file temporarily missing during temp+rename */ }
+    }, 500);
   }
 
   private loadFromDisk(): AllowlistData {
@@ -131,6 +235,7 @@ export class AllowlistStore {
     const tmpPath = `${this.filePath}.tmp`;
     fs.writeFileSync(tmpPath, JSON.stringify(this.data, null, 2));
     fs.renameSync(tmpPath, this.filePath);
+    this.lastWriteTimestamp = Date.now();
   }
 }
 

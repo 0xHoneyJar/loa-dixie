@@ -6,6 +6,9 @@ export interface BffError {
   body: ErrorResponse;
 }
 
+/** Log callback for circuit breaker observability (dependency injection). */
+export type LogCallback = (level: 'error' | 'warn' | 'info', data: Record<string, unknown>) => void;
+
 /**
  * Typed HTTP client for loa-finn.
  * Includes a circuit breaker: opens after `maxFailures` consecutive
@@ -20,6 +23,7 @@ export class FinnClient {
   private readonly windowMs: number;
   private readonly cooldownMs: number;
   private readonly timeoutMs: number;
+  private readonly log: LogCallback | null;
 
   constructor(
     baseUrl: string,
@@ -28,6 +32,7 @@ export class FinnClient {
       windowMs?: number;
       cooldownMs?: number;
       timeoutMs?: number;
+      log?: LogCallback;
     },
   ) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -35,6 +40,7 @@ export class FinnClient {
     this.windowMs = opts?.windowMs ?? 30_000;
     this.cooldownMs = opts?.cooldownMs ?? 10_000;
     this.timeoutMs = opts?.timeoutMs ?? 5_000;
+    this.log = opts?.log ?? null;
   }
 
   /** Current circuit breaker state */
@@ -105,11 +111,37 @@ export class FinnClient {
     }
   }
 
+  /**
+   * Transition the circuit breaker to a new state with structured logging.
+   *
+   * For Future Agents: The `circuit_breaker_transition` event name is the stable contract.
+   * CloudWatch alarms, dashboards, and alerting rules match on this string.
+   * Do not rename without updating the Terraform metric filter in deploy/terraform/dixie.tf.
+   */
+  private transitionTo(newState: CircuitState): void {
+    const from = this.circuitState;
+    if (from === newState) return; // no transition, no log
+
+    this.circuitState = newState;
+
+    if (this.log) {
+      const level = newState === 'open' ? 'error' : newState === 'half-open' ? 'warn' : 'info';
+      this.log(level, {
+        event: 'circuit_breaker_transition',
+        from,
+        to: newState,
+        circuit_state: newState,
+        consecutive_failures: this.consecutiveFailures,
+        service: 'loa-finn',
+      });
+    }
+  }
+
   private checkCircuit(): void {
     if (this.circuitState === 'open') {
       const elapsed = Date.now() - this.lastFailureAt;
       if (elapsed >= this.cooldownMs) {
-        this.circuitState = 'half-open';
+        this.transitionTo('half-open');
       } else {
         throw {
           status: 503,
@@ -124,7 +156,7 @@ export class FinnClient {
 
   private recordSuccess(): void {
     this.consecutiveFailures = 0;
-    this.circuitState = 'closed';
+    this.transitionTo('closed');
   }
 
   private recordFailure(): void {
@@ -136,7 +168,7 @@ export class FinnClient {
     this.lastFailureAt = now;
 
     if (this.consecutiveFailures >= this.maxFailures) {
-      this.circuitState = 'open';
+      this.transitionTo('open');
     }
   }
 }

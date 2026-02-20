@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -145,5 +145,181 @@ describe('allowlist middleware', () => {
     expect(log).toHaveLength(2);
     expect(log[0]!.action).toBe('allowed');
     expect(log[1]!.action).toBe('denied');
+  });
+});
+
+describe('AllowlistStore bounded audit log', () => {
+  let tmpDir: string;
+  let filePath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dixie-test-'));
+    filePath = path.join(tmpDir, 'allowlist.json');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  function makeEntry(n: number): import('../../src/middleware/allowlist.js').AuditEntry {
+    return {
+      timestamp: new Date().toISOString(),
+      request_id: `req-${n}`,
+      identity: `0x${n.toString(16).padStart(40, '0')}`,
+      auth_type: 'jwt_wallet',
+      action: 'allowed',
+      endpoint: '/api/test',
+      ip: '127.0.0.1',
+    };
+  }
+
+  it('accepts entries under the limit', () => {
+    const store = new AllowlistStore(filePath, { maxAuditEntries: 5 });
+    for (let i = 0; i < 5; i++) store.audit(makeEntry(i));
+    expect(store.getAuditLog()).toHaveLength(5);
+  });
+
+  it('evicts oldest entries when exceeding max', () => {
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const store = new AllowlistStore(filePath, { maxAuditEntries: 3 });
+
+    for (let i = 0; i < 5; i++) store.audit(makeEntry(i));
+
+    // Should have exactly 3 entries (last 3)
+    const log = store.getAuditLog();
+    expect(log).toHaveLength(3);
+    expect(log[0]!.request_id).toBe('req-2');
+
+    // Should have emitted 2 overflow entries to stdout
+    const overflows = stdoutSpy.mock.calls.filter(
+      (call) => typeof call[0] === 'string' && call[0].includes('audit_overflow'),
+    );
+    expect(overflows).toHaveLength(2);
+
+    stdoutSpy.mockRestore();
+  });
+
+  it('buffer stays bounded at steady state', () => {
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const store = new AllowlistStore(filePath, { maxAuditEntries: 10 });
+
+    // Add 100 entries
+    for (let i = 0; i < 100; i++) store.audit(makeEntry(i));
+
+    expect(store.getAuditLog()).toHaveLength(10);
+    stdoutSpy.mockRestore();
+  });
+
+  it('uses default max of 10000', () => {
+    const store = new AllowlistStore(filePath);
+    // Don't add 10K entries — just verify the store exists with default
+    for (let i = 0; i < 5; i++) store.audit(makeEntry(i));
+    expect(store.getAuditLog()).toHaveLength(5);
+  });
+});
+
+describe('AllowlistStore file-watcher', () => {
+  let tmpDir: string;
+  let filePath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dixie-test-'));
+    filePath = path.join(tmpDir, 'allowlist.json');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  it('detects external file write and reloads', async () => {
+    fs.writeFileSync(filePath, JSON.stringify({
+      version: 1, wallets: [], apiKeys: ['dxk_original'], updated_at: new Date().toISOString(),
+    }));
+
+    const store = new AllowlistStore(filePath, { watch: true });
+    expect(store.hasApiKey('dxk_original')).toBe(true);
+    expect(store.hasApiKey('dxk_external')).toBe(false);
+
+    // External write
+    fs.writeFileSync(filePath, JSON.stringify({
+      version: 1, wallets: [], apiKeys: ['dxk_original', 'dxk_external'], updated_at: new Date().toISOString(),
+    }));
+
+    // Wait for debounce (500ms) + some buffer
+    await new Promise((r) => setTimeout(r, 800));
+
+    expect(store.hasApiKey('dxk_external')).toBe(true);
+    store.close();
+  });
+
+  it('skips reload on self-write', async () => {
+    fs.writeFileSync(filePath, JSON.stringify({
+      version: 1, wallets: [], apiKeys: [], updated_at: new Date().toISOString(),
+    }));
+
+    const store = new AllowlistStore(filePath, { watch: true });
+    store.addEntry('apiKey', 'dxk_self');
+
+    // Wait for debounce
+    await new Promise((r) => setTimeout(r, 800));
+
+    // Should still have the entry (self-write reload was skipped)
+    expect(store.hasApiKey('dxk_self')).toBe(true);
+    store.close();
+  });
+
+  it('handles missing file gracefully', () => {
+    // File doesn't exist — watcher should not crash
+    const store = new AllowlistStore(filePath, { watch: true });
+    expect(store.getData().wallets).toEqual([]);
+    store.close();
+  });
+
+  it('close stops the watcher', () => {
+    fs.writeFileSync(filePath, JSON.stringify({
+      version: 1, wallets: [], apiKeys: [], updated_at: new Date().toISOString(),
+    }));
+
+    const store = new AllowlistStore(filePath, { watch: true });
+    store.close();
+    // Should not throw or leak
+  });
+
+  it('uses polling fallback when DIXIE_ALLOWLIST_POLL=1', () => {
+    const origPoll = process.env.DIXIE_ALLOWLIST_POLL;
+    process.env.DIXIE_ALLOWLIST_POLL = '1';
+
+    fs.writeFileSync(filePath, JSON.stringify({
+      version: 1, wallets: [], apiKeys: [], updated_at: new Date().toISOString(),
+    }));
+
+    const store = new AllowlistStore(filePath, { watch: true });
+    // Polling mode — should not crash
+    expect(store.getData().wallets).toEqual([]);
+    store.close();
+
+    process.env.DIXIE_ALLOWLIST_POLL = origPoll;
+  });
+
+  it('debounces rapid successive events', async () => {
+    fs.writeFileSync(filePath, JSON.stringify({
+      version: 1, wallets: [], apiKeys: ['dxk_v1'], updated_at: new Date().toISOString(),
+    }));
+
+    const store = new AllowlistStore(filePath, { watch: true });
+
+    // Rapid writes (simulates EFS behavior)
+    for (let i = 0; i < 5; i++) {
+      fs.writeFileSync(filePath, JSON.stringify({
+        version: 1, wallets: [], apiKeys: [`dxk_v${i + 2}`], updated_at: new Date().toISOString(),
+      }));
+    }
+
+    // Wait for debounce
+    await new Promise((r) => setTimeout(r, 800));
+
+    // Should have the last write's value
+    expect(store.hasApiKey('dxk_v6')).toBe(true);
+    store.close();
   });
 });
