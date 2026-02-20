@@ -103,6 +103,9 @@ function proxyUpgrade(
     path: upstream.pathname + upstream.search,
     method: 'GET',
     headers,
+    // Explicit TLS certificate validation — defense against
+    // NODE_TLS_REJECT_UNAUTHORIZED=0 leaking into production.
+    ...(isSecure ? { rejectUnauthorized: true } : {}),
   });
 
   upstreamReq.on('upgrade', (_upRes: IncomingMessage, upSocket: Duplex, upHead: Buffer) => {
@@ -143,6 +146,10 @@ function proxyUpgrade(
     }
     clientSocket.write(statusLine + headerLines.join('\r\n') + '\r\n\r\n');
     res.pipe(clientSocket);
+    // Ensure the client socket is destroyed after the upstream response ends
+    // to prevent lingering half-open connections on rejection.
+    res.on('end', () => clientSocket.destroy());
+    res.on('error', () => clientSocket.destroy());
   });
 
   upstreamReq.on('error', () => {

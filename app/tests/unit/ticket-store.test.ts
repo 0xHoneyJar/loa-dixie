@@ -80,4 +80,53 @@ describe('TicketStore', () => {
     store.close();
     expect(store.size).toBe(0);
   });
+
+  it('rejects the 6th ticket for the same wallet when cap is 5', () => {
+    store = new TicketStore(30_000, 999_999, 5);
+    for (let i = 0; i < 5; i++) {
+      const result = store.issue('0xCAP');
+      expect(result).not.toBeNull();
+    }
+    const sixth = store.issue('0xCAP');
+    expect(sixth).toBeNull();
+    expect(store.size).toBe(5);
+  });
+
+  it('allows tickets for different wallets independently', () => {
+    store = new TicketStore(30_000, 999_999, 2);
+    expect(store.issue('0xA')).not.toBeNull();
+    expect(store.issue('0xA')).not.toBeNull();
+    expect(store.issue('0xA')).toBeNull(); // 3rd for 0xA — rejected
+    expect(store.issue('0xB')).not.toBeNull(); // different wallet — allowed
+  });
+
+  it('consuming a ticket frees a slot for that wallet', () => {
+    store = new TicketStore(30_000, 999_999, 2);
+    const t1 = store.issue('0xFREE');
+    const t2 = store.issue('0xFREE');
+    expect(t1).not.toBeNull();
+    expect(t2).not.toBeNull();
+    expect(store.issue('0xFREE')).toBeNull(); // at cap
+
+    // Consume one ticket — should free a slot
+    store.consume(t1!.ticket);
+    const t3 = store.issue('0xFREE');
+    expect(t3).not.toBeNull();
+  });
+
+  it('sweep frees per-wallet slots for expired tickets', () => {
+    store = new TicketStore(1, 999_999, 2); // 1ms TTL
+    store.issue('0xSWEEP');
+    store.issue('0xSWEEP');
+    expect(store.issue('0xSWEEP')).toBeNull(); // at cap
+
+    // Wait for expiry
+    const start = Date.now();
+    while (Date.now() - start < 5) { /* spin */ }
+
+    store.sweep();
+    // After sweep, slots should be freed
+    const result = store.issue('0xSWEEP');
+    expect(result).not.toBeNull();
+  });
 });

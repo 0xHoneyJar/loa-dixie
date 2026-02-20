@@ -24,8 +24,14 @@ export function createWsTicketRoutes(ticketStore: TicketStore): Hono {
       );
     }
 
-    const { ticket, expiresIn } = ticketStore.issue(wallet);
-    return c.json({ ticket, expires_in: expiresIn });
+    const result = ticketStore.issue(wallet);
+    if (!result) {
+      return c.json(
+        { error: 'rate_limited', message: 'Too many outstanding tickets for this wallet' },
+        429,
+      );
+    }
+    return c.json({ ticket: result.ticket, expires_in: result.expiresIn });
   });
 
   return app;

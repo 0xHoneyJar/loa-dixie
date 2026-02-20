@@ -1,6 +1,13 @@
 import { Hono } from 'hono';
+import { timingSafeEqual } from 'node:crypto';
 import { getAddress } from 'viem';
 import type { AllowlistStore } from '../middleware/allowlist.js';
+
+/** Constant-time string comparison to prevent timing attacks on admin key. */
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 /**
  * Admin routes for allowlist management. Gated by admin API key.
@@ -23,7 +30,7 @@ export function createAdminRoutes(
     const key = authHeader.startsWith('Bearer ')
       ? authHeader.slice(7)
       : authHeader;
-    if (key !== adminKey) {
+    if (!safeEqual(key, adminKey)) {
       return c.json(
         { error: 'forbidden', message: 'Invalid admin key' },
         403,
