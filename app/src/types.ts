@@ -29,6 +29,13 @@
  * - CircuitState as HounfourCircuitState (for protocol mapping)
  */
 
+// DECISION: Progressive Hounfour protocol adoption (Level 1 → Level 4)
+// Currently at Level 1 (Interface): types imported for API shape alignment.
+// Level 2 (Structural) requires state machine validation against protocol transitions.
+// Level 3 (Behavioral) requires runtime invariant checking.
+// Level 4 (Civilizational) requires passing Freeside PR #63's E2E validator.
+// See: grimoires/loa/context/adr-hounfour-alignment.md
+
 // Aligned: loa-hounfour protocol types for cross-system contracts
 export type {
   AccessPolicy,

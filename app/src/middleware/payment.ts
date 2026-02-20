@@ -1,5 +1,12 @@
 import { createMiddleware } from 'hono/factory';
 
+// DECISION: x402 as the Conway-Ostrom bridge (economic plumbing under community governance)
+// The payment middleware is positioned after allowlist (community gate), making economic
+// flows subordinate to community membership. This is the architectural bridge between
+// Conway's autonomous economic agency and Ostrom's community governance: x402 provides
+// the economic plumbing, but community governance decides who uses it.
+// See: grimoires/loa/context/adr-conway-positioning.md
+
 /**
  * x402 Payment Gate — Micropayment Middleware Hook Point
  *

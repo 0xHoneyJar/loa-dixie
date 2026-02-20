@@ -43,6 +43,14 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   });
   const ticketStore = new TicketStore();
 
+  // DECISION: Middleware pipeline as constitutional ordering (communitarian architecture)
+  // The middleware sequence is not arbitrary — it encodes governance priorities.
+  // Allowlist (community membership) gates payment (economic access), which gates
+  // routes (capability access). This ordering ensures community governance controls
+  // economic flows, not the other way around. Reordering is an architectural decision.
+  // See: grimoires/loa/context/adr-communitarian-agents.md
+  // See: grimoires/loa/context/adr-conway-positioning.md
+  //
   // Middleware ordering rationale:
   // 1. requestId — generates trace ID before anything else
   // 2. tracing — OpenTelemetry spans need the request ID
