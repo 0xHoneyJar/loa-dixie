@@ -14,7 +14,9 @@ import { createAdminRoutes } from './routes/admin.js';
 import { createChatRoutes } from './routes/chat.js';
 import { createSessionRoutes } from './routes/sessions.js';
 import { createIdentityRoutes } from './routes/identity.js';
+import { createWsTicketRoutes } from './routes/ws-ticket.js';
 import { FinnClient } from './proxy/finn-client.js';
+import { TicketStore } from './services/ticket-store.js';
 import type { DixieConfig } from './config.js';
 import type { LogLevel } from './middleware/logger.js';
 
@@ -22,6 +24,7 @@ export interface DixieApp {
   app: Hono;
   finnClient: FinnClient;
   allowlistStore: AllowlistStore;
+  ticketStore: TicketStore;
 }
 
 /**
@@ -31,6 +34,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   const app = new Hono();
   const finnClient = new FinnClient(config.finnUrl);
   const allowlistStore = new AllowlistStore(config.allowlistPath);
+  const ticketStore = new TicketStore();
   const { middleware: loggerMiddleware } = createLogger(
     'dixie-bff',
     (config.logLevel || 'info') as LogLevel,
@@ -80,6 +84,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     expiresIn: '1h',
   }));
   app.route('/api/admin', createAdminRoutes(allowlistStore, config.adminKey));
+  app.route('/api/ws/ticket', createWsTicketRoutes(ticketStore));
   app.route('/api/chat', createChatRoutes(finnClient));
   app.route('/api/sessions', createSessionRoutes(finnClient));
   app.route('/api/identity', createIdentityRoutes(finnClient));
@@ -89,5 +94,5 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     c.json({ service: 'dixie-bff', status: 'running', version: '1.0.0' }),
   );
 
-  return { app, finnClient, allowlistStore };
+  return { app, finnClient, allowlistStore, ticketStore };
 }

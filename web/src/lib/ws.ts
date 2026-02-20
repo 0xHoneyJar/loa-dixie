@@ -51,16 +51,25 @@ export type ChatStreamEvent =
 
 export type StreamCallback = (event: ChatStreamEvent) => void;
 
+/**
+ * Connect to the chat WebSocket stream using a short-lived ticket.
+ *
+ * The `getTicket` callback is called before each connection (including reconnects)
+ * to obtain a fresh single-use ticket. This replaces the previous pattern of passing
+ * the JWT directly in the URL query string.
+ *
+ * @param sessionId - Chat session ID
+ * @param getTicket - Async callback that returns a fresh wst_ ticket
+ * @param onEvent - Called for each streaming event
+ * @param onClose - Called when connection permanently closes (after max reconnects)
+ */
 export function connectChatStream(
   sessionId: string,
-  token: string,
+  getTicket: () => Promise<string>,
   onEvent: StreamCallback,
   onClose?: () => void,
 ): { close: () => void } {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = `${protocol}//${window.location.host}/ws/chat/${sessionId}?token=${encodeURIComponent(token)}`;
-
-  let ws: WebSocket | null = new WebSocket(url);
+  let ws: WebSocket | null = null;
   let reconnectAttempts = 0;
   const maxReconnect = 3;
   let closed = false;
@@ -81,17 +90,31 @@ export function connectChatStream(
       const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 8000);
       setTimeout(() => {
         if (closed) return;
-        ws = new WebSocket(url);
-        ws.onmessage = handleMessage;
-        ws.onclose = handleClose;
+        connect();
       }, delay);
     } else {
       onClose?.();
     }
   }
 
-  ws.onmessage = handleMessage;
-  ws.onclose = handleClose;
+  function connect() {
+    getTicket()
+      .then((ticket) => {
+        if (closed) return;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const url = `${protocol}//${window.location.host}/ws/chat/${sessionId}?ticket=${encodeURIComponent(ticket)}`;
+        ws = new WebSocket(url);
+        ws.onmessage = handleMessage;
+        ws.onclose = handleClose;
+      })
+      .catch(() => {
+        // Ticket acquisition failed — treat as connection failure
+        handleClose();
+      });
+  }
+
+  // Initial connection
+  connect();
 
   return {
     close() {

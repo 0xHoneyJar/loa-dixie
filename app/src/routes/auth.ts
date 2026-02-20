@@ -97,6 +97,11 @@ export function createAuthRoutes(
   return app;
 }
 
+// ADR: HS256 token issuance — see jwt.ts for full ES256 migration plan.
+// When migrating, this function changes to:
+//   1. Import PEM private key via jose.importPKCS8(config.jwtPrivateKey, 'ES256')
+//   2. Set alg to 'ES256' in protected header
+//   3. Add 'kid' header for key rotation support
 async function issueJwt(
   wallet: string,
   config: AuthConfig,

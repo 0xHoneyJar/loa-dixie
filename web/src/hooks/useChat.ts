@@ -71,13 +71,22 @@ export function useChat() {
           messages: [...prev.messages, assistantMsg],
         }));
 
-        // Connect WebSocket for streaming
+        // Connect WebSocket for streaming via ticket pattern
         const token = getAuthToken();
         if (token) {
           streamRef.current?.close();
+          const getTicket = async (): Promise<string> => {
+            const res = await fetch('/api/ws/ticket', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('Failed to obtain WebSocket ticket');
+            const data = await res.json() as { ticket: string };
+            return data.ticket;
+          };
           streamRef.current = connectChatStream(
             result.sessionId,
-            token,
+            getTicket,
             (event: ChatStreamEvent) => {
               setState((prev) => {
                 const messages = [...prev.messages];
