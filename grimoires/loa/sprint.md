@@ -1353,3 +1353,37 @@ Each sprint includes implicit buffer for:
 - `OracleIdentityCard.tsx`: Use `apiFetch` from api module instead of raw `fetch`
 - `useChat.ts`: Use `crypto.randomUUID()` for message IDs instead of `Date.now()`
 - Existing web tests updated if needed
+
+---
+
+## Sprint 19: Final Convergence (Bridge Iter 3)
+
+**Goal**: Address remaining 2 MEDIUM-severity findings from Bridgebuilder iteration 2 (bridge-20260220-451207). These close the gap between APPROVED verdict and production hardening.
+
+**Success Criteria**: WebSocket upgrade validates session ID. Route handlers use shared request context helper. All tests pass.
+
+> Source: Bridgebuilder Review iter 2 — SEC-007, ARCH-001
+
+### Tasks
+
+#### 19.1 Validate session ID in WebSocket upgrade path (SEC-007)
+
+**Description**: The WebSocket upgrade handler (`ws-upgrade.ts`) passes the raw URL pathname to loa-finn without validating the session ID segment. The URL constructor normalizes `../../admin` to `/admin`, enabling path traversal to arbitrary upstream endpoints.
+
+**Acceptance Criteria**:
+- Extract session ID from `/ws/chat/:sessionId` path segment
+- Validate with `isValidPathParam()` before constructing upstream URL
+- Reject invalid session IDs with 400 response
+- Existing ws-upgrade tests updated to cover path traversal attempt
+- All tests pass
+
+#### 19.2 Extract shared request context helper (ARCH-001)
+
+**Description**: Route handlers duplicate the pattern of reading `x-wallet-address` and `x-request-id` headers with slight inconsistencies. Extract a shared helper that provides consistent extraction.
+
+**Acceptance Criteria**:
+- New `getRequestContext(c)` utility that returns `{ wallet, requestId }` with consistent extraction
+- Applied to chat.ts, sessions.ts, identity.ts, ws-ticket.ts
+- Consistent requestId extraction (from request header, not response header)
+- No behavioral changes — pure refactor
+- All tests pass

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { FinnClient } from '../proxy/finn-client.js';
 import type { AgentIdentity } from '../types.js';
+import { getRequestContext } from '../validation.js';
 
 /**
  * ADR: Hono sub-app typing
@@ -44,7 +45,7 @@ export function createIdentityRoutes(finnClient: FinnClient): Hono {
 
   /** GET /oracle — Oracle identity information */
   app.get('/oracle', async (c) => {
-    const requestId = c.req.header('x-request-id') ?? '';
+    const { requestId } = getRequestContext(c);
 
     // Check cache
     const now = Date.now();

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { FinnClient } from '../proxy/finn-client.js';
-import { isValidPathParam } from '../validation.js';
+import { isValidPathParam, getRequestContext } from '../validation.js';
 
 /**
  * ADR: Hono sub-app typing
@@ -25,8 +25,7 @@ export function createSessionRoutes(finnClient: FinnClient): Hono {
 
   /** GET / — List sessions */
   app.get('/', async (c) => {
-    const wallet = c.req.header('x-wallet-address');
-    const requestId = c.req.header('x-request-id') ?? '';
+    const { wallet, requestId } = getRequestContext(c);
 
     try {
       const result = await finnClient.request<unknown>('GET', '/api/sessions', {
@@ -58,7 +57,7 @@ export function createSessionRoutes(finnClient: FinnClient): Hono {
         400,
       );
     }
-    const requestId = c.req.header('x-request-id') ?? '';
+    const { requestId } = getRequestContext(c);
 
     try {
       const result = await finnClient.request<unknown>(

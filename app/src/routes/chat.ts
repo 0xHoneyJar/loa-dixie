@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { FinnClient } from '../proxy/finn-client.js';
-import { isValidPathParam } from '../validation.js';
+import { isValidPathParam, getRequestContext } from '../validation.js';
 
 /**
  * ADR: Hono sub-app typing
@@ -50,9 +50,8 @@ export function createChatRoutes(finnClient: FinnClient): Hono {
     }
     const body = parsed.data;
 
-    // Read from response headers set by middleware (typed context doesn't span Hono instances)
-    const wallet = c.req.header('x-wallet-address');
-    const requestId = c.res.headers.get('X-Request-Id') ?? c.req.header('x-request-id') ?? '';
+    // ARCH-001: Consistent request context extraction via shared helper
+    const { wallet, requestId } = getRequestContext(c);
 
     try {
       if (body.sessionId) {

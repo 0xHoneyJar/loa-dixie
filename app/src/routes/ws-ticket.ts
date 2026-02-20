@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { TicketStore } from '../services/ticket-store.js';
+import { getRequestContext } from '../validation.js';
 
 /**
  * WebSocket ticket routes — issues short-lived tickets for WS authentication.
@@ -15,8 +16,8 @@ export function createWsTicketRoutes(ticketStore: TicketStore): Hono {
    * Requires JWT authentication (wallet extracted by upstream middleware).
    */
   app.post('/', async (c) => {
-    // Wallet set by JWT middleware via header (Hono sub-app boundary)
-    const wallet = c.req.header('x-wallet-address');
+    // ARCH-001: Consistent request context extraction via shared helper
+    const { wallet } = getRequestContext(c);
     if (!wallet) {
       return c.json(
         { error: 'unauthorized', message: 'Authentication required' },

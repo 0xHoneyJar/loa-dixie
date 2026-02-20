@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { TicketStore } from './services/ticket-store.js';
+import { isValidPathParam } from './validation.js';
 
 /**
  * Create a Node.js HTTP 'upgrade' event handler that validates WebSocket
@@ -38,6 +39,17 @@ export function createWsUpgradeHandler(
     const wallet = ticketStore.consume(ticket);
     if (!wallet) {
       rejectUpgrade(socket, 'invalid_ticket');
+      return;
+    }
+
+    // SEC-007: Validate session ID before constructing upstream URL.
+    // URL constructor normalizes path traversal (../../admin → /admin),
+    // so we must validate the session ID segment before URL construction.
+    const pathSegments = url.pathname.split('/').filter(Boolean);
+    // Expected: ['ws', 'chat', '<sessionId>']
+    const sessionId = pathSegments[2];
+    if (sessionId && !isValidPathParam(sessionId)) {
+      rejectUpgrade(socket, 'invalid_session_id');
       return;
     }
 
