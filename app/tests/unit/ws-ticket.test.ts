@@ -80,4 +80,30 @@ describe('ws-ticket routes', () => {
     const wallet = store.consume(body.ticket); // second use
     expect(wallet).toBeNull();
   });
+
+  it('returns 429 when per-wallet ticket cap is reached', async () => {
+    // Create a store with cap of 1
+    const capStore = new TicketStore(30_000, 999_999, 1);
+    const capApp = new Hono();
+    capApp.use('/api/*', createJwtMiddleware(JWT_SECRET, 'dixie-bff'));
+    capApp.use('/api/*', async (c, next) => {
+      const wallet = c.get('wallet');
+      if (wallet) c.req.raw.headers.set('x-wallet-address', wallet);
+      await next();
+    });
+    capApp.route('/api/ws/ticket', createWsTicketRoutes(capStore));
+
+    const jwt = await makeJwt(WALLET);
+    const headers = { authorization: `Bearer ${jwt}` };
+
+    // First ticket should succeed
+    const res1 = await capApp.request('/api/ws/ticket', { method: 'POST', headers });
+    expect(res1.status).toBe(200);
+
+    // Second ticket should be rate-limited
+    const res2 = await capApp.request('/api/ws/ticket', { method: 'POST', headers });
+    expect(res2.status).toBe(429);
+
+    capStore.close();
+  });
 });

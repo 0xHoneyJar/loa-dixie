@@ -15,14 +15,12 @@ export function createTracing(serviceName: string) {
   return createMiddleware(async (c, next) => {
     const incoming = c.req.header('traceparent');
     let traceId: string;
-    let parentSpanId: string | undefined;
 
     if (incoming) {
       // Parse W3C traceparent: version-traceId-parentId-flags
       const parts = incoming.split('-');
       if (parts.length === 4) {
         traceId = parts[1];
-        parentSpanId = parts[2];
       } else {
         traceId = randomUUID().replace(/-/g, '');
       }

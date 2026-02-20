@@ -3,10 +3,18 @@ import { timingSafeEqual } from 'node:crypto';
 import { getAddress } from 'viem';
 import type { AllowlistStore } from '../middleware/allowlist.js';
 
-/** Constant-time string comparison to prevent timing attacks on admin key. */
+/**
+ * Constant-time string comparison to prevent timing attacks on admin key.
+ * Both inputs are padded to equal length before comparison so that the
+ * length check itself does not leak timing information about the key.
+ */
 function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  const maxLen = Math.max(a.length, b.length);
+  const bufA = Buffer.alloc(maxLen);
+  const bufB = Buffer.alloc(maxLen);
+  Buffer.from(a).copy(bufA);
+  Buffer.from(b).copy(bufB);
+  return timingSafeEqual(bufA, bufB) && a.length === b.length;
 }
 
 /**
