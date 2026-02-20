@@ -10,6 +10,7 @@ import { createAuthRoutes } from './routes/auth.js';
 import { createAdminRoutes } from './routes/admin.js';
 import { createChatRoutes } from './routes/chat.js';
 import { createSessionRoutes } from './routes/sessions.js';
+import { createIdentityRoutes } from './routes/identity.js';
 import { FinnClient } from './proxy/finn-client.js';
 import type { DixieConfig } from './config.js';
 
@@ -58,6 +59,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.route('/api/admin', createAdminRoutes(allowlistStore, config.adminKey));
   app.route('/api/chat', createChatRoutes(finnClient));
   app.route('/api/sessions', createSessionRoutes(finnClient));
+  app.route('/api/identity', createIdentityRoutes(finnClient));
 
   // --- SPA fallback (placeholder — web build integrated later) ---
   app.get('/', (c) =>

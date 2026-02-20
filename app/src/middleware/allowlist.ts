@@ -125,6 +125,7 @@ export class AllowlistStore {
   }
 
   private persistToDisk(): void {
+    if (!this.filePath) return; // In-memory only mode
     const dir = path.dirname(this.filePath);
     fs.mkdirSync(dir, { recursive: true });
     const tmpPath = `${this.filePath}.tmp`;
@@ -141,10 +142,11 @@ export function createAllowlistMiddleware(store: AllowlistStore) {
   return createMiddleware(async (c, next) => {
     const pathname = new URL(c.req.url).pathname;
 
-    // Skip allowlist check for health and auth endpoints
+    // Skip allowlist check for endpoints with their own auth gates
     if (
       pathname.startsWith('/api/health') ||
-      pathname.startsWith('/api/auth')
+      pathname.startsWith('/api/auth') ||
+      pathname.startsWith('/api/admin')
     ) {
       await next();
       return;
