@@ -36,9 +36,23 @@ export function createJwtMiddleware(jwtSecret: string, issuer: string) {
         if (payload.sub) {
           c.set('wallet', payload.sub);
         }
-      } catch {
+      } catch (err) {
         // Invalid JWT — continue without setting wallet.
         // Allowlist middleware will handle 401/403.
+        const errorType =
+          err instanceof jose.errors.JWTExpired ? 'expired' :
+          err instanceof jose.errors.JWTClaimValidationFailed ? 'invalid_claims' :
+          err instanceof jose.errors.JWSSignatureVerificationFailed ? 'invalid_signature' :
+          'malformed';
+        process.stderr.write(
+          JSON.stringify({
+            level: 'warn',
+            event: 'jwt_verification_failed',
+            error_type: errorType,
+            timestamp: new Date().toISOString(),
+            service: 'dixie-bff',
+          }) + '\n',
+        );
       }
     }
 

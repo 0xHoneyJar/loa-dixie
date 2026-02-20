@@ -31,7 +31,7 @@ export class AllowlistStore {
   private readonly filePath: string;
   private readonly auditLog: AuditEntry[] = [];
   private readonly maxAuditEntries: number;
-  private lastWriteTimestamp = 0;
+  private lastWrittenHash = '';
   private watcher: fs.FSWatcher | null = null;
   private pollInterval: ReturnType<typeof setInterval> | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -114,22 +114,28 @@ export class AllowlistStore {
     return { ...this.data };
   }
 
-  /** Record an audit entry with bounded ring buffer. */
+  /** Record an audit entry with bounded buffer.
+   *  Uses batch eviction (oldest half) for amortized O(1) per entry,
+   *  instead of shift() which is O(n) per eviction. */
   audit(entry: AuditEntry): void {
     this.auditLog.push(entry);
 
-    // Ring buffer: emit oldest entries to structured log on overflow
-    while (this.auditLog.length > this.maxAuditEntries) {
-      const evicted = this.auditLog.shift()!;
-      process.stdout.write(
-        JSON.stringify({
-          level: 'info',
-          event: 'audit_overflow',
-          overflow_at: new Date().toISOString(),
-          service: 'dixie-bff',
-          ...evicted,
-        }) + '\n',
-      );
+    if (this.auditLog.length > this.maxAuditEntries) {
+      // Batch evict the oldest half via a single splice
+      const evictCount = Math.floor(this.auditLog.length / 2);
+      const evicted = this.auditLog.splice(0, evictCount);
+      const overflowTimestamp = new Date().toISOString();
+      for (const e of evicted) {
+        process.stdout.write(
+          JSON.stringify({
+            level: 'info',
+            event: 'audit_overflow',
+            overflow_at: overflowTimestamp,
+            service: 'dixie-bff',
+            ...e,
+          }) + '\n',
+        );
+      }
     }
   }
 
@@ -207,11 +213,13 @@ export class AllowlistStore {
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
 
-      // Self-write detection: skip reload if file changed within 100ms of our own write
-      if (Date.now() - this.lastWriteTimestamp < 100) return;
-
       try {
-        this.data = this.loadFromDisk();
+        const loaded = this.loadFromDisk();
+        // Self-write detection: compare content hash of loaded data against
+        // the last data we wrote. If they match, this is our own write — skip.
+        const loadedHash = JSON.stringify(loaded);
+        if (loadedHash === this.lastWrittenHash) return;
+        this.data = loaded;
       } catch { /* file temporarily missing during temp+rename */ }
     }, 500);
   }
@@ -234,10 +242,14 @@ export class AllowlistStore {
     if (!this.filePath) return; // In-memory only mode
     const dir = path.dirname(this.filePath);
     fs.mkdirSync(dir, { recursive: true });
+    const content = JSON.stringify(this.data, null, 2);
     const tmpPath = `${this.filePath}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(this.data, null, 2));
+    fs.writeFileSync(tmpPath, content);
     fs.renameSync(tmpPath, this.filePath);
-    this.lastWriteTimestamp = Date.now();
+    // Store a hash of the written data for self-write detection.
+    // Uses JSON.stringify of the parsed data (not the formatted string)
+    // so the comparison in debouncedReload is consistent.
+    this.lastWrittenHash = JSON.stringify(this.data);
   }
 }
 

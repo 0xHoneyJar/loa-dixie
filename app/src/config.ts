@@ -51,7 +51,8 @@ export function loadConfig(): DixieConfig {
   }
 
   const port = parseInt(process.env.DIXIE_PORT ?? '3001', 10);
-  const finnWsUrl = process.env.FINN_WS_URL ?? finnUrl.replace(/^http/, 'ws');
+  const finnWsUrl = process.env.FINN_WS_URL
+    ?? finnUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
 
   const corsOriginsRaw = process.env.DIXIE_CORS_ORIGINS ?? `http://localhost:${port}`;
   const corsOrigins = corsOriginsRaw.split(',').map(o => o.trim());

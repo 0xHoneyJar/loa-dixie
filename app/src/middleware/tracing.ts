@@ -33,13 +33,13 @@ export function createTracing(serviceName: string) {
     const spanId = randomUUID().replace(/-/g, '').slice(0, 16);
     const traceparent = `00-${traceId}-${spanId}-01`;
 
-    // Set on response for downstream debugging
+    // Set trace context as response headers for downstream debugging and proxy calls.
+    // Uses headers instead of c.set() to avoid `as never` type assertions —
+    // Hono's typed context requires a global Variables type declaration that
+    // would be invasive across all route definitions.
     c.header('traceparent', traceparent);
-
-    // Store trace context for downstream proxy calls
-    c.set('traceId' as never, traceId);
-    c.set('spanId' as never, spanId);
-    c.set('traceparent' as never, traceparent);
+    c.header('x-trace-id', traceId);
+    c.header('x-span-id', spanId);
 
     await next();
   });
