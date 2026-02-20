@@ -211,11 +211,13 @@ docs/screenshots/
 evals/results/*
 !evals/results/.gitkeep
 
-# Application artifacts (app/)
-app/src/
-app/tests/
-app/config/
-app/package.json
-app/package-lock.json
-app/tsconfig.json
-app/ecosystem.config.js
+# Application build artifacts
+app/dist/
+app/node_modules/
+
+# Web frontend build artifacts
+web/dist/
+web/node_modules/
+
+# Deploy secrets (never commit)
+deploy/.env

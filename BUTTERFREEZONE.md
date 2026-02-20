@@ -1,24 +1,11 @@
 <!-- AGENT-CONTEXT
-name: loa
+name: loa-dixie
 type: framework
-purpose: Loa is an agent-driven development framework for [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) (Anthropic's official CLI).
+purpose: **The Oracle Product — Cross-Project Understanding
 key_files: [CLAUDE.md, .claude/loa/CLAUDE.loa.md, .loa.config.yaml, .claude/scripts/, .claude/skills/]
 interfaces:
   core: [/auditing-security, /autonomous-agent, /bridgebuilder-review, /browsing-constructs, /bug-triaging]
 dependencies: [git, jq, yq]
-ecosystem:
-  - repo: 0xHoneyJar/loa-finn
-    role: runtime
-    interface: hounfour-router
-    protocol: loa-hounfour@5.0.0
-  - repo: 0xHoneyJar/loa-hounfour
-    role: protocol
-    interface: npm-package
-    protocol: loa-hounfour@7.0.0
-  - repo: 0xHoneyJar/arrakis
-    role: distribution
-    interface: jwt-auth
-    protocol: loa-hounfour@7.0.0
 capability_requirements:
   - filesystem: read
   - filesystem: write (scope: state)
@@ -26,14 +13,14 @@ capability_requirements:
   - git: read_write
   - shell: execute
   - github_api: read_write (scope: external)
-version: v1.49.0
+version: loa@v1.39.1
 trust_level: L2-verified
 -->
 
-# loa
+# loa-dixie
 
 <!-- provenance: DERIVED -->
-Loa is an agent-driven development framework for [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) (Anthropic's official CLI).
+**The Oracle Product — Cross-Project Understanding
 
 The framework provides 29 specialized skills, built with TypeScript/JavaScript, Python, Shell.
 
@@ -70,13 +57,15 @@ graph TD
     docs[docs]
     evals[evals]
     grimoires[grimoires]
-    skills[skills]
+    knowledge[knowledge]
+    persona[persona]
     tests[tests]
     Root[Project Root]
     Root --> docs
     Root --> evals
     Root --> grimoires
-    Root --> skills
+    Root --> knowledge
+    Root --> persona
     Root --> tests
 ```
 Directory structure:
@@ -96,10 +85,10 @@ Directory structure:
 ./grimoires
 ./grimoires/loa
 ./grimoires/pub
-./skills
-./skills/legba
+./knowledge
+./knowledge/sources
+./persona
 ./tests
-./tests/__pycache__
 ./tests/e2e
 ./tests/edge-cases
 ./tests/fixtures
@@ -149,17 +138,18 @@ Directory structure:
 <!-- provenance: DERIVED -->
 | Module | Files | Purpose | Documentation |
 |--------|-------|---------|---------------|
-| `docs/` | 6 | Documentation | \u2014 |
-| `evals/` | 5819 | Benchmarking and regression framework for the Loa agent development system. Ensures framework changes don't degrade agent behavior through | [evals/README.md](evals/README.md) |
-| `grimoires/` | 754 | Home to all grimoire directories for the Loa | [grimoires/README.md](grimoires/README.md) |
-| `skills/` | 5112 | Specialized agent skills | \u2014 |
-| `tests/` | 154 | Test suites | \u2014 |
+| `docs/` | 9 | Documentation | \u2014 |
+| `evals/` | 122 | Benchmarking and regression framework for the Loa agent development system. Ensures framework changes don't degrade agent behavior through | [evals/README.md](evals/README.md) |
+| `grimoires/` | 42 | Home to all grimoire directories for the Loa | [grimoires/README.md](grimoires/README.md) |
+| `knowledge/` | 11 | Documentation | \u2014 |
+| `persona/` | 1 | Persona | \u2014 |
+| `tests/` | 155 | Test suites | \u2014 |
 
 ## Verification
 <!-- provenance: CODE-FACTUAL -->
 - Trust Level: **L2 — CI Verified**
-- 154 test files across 1 suite
-- CI/CD: GitHub Actions (10 workflows)
+- 155 test files across 1 suite
+- CI/CD: GitHub Actions (0 workflows)
 - Security: SECURITY.md present
 
 ## Agents
@@ -169,53 +159,16 @@ The project defines 1 specialized agent persona.
 | Agent | Identity | Voice |
 |-------|----------|-------|
 | Bridgebuilder | You are the Bridgebuilder — a senior engineering mentor who has spent decades building systems at scale. | Your voice is warm, precise, and rich with analogy. |
-
-## Culture
-<!-- provenance: OPERATIONAL -->
-**Naming**: Vodou terminology (Loa, Grimoire, Hounfour, Simstim) as cognitive hooks for agent framework concepts.
-
-**Principles**: Think Before Coding — plan and analyze before implementing, Simplicity First — minimum complexity for the current task, Surgical Changes — minimal diff, maximum impact, Goal-Driven — every action traces to acceptance criteria.
-
-**Methodology**: Agent-driven development with iterative excellence loops (Simstim, Run Bridge, Flatline Protocol).
-**Creative Methodology**: Creative methodology drawing from cyberpunk fiction, free jazz improvisation, and temporary autonomous zones.
-
-**Influences**: Neuromancer (Gibson) — Simstim as shared consciousness metaphor, Flatline Protocol — adversarial multi-model review as creative tension, TAZ (Hakim Bey) — temporary spaces for autonomous agent exploration.
-
-**Knowledge Production**: Knowledge production through collective inquiry — Flatline as multi-model study group.
-
-## Quick Start
-<!-- provenance: OPERATIONAL -->
-
-**Prerequisites**: [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) (Anthropic's CLI for Claude), Git, jq, [yq v4+](https://github.com/mikefarah/yq). See **[INSTALLATION.md](INSTALLATION.md)** for full details.
-
-```bash
-# Install (one command, any existing repo)
-curl -fsSL https://raw.githubusercontent.com/0xHoneyJar/loa/main/.claude/scripts/mount-loa.sh | bash
-
-# Start Claude Code
-claude
-
-# These are slash commands typed inside Claude Code, not your terminal.
-# 5 commands. Full development cycle.
-/plan      # Requirements -> Architecture -> Sprints
-/build     # Implement the current sprint
-/review    # Code review + security audit
-/ship      # Deploy and archive
-```
-
-After install, you should see a `.claude/` directory, `grimoires/loa/`, and `.loa.config.yaml` in your repo. Run `/loa doctor` inside Claude Code to verify everything is healthy.
 <!-- ground-truth-meta
-head_sha: a96803c14952bcc050c36255a2d5baef5b9f2b5b
-generated_at: 2026-02-20T00:53:42Z
+head_sha: 6a69d8c09ca2c7ab325543a0a3427d2d3fca9f71
+generated_at: 2026-02-20T08:14:58Z
 generator: butterfreezone-gen v1.0.0
 sections:
-  agent_context: 7ce878156319ae96e1ab2bd9ab83f2aa74c990757707381a1a2a2fbfa0474d8d
+  agent_context: 58765014d4b1d2099c2917bbc2958aafa67a8bc0717a2aecab4def9162b97839
   capabilities: ab2576b1f2e7e8141f0e93e807d26ed2b7b155e21c96d787507a3ba933bb9795
-  architecture: 970c0549aa208f3f8e0063176776b3fd52798e8d19011897a6a22e6542c2e772
+  architecture: 39eafc0a8fd07efa98584c631c7949e9511b8a4081f9bfa6d8a2ecfc1f5cbe32
   interfaces: 120e3b3a6d65d4939b251dd049f213e32254a91510d48457be2e4f1b3f7399d3
-  module_map: 631e02b2208792010bb727158c97f70a2eee1ca6d9d97477c35bf27c0bba718b
-  verification: 5d6c739eaba49eba9db844be89a4b3a200d5b73e05d9163e4629275f82e41e78
+  module_map: 94829ce23ba5779e4fd247648aa039718f94142e9138a053430cc1e6a534b3c6
+  verification: 5adbc850f927069328341f443580b3487ffac2ae6e3697433d91b055f9eb3040
   agents: ca263d1e05fd123434a21ef574fc8d76b559d22060719640a1f060527ef6a0b6
-  culture: f73380f93bb4fadf36ccc10d60fc57555914363fc90e4f15b4dc4eb92bd1640f
-  quick_start: 3c38dc53bf2ec73cbbb5c372af747ffa7894538d360b1182566647c2940c58c7
 -->
