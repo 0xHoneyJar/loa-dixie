@@ -13,17 +13,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "hono": "^4.7.0",
+    "@0xhoneyjar/loa-hounfour": "file:../../loa-hounfour",
     "@hono/node-server": "^1.14.0",
+    "hono": "^4.7.0",
+    "jose": "^6.0.0",
     "siwe": "^2.3.0",
-    "viem": "^2.23.0",
-    "jose": "^6.0.0"
+    "viem": "^2.23.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0",
-    "eslint": "^9.0.0"
+    "vitest": "^3.0.0"
   }
 }

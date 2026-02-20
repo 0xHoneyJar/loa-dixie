@@ -2,13 +2,29 @@ import { createMiddleware } from 'hono/factory';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getAddress } from 'viem';
+import type { AccessPolicy } from '../types.js';
 
-/** Allowlist file format persisted to disk */
+// DECISION: Allowlist as governance primitive (communitarian architecture)
+// The allowlist gate is not just an access control list — it's the first
+// layer of community governance. The AccessPolicy type from Hounfour
+// formalizes what this gate implements: who can access what, and under
+// what conditions. See: grimoires/loa/context/adr-communitarian-agents.md
+
+/**
+ * Allowlist file format persisted to disk.
+ *
+ * The optional `policy` field uses Hounfour's AccessPolicy type to formalize
+ * governance rules. Phase 1 uses 'role_based' only. Phase 2 adds 'time_limited'
+ * for conviction-based tier expiry. Phase 3 adds per-conversation policies
+ * for soul memory governance.
+ */
 export interface AllowlistData {
   version: number;
   wallets: string[];
   apiKeys: string[];
   updated_at: string;
+  /** Hounfour AccessPolicy governing this allowlist (optional, backward-compatible) */
+  policy?: AccessPolicy;
 }
 
 /** Audit log entry for access attempts */
@@ -21,6 +37,19 @@ export interface AuditEntry {
   endpoint: string;
   ip: string;
 }
+
+/**
+ * Default AccessPolicy for Phase 1: role_based with 'team' role.
+ * All allowlisted entries have equivalent access as team members.
+ * ADR: Phase 1 uses role_based only. Phase 2 adds time_limited for
+ * conviction-based tier expiry. Phase 3 adds per-conversation policies.
+ */
+export const DEFAULT_ACCESS_POLICY: AccessPolicy = {
+  type: 'role_based',
+  roles: ['team'],
+  audit_required: true,
+  revocable: false,
+};
 
 /**
  * In-memory allowlist with file persistence, bounded audit log,
@@ -112,6 +141,24 @@ export class AllowlistStore {
   /** Get the current allowlist data */
   getData(): AllowlistData {
     return { ...this.data };
+  }
+
+  /**
+   * Get the effective AccessPolicy for this allowlist.
+   * Returns the stored policy, or the default Phase 1 policy.
+   *
+   * Default: { type: 'role_based', role: 'team' } — matches current
+   * allowlist behavior where all entries are equivalent team members.
+   */
+  getPolicy(): AccessPolicy {
+    return this.data.policy ?? DEFAULT_ACCESS_POLICY;
+  }
+
+  /** Update the AccessPolicy for this allowlist */
+  setPolicy(policy: AccessPolicy): void {
+    this.data.policy = policy;
+    this.data.updated_at = new Date().toISOString();
+    this.persistToDisk();
   }
 
   /** Record an audit entry with bounded buffer.

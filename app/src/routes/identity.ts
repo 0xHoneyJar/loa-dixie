@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { FinnClient } from '../proxy/finn-client.js';
+import type { AgentIdentity } from '../types.js';
 
 /**
  * ADR: Hono sub-app typing
@@ -16,6 +17,14 @@ import type { FinnClient } from '../proxy/finn-client.js';
  * search for "ADR: Hono sub-app typing" to find all files that can be simplified.
  */
 
+/**
+ * Oracle identity — subset of Hounfour AgentIdentity protocol type.
+ *
+ * Aligned: loa-hounfour/AgentIdentity
+ * The OracleIdentity shape is a projection of AgentIdentity fields relevant
+ * to the Oracle dNFT. When loa-finn's identity graph returns full AgentIdentity
+ * objects, this subset ensures backward-compatible API responses.
+ */
 interface OracleIdentity {
   nftId: string;
   name: string;
