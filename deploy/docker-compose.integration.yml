@@ -1,0 +1,107 @@
+# Hermetic Integration Test Environment — Sprint 15
+#
+# Brings up dixie-bff alongside a REAL loa-finn instance (not mocks).
+# All state is ephemeral — no persistent volumes.
+#
+# Usage:
+#   docker compose -f deploy/docker-compose.integration.yml up -d --wait
+#   pnpm test:integration
+#   docker compose -f deploy/docker-compose.integration.yml down -v
+#
+# Health checks:
+#   curl http://localhost:3201/api/health
+#   curl http://localhost:4200/health
+
+version: "3.9"
+
+services:
+  # --- Redis (session storage for loa-finn) ---
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6479:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- Real loa-finn instance ---
+  loa-finn:
+    image: ghcr.io/0xhoneyjar/loa-finn:latest
+    ports:
+      - "4200:4000"
+    environment:
+      PORT: "4000"
+      NODE_ENV: test
+      REDIS_URL: "redis://redis:6379"
+      # Test JWT key matching dixie's test key
+      JWT_SECRET: "integration-test-jwt-secret-32chars!"
+      JWT_ISSUER: "dixie-bff"
+      # Oracle binding — knowledge sources from shared volume
+      ORACLE_ENABLED: "true"
+      KNOWLEDGE_DIR: "/knowledge"
+    volumes:
+      - knowledge-shared:/knowledge
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # --- Knowledge init container (seed corpus for Oracle) ---
+  knowledge-init:
+    image: alpine:3.19
+    volumes:
+      - knowledge-shared:/knowledge
+      - ../knowledge:/source:ro
+    command: >
+      sh -c "
+        mkdir -p /knowledge/oracle/persona /knowledge/oracle/corpus &&
+        if [ -d /source/oracle ]; then
+          cp -r /source/oracle/* /knowledge/oracle/ 2>/dev/null || true;
+        fi &&
+        echo 'Knowledge corpus initialized' &&
+        exit 0
+      "
+    restart: "no"
+
+  # --- Dixie BFF (the service under test) ---
+  dixie-bff:
+    build:
+      context: ../app
+      dockerfile: ../deploy/Dockerfile
+    ports:
+      - "3201:3001"
+    environment:
+      DIXIE_PORT: "3001"
+      FINN_URL: "http://loa-finn:4000"
+      FINN_WS_URL: "ws://loa-finn:4000"
+      DIXIE_JWT_PRIVATE_KEY: "integration-test-jwt-secret-32chars!"
+      DIXIE_CORS_ORIGINS: "*"
+      DIXIE_ADMIN_KEY: "integration-test-admin-key"
+      DIXIE_ALLOWLIST_PATH: "/data/allowlist.json"
+      DIXIE_RATE_LIMIT_RPM: "1000"
+      NODE_ENV: test
+      LOG_LEVEL: "debug"
+    volumes:
+      - dixie-data:/data
+    depends_on:
+      loa-finn:
+        condition: service_healthy
+      knowledge-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  knowledge-shared:
+  dixie-data:

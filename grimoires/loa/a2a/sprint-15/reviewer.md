@@ -1,103 +1,89 @@
-# Sprint 2 (sprint-15) Implementation Report: Skill Integrations
+# Sprint 15 Implementation Report: Hermetic Integration Testing
 
-## Executive Summary
+## Sprint Overview
 
-Wired `qmd-context-query.sh` into 5 core skills with appropriate query construction, scope selection, and budget allocation. All integrations follow the same pattern: check for script existence and config enablement, run query with skill-specific parameters, include output as advisory context. All 22 integration tests pass. All 24 Sprint 1 unit tests pass (no regressions).
+| Field | Value |
+|-------|-------|
+| Sprint ID | sprint-15 (global) |
+| Label | Hermetic Integration Testing |
+| Tasks | 4 |
+| Status | COMPLETED |
+| Tests Before | 135 |
+| Tests After | 152 (+17) |
 
 ## Tasks Completed
 
-### BB-408: `/implement` Context Injection
-- **File**: `.claude/skills/implementing-tasks/SKILL.md:395-398`
-- **Approach**: Added step 8 to `<grounding_requirements>` section. Instructs agent to query grimoires scope with task descriptions and file names before implementation.
-- **Parameters**: `--scope grimoires --budget 2000 --format text`
-- **Safety**: Graceful no-op when script missing or disabled. Sprint plan acceptance criteria remain source of truth.
+### Task 15.1: Docker Compose Integration Environment
+**File**: `deploy/docker-compose.integration.yml`
 
-### BB-409: `/review-sprint` Context Injection
-- **File**: `.claude/skills/reviewing-code/SKILL.md:317-320`
-- **Approach**: Added step 8 to `<grounding_requirements>` section. Instructs agent to query grimoires scope with changed file names and sprint goal.
-- **Parameters**: `--scope grimoires --budget 1500 --format text`
-- **Safety**: Graceful no-op. Acceptance criteria and code remain primary sources.
+Created hermetic integration environment with:
+- **Redis**: Session storage for loa-finn (port 6479)
+- **loa-finn**: Real instance from `ghcr.io/0xhoneyjar/loa-finn:latest` (port 4200)
+- **knowledge-init**: Alpine init container that seeds Oracle knowledge corpus
+- **dixie-bff**: Build from local Dockerfile (port 3201)
 
-### BB-410: `/ride` Context Injection
-- **File**: `.claude/skills/riding-codebase/SKILL.md:129-136`
-- **Approach**: Added `### QMD Reality Context (Optional)` section after enrichment flags. Instructs agent to query reality scope with module names during drift analysis.
-- **Parameters**: `--scope reality --budget 2000 --format text`
-- **Safety**: Graceful no-op. Labeled as "Optional".
+Key design decisions:
+- All state is ephemeral (no persistent volumes beyond the compose session)
+- JWT secret shared between dixie and finn (`integration-test-jwt-secret-32chars!`)
+- Health checks with start_period to handle cold-start latency
+- Shared `knowledge-shared` volume between init container and loa-finn
 
-### BB-411: `/run-bridge` Context Injection
-- **File**: `.claude/scripts/bridge-orchestrator.sh:155-166`
-- **Approach**: Added `load_bridge_context()` function after `load_bridge_config()`. Accepts query string, calls `qmd-context-query.sh`, stores result in `BRIDGE_CONTEXT` variable.
-- **Parameters**: `--scope grimoires --budget 2500 --format text`
-- **Safety**: Checks script exists and is executable. Falls back to empty string on any error.
+### Task 15.2: Full Proxy Flow Integration Tests
+**File**: `app/tests/integration/proxy-flow.test.ts` (6 tests)
 
-### BB-412: Gate 0 Pre-flight Context Injection
-- **File**: `.claude/scripts/preflight.sh:289-299`
-- **Approach**: Added check #8 in `run_integrity_checks()` before final "complete" message. Queries notes scope for known issues relevant to the current skill.
-- **Parameters**: `--scope notes --budget 1000 --format text`
-- **Safety**: Checks script exists and is executable. Outputs to stderr only. Falls back silently.
+Tests the complete request path through the BFF:
+- **Health endpoint**: Validates dixie returns composite health with finn status
+- **Auth gates**: 401 for unauthenticated, 403 for non-allowlisted API keys
+- **Chat through BFF**: Allowlisted API key creates session via POST /api/chat
+- **Session metadata**: Response includes sessionId and messageId
+- **Circuit breaker**: Returns degraded health when finn is unreachable
 
-### BB-413: Integration Tests
-- **File**: `.claude/scripts/qmd-context-integration-tests.sh` (new, 181 lines)
-- **Coverage**: 22 tests across all 5 integrations plus cross-cutting disabled config test
-  - BB-408: 4 tests (script reference, scope, budget, graceful no-op)
-  - BB-409: 4 tests (script reference, scope, budget, graceful no-op)
-  - BB-410: 4 tests (script reference, scope, budget, graceful no-op)
-  - BB-411: 4 tests (function presence, script reference, budget, context variable)
-  - BB-412: 4 tests (script reference, scope, budget, context surfacing)
-  - Cross-cutting: 2 tests (disabled config returns empty, all SKILL.md check enabled flag)
+Dual-mode architecture:
+- Default: In-process mock finn (hermetic, no Docker needed)
+- Docker: Set `INTEGRATION_URL=http://localhost:3201` for real finn testing
 
-## Technical Highlights
+Notable fix: Module-level health cache in `routes/health.ts` is shared across app instances. Used `resetHealthCache()` export to ensure isolated app gets fresh results.
 
-### Integration Pattern
-Every skill integration follows the same minimal, additive pattern:
-1. Check script existence and `qmd_context.enabled` config
-2. Build skill-specific query from available context
-3. Call `qmd-context-query.sh` with appropriate scope and budget
-4. Include output as advisory context (never authoritative)
-5. Graceful no-op on any failure
+### Task 15.3: WebSocket Bidirectional Proxy Pipe Tests
+**File**: `app/tests/integration/ws-proxy-pipe.test.ts` (7 tests)
 
-### No Breaking Changes
-- SKILL.md modifications are additive (new step appended to existing list)
-- Shell script modifications are additive (new function, new check block)
-- All existing behavior preserved — no code paths modified, only extended
-- All Sprint 1 unit tests pass (24/24)
+Tests the raw WebSocket proxy code in `ws-upgrade.ts`:
+- **Forward direction**: Client message arrives at upstream echo server
+- **Reverse direction**: Echo response arrives back at client
+- **Upstream close cascade**: Upstream close triggers client close event
+- **Client close cascade**: Client close triggers upstream cleanup
+- **Large message**: 100KB payload passes through without corruption
+- **Missing ticket**: Connection rejected without ticket
+- **Invalid ticket**: Connection rejected with bad ticket
 
-### Budget Differentiation
-Budgets tuned per-skill based on context importance:
-| Skill | Budget | Rationale |
-|-------|--------|-----------|
-| /implement | 2000 | Full context for implementation decisions |
-| /review-sprint | 1500 | Focused on architectural alignment |
-| /ride | 2000 | Needs broad reality comparison |
-| /run-bridge | 2500 | Richest context for Bridgebuilder review |
-| Gate 0 | 1000 | Minimal — just known issues |
+Implementation uses `getRequestListener` from `@hono/node-server` to create proper HTTP server with Hono request handling + WebSocket upgrade handler attached.
 
-## Testing Summary
+### Task 15.4: JWT Exchange Integration Tests
+**File**: `app/tests/integration/jwt-exchange.test.ts` (4 tests)
 
-| Suite | Tests | Status |
-|-------|-------|--------|
-| Unit tests (Sprint 1) | 24/24 | PASS |
-| Integration tests (Sprint 2) | 22/22 | PASS |
-| **Total** | **46/46** | **PASS** |
+Validates the full JWT lifecycle:
+- **Valid JWT flow**: JWT issued with HS256 → wallet extracted → allowlist check → finn session created
+- **Expired JWT**: Rejected at dixie's JWT middleware layer (401)
+- **Wrong issuer**: Rejected at dixie's JWT middleware layer (401)
+- **Ticket flow e2e**: Issue returns `{ticket, expiresIn}`, consume returns wallet, second consume returns null
 
-### How to Run
-```bash
-# Unit tests
-bash .claude/scripts/qmd-context-query-tests.sh
+Key design insight: Dixie validates JWTs and forwards wallet via `X-Wallet-Address` header to finn. The mock finn validates the forwarded wallet header arrives (not JWT re-validation). This matches the real architecture where dixie is the JWT authority.
 
-# Integration tests
-bash .claude/scripts/qmd-context-integration-tests.sh
-```
+## Dependencies Added
 
-## Known Limitations
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `ws` | devDependency | WebSocket client for integration tests |
+| `@types/ws` | devDependency | TypeScript types for ws |
 
-1. Integration tests verify structural presence (grep-based), not runtime behavior. Full runtime testing would require mocking skill invocations.
-2. The `load_bridge_context()` function is defined but not yet called from the main orchestration loop — it's available for the bridge skill to call during review construction.
-3. SKILL.md integrations are instructions for the agent, not executable code. Actual context injection happens when the agent follows the instructions during skill execution.
+## Findings and Fixes During Implementation
 
-## Verification Steps
+1. **TicketStore.issue() return type**: Returns `{ticket: string, expiresIn: number} | null`, not a plain string. Tests updated to destructure correctly.
 
-1. Run unit tests: `bash .claude/scripts/qmd-context-query-tests.sh` → 24/24
-2. Run integration tests: `bash .claude/scripts/qmd-context-integration-tests.sh` → 22/22
-3. Verify SKILL.md changes are additive: `git diff .claude/skills/` shows only appended steps
-4. Verify shell script changes are additive: `git diff .claude/scripts/` shows only new functions/blocks
+2. **Valid Ethereum addresses required**: `viem.getAddress()` validates addresses. Test wallet `0xTestWallet123` is invalid. Fixed with proper hex address `0x1234567890123456789012345678901234567890`.
+
+3. **Health cache module singleton**: `cachedFinnHealth` in `routes/health.ts` is module-level, shared across all app instances in the same process. Tests that create isolated apps must call `resetHealthCache()`.
+
+4. **@hono/node-server serve() auto-binds**: `serve()` creates AND listens on port 3000 by default. For custom HTTP servers needing upgrade handlers, use `getRequestListener()` instead.
+
+5. **JWT forwarding architecture**: Dixie validates JWTs → extracts wallet → forwards via header. Mock finn should validate wallet header presence, not re-validate JWT.
