@@ -1,0 +1,56 @@
+{
+  "phase": "prd",
+  "document": "grimoires/loa/prd.md",
+  "cycle": "cycle-029",
+  "timestamp": "2026-02-19T20:15:00Z",
+  "consensus_summary": {
+    "high_consensus_count": 3,
+    "disputed_count": 2,
+    "low_value_count": 0,
+    "blocker_count": 0,
+    "model_agreement_percent": 78
+  },
+  "high_consensus": [
+    {
+      "id": "HC-1",
+      "title": "Constraint enforcement is documentation, not code",
+      "description": "PRD assumes programmatic constraint enforcement (isConstructWorkflowActive function). Actual enforcement is through: (1) CLAUDE.md prompt instructions, (2) command pre-flight .md templates, (3) safety hooks. FR-2/FR-3 must specify which layer yielding occurs at.",
+      "scores": {"opus": 850, "gpt": 820},
+      "recommendation": "Rewrite FR-2/FR-3 to specify three enforcement layers: constraints.json gets construct_yield field for CLAUDE.md rendering, command .md files get conditional pre-flight checks, hooks unchanged.",
+      "integrated": true
+    },
+    {
+      "id": "HC-2",
+      "title": "condense in schema but out of scope",
+      "description": "FR-1 schema lists condense as gate value but Section 7 marks condense implementation as out of scope. Creates dead value in reader.",
+      "scores": {"opus": 780, "gpt": 740},
+      "recommendation": "Remove condense from this cycle's reader. Schema accepts it but treats as full with logged advisory. Full condense behavior deferred to loa-constructs#129.",
+      "integrated": true
+    },
+    {
+      "id": "HC-3",
+      "title": "FR-4 assumes CLI flags, skills take sprint IDs",
+      "description": "FR-4 proposes --criteria-source parameter but review/audit are skill invocations taking sprint IDs, not CLI commands with flags.",
+      "scores": {"opus": 750, "gpt": 710},
+      "recommendation": "Replace --criteria-source with construct manifest detection. When review-sprint detects active construct, reads criteria from construct's declared source. No new CLI parameter.",
+      "integrated": true
+    }
+  ],
+  "disputed": [
+    {
+      "id": "D-1",
+      "title": "FR-4 scope too large for this cycle",
+      "description": "6+ hard coupling points in review/audit skills. Full decoupling is substantial refactoring.",
+      "scores": {"opus": 720, "gpt": 380},
+      "resolution": "pending_user_decision"
+    },
+    {
+      "id": "D-2",
+      "title": "Data/Lore direct vs required inconsistency",
+      "description": "Section 9 shows implement: direct for Data/Lore but schema only allows implement: required.",
+      "scores": {"opus": 650, "gpt": 300},
+      "resolution": "pending_user_decision"
+    }
+  ],
+  "blockers": []
+}
