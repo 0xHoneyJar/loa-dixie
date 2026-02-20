@@ -7,6 +7,15 @@ interface RateLimitEntry {
 /**
  * Sliding window rate limiter.
  * Tracks requests per IP or wallet within a 1-minute window.
+ *
+ * Design: Uses a sliding window (array of timestamps) rather than fixed-window
+ * counters to avoid the boundary-burst problem where a client can send 2x the
+ * limit by timing requests at the boundary of two fixed windows. Each request
+ * stores its timestamp; on the next request, timestamps older than 60s are pruned.
+ *
+ * Cleanup: A background interval sweeps the store every 60s to evict keys with
+ * zero active timestamps. The interval is unref'd so it doesn't prevent graceful
+ * shutdown. This bounds memory to O(active_identities * maxRpm).
  */
 export function createRateLimit(maxRpm: number) {
   const store = new Map<string, RateLimitEntry>();

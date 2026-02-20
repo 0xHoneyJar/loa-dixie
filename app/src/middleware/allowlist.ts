@@ -52,7 +52,9 @@ export class AllowlistStore {
     return this.data.apiKeys.includes(key);
   }
 
-  /** Check if a wallet address is in the allowlist (EIP-55 normalized) */
+  /** Check if a wallet address is in the allowlist (EIP-55 normalized).
+   * Uses viem's getAddress() for checksummed comparison — case-insensitive
+   * matching that prevents bypass via mixed-case addresses (EIP-55). */
   hasWallet(address: string): boolean {
     try {
       const normalized = getAddress(address);

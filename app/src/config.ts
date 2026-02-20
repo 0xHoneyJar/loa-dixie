@@ -12,6 +12,21 @@ export interface DixieConfig {
   otelEndpoint: string | null;
 }
 
+/**
+ * Environment variables:
+ *
+ * FINN_URL              (required) — loa-finn backend URL (e.g. http://localhost:3000)
+ * FINN_WS_URL           (optional) — WebSocket URL for loa-finn; defaults to FINN_URL with ws:// scheme
+ * DIXIE_PORT            (optional) — HTTP listen port; default 3001
+ * DIXIE_JWT_PRIVATE_KEY (required) — HS256 secret for JWT signing; min 32 chars (empty allowed in test)
+ * DIXIE_CORS_ORIGINS    (optional) — comma-separated allowed origins; default http://localhost:{port}
+ * DIXIE_ALLOWLIST_PATH  (optional) — path to allowlist JSON file; default /data/allowlist.json
+ * DIXIE_ADMIN_KEY       (optional) — admin API key for /api/admin endpoints
+ * DIXIE_RATE_LIMIT_RPM  (optional) — max requests per minute per identity; default 100
+ * NODE_ENV              (optional) — runtime environment; default 'development'
+ * LOG_LEVEL             (optional) — structured log level; default 'info'
+ * OTEL_EXPORTER_OTLP_ENDPOINT (optional) — OpenTelemetry collector endpoint; null disables tracing export
+ */
 export function loadConfig(): DixieConfig {
   const finnUrl = process.env.FINN_URL;
   if (!finnUrl) {

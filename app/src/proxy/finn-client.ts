@@ -25,6 +25,13 @@ export class FinnClient {
   private readonly timeoutMs: number;
   private readonly log: LogCallback | null;
 
+  /**
+   * Circuit breaker thresholds (defaults):
+   * - maxFailures: 5 — matches Netflix Hystrix default; 3 is too sensitive for startup transients
+   * - windowMs: 30s — failure window resets counter; prevents stale failures from tripping circuit
+   * - cooldownMs: 10s — time in open state before half-open probe; fast enough for rolling deploys
+   * - timeoutMs: 5s — per-request timeout; loa-finn's P99 is ~2s, 5s gives 2.5x headroom
+   */
   constructor(
     baseUrl: string,
     opts?: {

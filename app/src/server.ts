@@ -8,6 +8,7 @@ import { createRateLimit } from './middleware/rate-limit.js';
 import { createTracing } from './middleware/tracing.js';
 import { createLogger } from './middleware/logger.js';
 import { createBodyLimit } from './middleware/body-limit.js';
+import { createPaymentGate } from './middleware/payment.js';
 import { createHealthRoutes } from './routes/health.js';
 import { createAuthRoutes } from './routes/auth.js';
 import { createAdminRoutes } from './routes/admin.js';
@@ -41,6 +42,20 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     watch: config.nodeEnv !== 'test',
   });
   const ticketStore = new TicketStore();
+
+  // Middleware ordering rationale:
+  // 1. requestId — generates trace ID before anything else
+  // 2. tracing — OpenTelemetry spans need the request ID
+  // 3. secureHeaders — security headers on every response
+  // 4. cors — CORS must precede body parsing
+  // 5. bodyLimit — reject oversized payloads early
+  // 6. responseTime — wraps all downstream processing
+  // 7. logger — logs with response time available
+  // 8. jwt — extracts wallet from token
+  // 9. rateLimit — rate-limit by wallet/IP
+  // 10. allowlist — gate by wallet/API key
+  // 11. payment — x402 micropayment hook (noop)
+  // 12. routes — business logic
 
   // --- Global middleware ---
   app.use('*', requestId());
@@ -77,6 +92,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
 
   // --- Allowlist gate (after JWT extraction so wallet is available) ---
   app.use('/api/*', createAllowlistMiddleware(allowlistStore));
+
+  // HOOK: x402 payment gate — micropayment middleware slot (loa-freeside #62)
+  // Position: after allowlist (don't bill denied requests), before routes
+  // Replace with @x402/hono when ready. See: app/src/middleware/payment.ts
+  app.use('/api/*', createPaymentGate());
 
   // --- Routes ---
   app.route('/api/health', createHealthRoutes(finnClient));
