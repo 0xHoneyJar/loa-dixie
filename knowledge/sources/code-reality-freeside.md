@@ -5,6 +5,8 @@ provenance: cycle-001-sprint-3
 tags: ["technical", "architectural"]
 ---
 
+<!-- upstream-source: 0xHoneyJar/loa-freeside:main | generated: false | last-synced: 2026-02-22 -->
+
 # Code Reality: loa-freeside (Integration Surface)
 
 Technical knowledge source documenting the loa-freeside infrastructure as observed

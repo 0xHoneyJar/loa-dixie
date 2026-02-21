@@ -153,7 +153,7 @@ let cachedCorpusMeta: {
 } | null = null;
 const CORPUS_CACHE_TTL_MS = 60_000; // 1 minute — corpus changes rarely
 
-function getCorpusMeta(
+export function getCorpusMeta(
   nowOverride?: Date,
 ): NonNullable<HealthResponse['services']['knowledge_corpus']> | null {
   const now = Date.now();

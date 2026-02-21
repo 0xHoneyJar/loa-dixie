@@ -109,10 +109,10 @@ These sprints formalize that insight with concrete infrastructure, tests, and pr
 **Fix**: Shell script that reads `knowledge/sources.json` and reports: total sources, sources per tag category, which of the 5 repos have dedicated code-reality files, which repos are missing coverage, total estimated token budget vs. actual. Output as structured text suitable for inclusion in bridge reviews.
 
 **Acceptance Criteria**:
-- [ ] Script reports source count by tag
-- [ ] Script identifies repos with/without code-reality coverage
-- [ ] Script reports token budget utilization
-- [ ] Script exits 0 (informational, not a gate)
+- [x] Script reports source count by tag
+- [x] Script identifies repos with/without code-reality coverage
+- [x] Script reports token budget utilization
+- [x] Script exits 0 (informational, not a gate)
 
 ### Task 15.2: Add code-reality generation markers (speculation-2 — ARCHITECTURE)
 
@@ -120,9 +120,9 @@ These sprints formalize that insight with concrete infrastructure, tests, and pr
 **Fix**: Add `<!-- upstream-source: {repo}:{branch} | generated: false | last-synced: {date} -->` HTML comment markers to the top of each code-reality file. These markers enable future automation: a script can compare `last-synced` against upstream HEAD to detect drift. Mark `generated: false` to indicate manual curation (future: `generated: true` for auto-generated from /ride output).
 
 **Acceptance Criteria**:
-- [ ] All 4 code-reality files have upstream-source markers
-- [ ] Markers include repo, branch, generated flag, last-synced date
-- [ ] Existing content unchanged (markers added as HTML comments)
+- [x] All 4 code-reality files have upstream-source markers
+- [x] Markers include repo, branch, generated flag, last-synced date
+- [x] Existing content unchanged (markers added as HTML comments)
 
 ### Task 15.3: Enrich agent /knowledge endpoint (speculation-1 + speculation-2 — FEATURE)
 
@@ -130,10 +130,10 @@ These sprints formalize that insight with concrete infrastructure, tests, and pr
 **Fix**: When finn /knowledge/metadata returns successfully, merge local corpus metadata: `corpus_version`, freshness summary (`{healthy, stale, expired}` counts), and source count. Return enriched response. On finn failure, return local-only corpus metadata instead of empty object.
 
 **Acceptance Criteria**:
-- [ ] Response includes `corpus_version` field
-- [ ] Response includes `freshness` object with healthy/stale/expired counts
-- [ ] Graceful degradation returns local corpus metadata when finn unavailable
-- [ ] 3 new tests: enriched response, freshness counts, graceful degradation
+- [x] Response includes `corpus_version` field
+- [x] Response includes `freshness` object with healthy/stale/expired counts
+- [x] Graceful degradation returns local corpus metadata when finn unavailable
+- [x] 3 new tests: enriched response, freshness counts, graceful degradation
 
 ### Task 15.4: Document knowledge-as-product architecture (reframe-1 + speculation-3 — DESIGN)
 
@@ -141,28 +141,28 @@ These sprints formalize that insight with concrete infrastructure, tests, and pr
 **Fix**: Add section documenting the knowledge-as-product pattern: the Oracle's corpus as product surface (Twilio parallel), corpus versioning, conservation invariant (every claim grounded in verifiable source), freshness as reliability, competitive positioning through knowledge depth (vs. infrastructure-only approaches). Reference the Bridgebuilder review findings and the Cambrian context (Conway Automaton comparison).
 
 **Acceptance Criteria**:
-- [ ] New "Knowledge-as-Product Architecture" section added
-- [ ] Documents conservation invariant
-- [ ] References Twilio parallel and competitive positioning
-- [ ] Grounded in actual architecture (corpus_version, freshness validation, coverage)
+- [x] New "Knowledge-as-Product Architecture" section added
+- [x] Documents conservation invariant
+- [x] References Twilio parallel and competitive positioning
+- [x] Grounded in actual architecture (corpus_version, freshness validation, coverage)
 
 ### Task 15.5: File upstream issues for corpus freshness CI (speculation-2 — CROSS-REPO)
 
 **Cross-repo surfaces**:
-- [ ] loa (framework): "Knowledge Corpus Freshness: Automated CI Validation" — propose vitest-based corpus health checks as a Loa framework pattern, applicable to any project with knowledge/ directory
-- [ ] loa-finn: "Oracle API: Corpus Version Contract" — propose x-corpus-version response header from Oracle API, enabling clients to detect version drift across surfaces
+- [x] loa (framework): "Knowledge Corpus Freshness: Automated CI Validation" — 0xHoneyJar/loa#398
+- [x] loa-finn: "Oracle API: Corpus Version Contract" — 0xHoneyJar/loa-finn#94
 
 ---
 
 ## Verification
 
-- [ ] ~505 tests passing (492 existing + ~13 new)
-- [ ] `knowledge/sources.json` schema version 2 with corpus versioning
-- [ ] `knowledge/CHANGELOG.md` exists
-- [ ] Health endpoint reports `knowledge_corpus` metadata
-- [ ] Agent `/knowledge` endpoint enriched with corpus version
-- [ ] All knowledge sources pass freshness, terminology, and conservation tests
-- [ ] Cross-repo issues filed
+- [x] 505 tests passing (492 existing + 13 new)
+- [x] `knowledge/sources.json` schema version 2 with corpus versioning
+- [x] `knowledge/CHANGELOG.md` exists
+- [x] Health endpoint reports `knowledge_corpus` metadata
+- [x] Agent `/knowledge` endpoint enriched with corpus version
+- [x] All knowledge sources pass freshness, terminology, and conservation tests
+- [x] Cross-repo issues filed (loa#398, loa-finn#94)
 
 ## File Change Summary
 

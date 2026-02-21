@@ -3,6 +3,7 @@ import type { FinnClient } from '../proxy/finn-client.js';
 import type { ConvictionResolver } from '../services/conviction-resolver.js';
 import type { MemoryStore } from '../services/memory-store.js';
 import { getRequestContext } from '../validation.js';
+import { getCorpusMeta } from './health.js';
 import { tierMeetsRequirement } from '../types/conviction.js';
 import type {
   AgentQueryRequest,
@@ -312,18 +313,36 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       );
     }
 
+    // Local corpus metadata (always available)
+    const corpusMeta = getCorpusMeta();
+    const localCorpus = corpusMeta
+      ? {
+          corpus_version: corpusMeta.corpus_version,
+          freshness: {
+            healthy: corpusMeta.sources - corpusMeta.stale_sources,
+            stale: corpusMeta.stale_sources,
+            total: corpusMeta.sources,
+          },
+        }
+      : null;
+
     try {
       const knowledge = await finnClient.request<{
         domains: Array<{ name: string; documentCount: number; lastUpdated: string }>;
         totalDocuments: number;
       }>('GET', '/api/knowledge/metadata');
 
-      return c.json(knowledge);
+      // Merge finn metadata with local corpus metadata
+      return c.json({
+        ...knowledge,
+        ...(localCorpus ?? {}),
+      });
     } catch {
-      // Graceful degradation — return empty metadata
+      // Graceful degradation — return local corpus metadata when finn unavailable
       return c.json({
         domains: [],
         totalDocuments: 0,
+        ...(localCorpus ?? {}),
       });
     }
   });

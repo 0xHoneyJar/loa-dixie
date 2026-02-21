@@ -413,6 +413,61 @@ describe('Agent API routes', () => {
 
       expect(res.status).toBe(403);
     });
+
+    it('includes corpus_version in enriched response (Task 15.3)', async () => {
+      (mockFinnClient.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+        domains: [{ name: 'berachain', documentCount: 150, lastUpdated: '2026-02-21' }],
+        totalDocuments: 150,
+      });
+
+      const app = createApp();
+      const res = await app.request('/api/agent/knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.corpus_version).toBeGreaterThanOrEqual(1);
+      expect(body.totalDocuments).toBe(150);
+    });
+
+    it('includes freshness counts in enriched response (Task 15.3)', async () => {
+      (mockFinnClient.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+        domains: [],
+        totalDocuments: 0,
+      });
+
+      const app = createApp();
+      const res = await app.request('/api/agent/knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.freshness).toBeDefined();
+      expect(body.freshness.healthy).toBeGreaterThanOrEqual(0);
+      expect(body.freshness.stale).toBeGreaterThanOrEqual(0);
+      expect(body.freshness.total).toBe(body.freshness.healthy + body.freshness.stale);
+    });
+
+    it('returns local corpus metadata when finn unavailable (Task 15.3)', async () => {
+      (mockFinnClient.request as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('finn down'),
+      );
+
+      const app = createApp();
+      const res = await app.request('/api/agent/knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      // Should still have local corpus metadata even though finn is down
+      expect(body.corpus_version).toBeGreaterThanOrEqual(1);
+      expect(body.freshness).toBeDefined();
+      expect(body.domains).toEqual([]);
+      expect(body.totalDocuments).toBe(0);
+    });
   });
 
   describe('POST /schedule', () => {

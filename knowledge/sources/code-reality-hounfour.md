@@ -5,6 +5,8 @@ provenance: cycle-025-sprint-61-task-2.4
 tags: ["technical"]
 ---
 
+<!-- upstream-source: 0xHoneyJar/loa-hounfour:main | generated: false | last-synced: 2026-02-22 -->
+
 # Code Reality: loa-hounfour
 
 Technical knowledge source documenting the `@0xhoneyjar/loa-hounfour` protocol

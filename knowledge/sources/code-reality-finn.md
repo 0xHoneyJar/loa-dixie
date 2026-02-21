@@ -4,6 +4,7 @@ source_repo: 0xHoneyJar/loa-finn
 provenance: cycle-025-sprint-61-task-2.4
 tags: ["technical"]
 ---
+<!-- upstream-source: 0xHoneyJar/loa-finn:main | generated: false | last-synced: 2026-02-22 -->
 
 # Code Reality: loa-finn
 
