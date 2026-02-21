@@ -23,8 +23,10 @@ import { TicketStore } from './services/ticket-store.js';
 import { MemoryStore } from './services/memory-store.js';
 import { createMemoryContext } from './middleware/memory-context.js';
 import { createEconomicMetadata } from './middleware/economic-metadata.js';
+import { createConvictionTierMiddleware } from './middleware/conviction-tier.js';
 import { createPersonalityRoutes } from './routes/personality.js';
 import { PersonalityCache } from './services/personality-cache.js';
+import { ConvictionResolver } from './services/conviction-resolver.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
 import { SignalEmitter } from './services/signal-emitter.js';
@@ -50,6 +52,8 @@ export interface DixieApp {
   memoryStore: MemoryStore | null;
   /** Phase 2: BEAUVOIR personality cache */
   personalityCache: PersonalityCache;
+  /** Phase 2: Conviction tier resolver */
+  convictionResolver: ConvictionResolver;
 }
 
 /**
@@ -122,6 +126,21 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     );
   }
   const personalityCache = new PersonalityCache(finnClient, personalityProjectionCache);
+
+  // Phase 2: Conviction resolver (uses projection cache with conviction prefix when Redis available)
+  let convictionProjectionCache: ProjectionCache<import('./types/conviction.js').ConvictionResult> | null = null;
+  if (redisClient) {
+    convictionProjectionCache = new ProjectionCache(
+      redisClient,
+      'conviction',
+      config.convictionTierTtlSec,
+    );
+  }
+  const convictionResolver = new ConvictionResolver(
+    finnClient,
+    convictionProjectionCache,
+    allowlistStore,
+  );
 
   // DECISION: Middleware pipeline as constitutional ordering (communitarian architecture)
   // The middleware sequence is not arbitrary — it encodes governance priorities.
@@ -200,6 +219,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Replace with @x402/hono when ready. See: app/src/middleware/payment.ts
   app.use('/api/*', createPaymentGate());
 
+  // --- Phase 2 Position 13: Conviction tier resolution ---
+  // Resolves wallet → BGT staking → conviction tier (5-tier commons governance)
+  // Graceful degradation: failure defaults to 'observer' tier
+  app.use('/api/*', createConvictionTierMiddleware(convictionResolver));
+
   // --- Phase 2 Position 14: Memory context injection ---
   // Resolves wallet → nftId → projection → InjectionContext
   // Graceful degradation: failure doesn't block request
@@ -276,5 +300,6 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     projectionCache,
     memoryStore,
     personalityCache,
+    convictionResolver,
   };
 }

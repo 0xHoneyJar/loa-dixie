@@ -156,8 +156,9 @@ function setPhase2Headers(c: { req: { header: (name: string) => string | undefin
   const memoryTokens = c.req.header('x-memory-tokens');
   if (memoryTokens) c.header('X-Memory-Tokens', memoryTokens);
 
-  // Conviction tier — placeholder until Sprint 5 implements conviction resolver
-  c.header('X-Conviction-Tier', 'observer');
+  // Conviction tier — resolved by conviction-tier middleware (position 13)
+  const convictionTier = c.req.header('x-conviction-tier');
+  if (convictionTier) c.header('X-Conviction-Tier', convictionTier);
 }
 
 /**
