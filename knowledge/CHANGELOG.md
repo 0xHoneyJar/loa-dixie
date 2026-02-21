@@ -7,6 +7,29 @@ Corpus versions follow integer increment (not semver) — each corpus mutation i
 
 ---
 
+## [3] - 2026-02-22
+
+### Added
+- `scripts/knowledge-drift.sh` — automated drift detection ("ArgoCD for knowledge")
+- `knowledge/contracts/oracle-requirements.json` — consumer-driven corpus contract declaration
+- `scripts/corpus-diff.sh` — corpus diff utility ("git log --stat for knowledge")
+- Declaration-driven consumer contract tests reading from oracle-requirements.json
+- Upstream drift marker contract tests (parseable dates, 30-day threshold)
+
+### Changed
+- `corpus_version` incremented to 3
+- Contract tests extended: +7 declaration-driven + 2 drift marker tests
+
+### Cross-Repo
+- loa-finn#95: Oracle Metacognition — Self-Knowledge API Contract
+- loa#399: Knowledge Drift Detection — CI Integration Pattern
+
+### Architecture
+- Bilateral contract pattern complete: producer tests (what corpus promises) + consumer tests (what runtime needs) + declaration file (formal requirements)
+- Drift detection completes the reconciliation loop: event log (audit trail) + contracts (quality) + drift (sync)
+
+---
+
 ## [2] - 2026-02-22
 
 ### Added

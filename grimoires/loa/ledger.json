@@ -263,12 +263,26 @@
           "label": "Knowledge Product Surface & Bidirectional Freshness (Bridge Horizon)",
           "tasks": 5,
           "status": "completed"
+        },
+        {
+          "id": "sprint-16",
+          "global_id": 35,
+          "label": "Corpus Service Architecture + Oracle Self-Knowledge (Deep Review)",
+          "tasks": 6,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-17",
+          "global_id": 36,
+          "label": "Knowledge Drift Detection + Consumer Contracts (Deep Review)",
+          "tasks": 5,
+          "status": "pending"
         }
       ]
     }
   ],
   "active_cycle": "cycle-002",
   "active_bugfix": null,
-  "global_sprint_counter": 34,
+  "global_sprint_counter": 36,
   "bugfix_cycles": []
 }

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "corpus_version": 2,
+  "corpus_version": 3,
   "default_budget_tokens": 50000,
   "glossary_terms": {
     "hounfour": ["technical", "architectural"],

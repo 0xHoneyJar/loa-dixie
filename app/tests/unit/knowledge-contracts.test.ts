@@ -22,6 +22,10 @@ const EVENTS_PATH = path.resolve(
   __dirname,
   '../../../knowledge/corpus-events.json',
 );
+const CONTRACTS_PATH = path.resolve(
+  __dirname,
+  '../../../knowledge/contracts/oracle-requirements.json',
+);
 
 interface SourceEntry {
   id: string;
@@ -453,5 +457,182 @@ describe('consumer contracts — token budget', () => {
     expect(config.default_budget_tokens).toBeGreaterThanOrEqual(30000);
     expect(config.default_budget_tokens).toBeLessThanOrEqual(100000);
     recordContract('consumer', 'token budget: within 30K-100K', passed);
+  });
+});
+
+// ─── Declaration-driven consumer contracts (Task 17.2) ───
+
+describe('consumer contracts — declaration-driven (oracle-requirements.json)', () => {
+  interface OracleRequirements {
+    consumer: string;
+    version: number;
+    requirements: {
+      minimum_sources: { total: number; required_tags: Record<string, number> };
+      code_reality_coverage: { required_repos: string[]; source_id_map: Record<string, string> };
+      glossary_requirements: { minimum_terms: number; required_terms: string[] };
+      freshness: { max_stale_sources: number };
+      token_budget: { minimum_budget: number; maximum_budget: number };
+    };
+  }
+
+  function loadRequirements(): OracleRequirements {
+    const raw = fs.readFileSync(CONTRACTS_PATH, 'utf-8');
+    return JSON.parse(raw);
+  }
+
+  it('oracle-requirements.json exists and is valid', () => {
+    const passed = fs.existsSync(CONTRACTS_PATH);
+    expect(passed).toBe(true);
+    const reqs = loadRequirements();
+    expect(reqs.consumer).toBe('oracle-runtime');
+    expect(reqs.version).toBeGreaterThanOrEqual(1);
+    recordContract('consumer', 'declaration: exists and valid', passed);
+  });
+
+  it('corpus meets minimum source count from declaration', () => {
+    const config = loadConfig();
+    const reqs = loadRequirements();
+    const passed = config.sources.length >= reqs.requirements.minimum_sources.total;
+    expect(config.sources.length).toBeGreaterThanOrEqual(
+      reqs.requirements.minimum_sources.total,
+    );
+    recordContract('consumer', 'declaration: min sources met', passed);
+  });
+
+  it('corpus meets tag distribution from declaration', () => {
+    const config = loadConfig();
+    const reqs = loadRequirements();
+    const tagCounts: Record<string, number> = {};
+
+    for (const source of config.sources) {
+      for (const tag of source.tags) {
+        tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
+      }
+    }
+
+    const failures: string[] = [];
+    for (const [tag, minCount] of Object.entries(reqs.requirements.minimum_sources.required_tags)) {
+      const actual = tagCounts[tag] ?? 0;
+      if (actual < minCount) {
+        failures.push(`${tag}: need ${minCount}, have ${actual}`);
+      }
+    }
+
+    const passed = failures.length === 0;
+    expect(
+      failures,
+      `Tag distribution unmet:\n${failures.join('\n')}`,
+    ).toHaveLength(0);
+
+    recordContract('consumer', 'declaration: tag distribution met', passed);
+  });
+
+  it('corpus meets code-reality coverage from declaration', () => {
+    const config = loadConfig();
+    const reqs = loadRequirements();
+    const sourceIds = new Set(config.sources.map((s) => s.id));
+    const missing: string[] = [];
+
+    for (const [repo, sourceId] of Object.entries(reqs.requirements.code_reality_coverage.source_id_map)) {
+      if (!sourceIds.has(sourceId)) {
+        missing.push(`${repo} (expected: ${sourceId})`);
+      }
+    }
+
+    const passed = missing.length === 0;
+    expect(
+      missing,
+      `Missing code-reality sources:\n${missing.join('\n')}`,
+    ).toHaveLength(0);
+
+    recordContract('consumer', 'declaration: code-reality coverage met', passed);
+  });
+
+  it('corpus meets glossary requirements from declaration', () => {
+    const config = loadConfig();
+    const reqs = loadRequirements();
+    const glossaryTerms = Object.keys(config.glossary_terms).map((t) => t.toLowerCase());
+    const missing: string[] = [];
+
+    for (const term of reqs.requirements.glossary_requirements.required_terms) {
+      if (!glossaryTerms.includes(term.toLowerCase())) {
+        missing.push(term);
+      }
+    }
+
+    const termCountOk = glossaryTerms.length >= reqs.requirements.glossary_requirements.minimum_terms;
+    const termsPresent = missing.length === 0;
+    const passed = termCountOk && termsPresent;
+
+    expect(glossaryTerms.length).toBeGreaterThanOrEqual(
+      reqs.requirements.glossary_requirements.minimum_terms,
+    );
+    expect(
+      missing,
+      `Missing required glossary terms: ${missing.join(', ')}`,
+    ).toHaveLength(0);
+
+    recordContract('consumer', 'declaration: glossary requirements met', passed);
+  });
+});
+
+// ─── Drift marker contracts (Task 17.1) ───
+
+describe('producer contracts — upstream drift markers', () => {
+  it('all upstream-source markers have parseable dates', () => {
+    const sourceFiles = fs.readdirSync(SOURCES_DIR).filter((f) => f.endsWith('.md'));
+    const violations: string[] = [];
+
+    for (const file of sourceFiles) {
+      const content = fs.readFileSync(path.join(SOURCES_DIR, file), 'utf-8');
+      const marker = content.match(/<!-- upstream-source: ([^>]*?)-->/);
+      if (!marker) continue;
+
+      const dateMatch = marker[1]?.match(/last-synced:\s*(\d{4}-\d{2}-\d{2})/);
+      if (!dateMatch) {
+        violations.push(`${file}: upstream-source marker missing last-synced date`);
+      }
+    }
+
+    const passed = violations.length === 0;
+    expect(
+      violations,
+      `Unparseable drift markers:\n${violations.join('\n')}`,
+    ).toHaveLength(0);
+
+    recordContract('producer', 'drift: markers have parseable dates', passed);
+  });
+
+  it('all upstream-source markers are within 30-day threshold', () => {
+    const now = new Date('2026-02-22');
+    const threshold = 30;
+    const sourceFiles = fs.readdirSync(SOURCES_DIR).filter((f) => f.endsWith('.md'));
+    const staleFiles: string[] = [];
+
+    for (const file of sourceFiles) {
+      const content = fs.readFileSync(path.join(SOURCES_DIR, file), 'utf-8');
+      const marker = content.match(/<!-- upstream-source: ([^>]*?)-->/);
+      if (!marker) continue;
+
+      const dateMatch = marker[1]?.match(/last-synced:\s*(\d{4}-\d{2}-\d{2})/);
+      if (!dateMatch) continue;
+
+      const syncDate = new Date(dateMatch[1]!);
+      const driftDays = Math.floor(
+        (now.getTime() - syncDate.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      if (driftDays > threshold) {
+        staleFiles.push(`${file}: ${driftDays} days since sync (max ${threshold})`);
+      }
+    }
+
+    const passed = staleFiles.length === 0;
+    expect(
+      staleFiles,
+      `Stale upstream sources:\n${staleFiles.join('\n')}`,
+    ).toHaveLength(0);
+
+    recordContract('producer', 'drift: all within 30-day threshold', passed);
   });
 });

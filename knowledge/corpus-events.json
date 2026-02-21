@@ -26,6 +26,24 @@
       "author": "bridge-20260222-deeparch",
       "files_affected": 6,
       "corpus_version_after": 2
+    },
+    {
+      "seq": 4,
+      "type": "add_source",
+      "timestamp": "2026-02-22T20:30:00Z",
+      "detail": "Knowledge drift detection (scripts/knowledge-drift.sh), consumer contract declaration (oracle-requirements.json), corpus diff utility (scripts/corpus-diff.sh)",
+      "author": "bridge-20260222-deeparch",
+      "files_affected": 3,
+      "corpus_version_after": 3
+    },
+    {
+      "seq": 5,
+      "type": "schema_upgrade",
+      "timestamp": "2026-02-22T20:31:00Z",
+      "detail": "corpus_version 2→3: bilateral contract pattern complete (producer + consumer contracts, declaration-driven validation, drift markers)",
+      "author": "bridge-20260222-deeparch",
+      "files_affected": 1,
+      "corpus_version_after": 3
     }
   ]
 }
