@@ -201,7 +201,7 @@ The Oracle is the first agent persona to use the knowledge enrichment pipeline �
 
 ### Cycle 26 — Dixie Phase 1: Oracle Orchestration Layer
 
-**Started**: 2026-02-18 | **Sprints**: 19 (cycle-001) | **Tasks**: ~150 | **Bridge Iterations**: 3
+**Started**: 2026-02-20 | **Sprints**: 19 (cycle-001) | **Tasks**: ~150 | **Bridge Iterations**: 3
 
 The first Dixie cycle established the experience orchestration layer — a Hono BFF gateway (loa-dixie) sitting between end users and loa-finn. 19 sprints delivered the full vertical slice: JWT authentication middleware, WebSocket proxying with ticket-based auth, soul memory injection, conviction-gated commons access (5-tier BGT staking), tool event streaming, and economic metadata enrichment. 153 tests validated the foundation.
 
@@ -209,7 +209,7 @@ Three bridge iterations drove architectural refinement, converging on clean sepa
 
 ### Cycle 27 — Dixie Phase 2: Experience Orchestrator with Economic Awareness
 
-**Started**: 2026-02-19 | **Sprints**: 13 (cycle-002) | **Tasks**: ~100 | **Bridge Iterations**: 3
+**Started**: 2026-02-21 | **Sprints**: 13 (cycle-002) | **Tasks**: ~100 | **Bridge Iterations**: 3
 
 The second Dixie cycle extended the gateway into a full experience orchestrator with economic awareness. 13 sprints delivered autonomous operation mode with a 7-step permission engine, NL scheduling with cron integration, agent API surface (ERC-6551 TBA auth + x402 metering), compound learning signal aggregation, and Phase 2 E2E validation. 492 tests across 44 test files — a 3.2x increase from Phase 1.
 
@@ -230,8 +230,8 @@ Three bridge iterations converged at 1.0, achieving full convergence across secu
 | Billing wire E2E verified | 22 | 2026-02-17 | Production billing settlement proven |
 | Production deploy | 24 | 2026-02-16 | CI/CD, health monitoring, ES256 |
 | Oracle knowledge interface | 25 | 2026-02-16 | Unified knowledge system |
-| Dixie Phase 1 — Oracle orchestration | 26 | 2026-02-18 | BFF gateway, 153 tests, 3 bridge iterations |
-| Dixie Phase 2 — Experience orchestrator | 27 | 2026-02-19 | Economic awareness, 492 tests, converged at 1.0 |
+| Dixie Phase 1 — Oracle orchestration | 26 | 2026-02-20 | BFF gateway, 153 tests, 3 bridge iterations |
+| Dixie Phase 2 — Experience orchestrator | 27 | 2026-02-21 | Economic awareness, 492 tests, converged at 1.0 |
 
 ---
 
