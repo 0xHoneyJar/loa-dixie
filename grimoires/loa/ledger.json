@@ -1,0 +1,153 @@
+{
+  "version": "1.0.0",
+  "cycles": [
+    {
+      "id": "cycle-001",
+      "label": "Dixie MVP — Oracle Orchestration Layer",
+      "started": "2026-02-20",
+      "status": "active",
+      "prd": "grimoires/loa/prd.md",
+      "sdd": "grimoires/loa/sdd.md",
+      "sprint_plan": "grimoires/loa/sprint.md",
+      "sprints": [
+        {
+          "id": "sprint-1",
+          "global_id": 1,
+          "label": "Project Scaffold + BFF Skeleton",
+          "tasks": 7,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-2",
+          "global_id": 2,
+          "label": "Allowlist Gate + Auth Flow",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-3",
+          "global_id": 3,
+          "label": "Knowledge Corpus Update + Deployment Config",
+          "tasks": 7,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-4",
+          "global_id": 4,
+          "label": "Web Chat UI (Streaming + Markdown + Citations)",
+          "tasks": 9,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-5",
+          "global_id": 5,
+          "label": "Oracle dNFT Identity + Integration Testing",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-6",
+          "global_id": 6,
+          "label": "E2E Validation + Polish + Monitoring",
+          "tasks": 7,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-7",
+          "global_id": 7,
+          "label": "Security & Auth Excellence",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-8",
+          "global_id": 8,
+          "label": "Operational Resilience & Observability",
+          "tasks": 4,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-9",
+          "global_id": 9,
+          "label": "Architectural Documentation & Future-Proofing",
+          "tasks": 4,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-10",
+          "global_id": 10,
+          "label": "Security Hardening II (Bridge Iter 1)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-11",
+          "global_id": 11,
+          "label": "Quality & Resilience (Bridge Iter 1)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-12",
+          "global_id": 12,
+          "label": "Final Convergence (Bridge Iter 2)",
+          "tasks": 3,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-13",
+          "global_id": 13,
+          "label": "Hounfour Protocol Alignment",
+          "tasks": 4,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-14",
+          "global_id": 14,
+          "label": "Communitarian Architecture & Decision Trail",
+          "tasks": 4,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-15",
+          "global_id": 15,
+          "label": "Hermetic Integration Testing",
+          "tasks": 4,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-16",
+          "global_id": 16,
+          "label": "Tool Use Visualization & Experience Layer",
+          "tasks": 4,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-17",
+          "global_id": 17,
+          "label": "Soul Memory Architecture Preparation",
+          "tasks": 4,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-18",
+          "global_id": 18,
+          "label": "Security Hardening III (Bridge Iter 3)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-19",
+          "global_id": 19,
+          "label": "Final Convergence (Bridge Iter 3)",
+          "tasks": 2,
+          "status": "completed"
+        }
+      ]
+    }
+  ],
+  "active_cycle": "cycle-001",
+  "active_bugfix": null,
+  "global_sprint_counter": 19,
+  "bugfix_cycles": []
+}

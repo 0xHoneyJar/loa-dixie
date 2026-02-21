@@ -1,0 +1,167 @@
+{
+  "version": "1.0.0",
+  "description": "Oracle gold-set evaluation queries spanning 7 abstraction levels",
+  "queries": [
+    {
+      "id": "code-001",
+      "level": "Code",
+      "question": "What is the BFF architecture pattern used in Dixie?",
+      "expected_sources": ["dixie-architecture"],
+      "rubric": "Must mention Hono, proxy to loa-finn, no local inference"
+    },
+    {
+      "id": "code-002",
+      "level": "Code",
+      "question": "How does the circuit breaker in Dixie's FinnClient work?",
+      "expected_sources": ["dixie-architecture"],
+      "rubric": "Must describe closed/open/half-open states, threshold, cooldown"
+    },
+    {
+      "id": "code-003",
+      "level": "Code",
+      "question": "What authentication methods does Dixie support?",
+      "expected_sources": ["dixie-architecture"],
+      "rubric": "Must mention SIWE + JWT, API keys (dxk_ prefix), allowlist gate"
+    },
+    {
+      "id": "arch-001",
+      "level": "Architecture",
+      "question": "How does the multi-model routing work in loa-finn?",
+      "expected_sources": ["freeside-api-reference", "freeside-infrastructure"],
+      "rubric": "Must mention 5 model pools, ensemble strategies, tier-based access"
+    },
+    {
+      "id": "arch-002",
+      "level": "Architecture",
+      "question": "How does knowledge enrichment work for the Oracle?",
+      "expected_sources": ["freeside-api-reference", "dixie-architecture"],
+      "rubric": "Must describe source selection, budget tokens, enrichment pipeline"
+    },
+    {
+      "id": "arch-003",
+      "level": "Architecture",
+      "question": "What is the Gateway architecture in loa-finn?",
+      "expected_sources": ["freeside-api-reference", "freeside-infrastructure"],
+      "rubric": "Must mention HTTP + WebSocket, streaming, session management"
+    },
+    {
+      "id": "product-001",
+      "level": "Product",
+      "question": "What is the Oracle and what makes it different from a regular chatbot?",
+      "expected_sources": ["oracle-persona", "ecosystem-overview"],
+      "rubric": "Must describe institutional consciousness, knowledge corpus, curated voice"
+    },
+    {
+      "id": "product-002",
+      "level": "Product",
+      "question": "What is the dNFT concept in the 0xHoneyJar ecosystem?",
+      "expected_sources": ["damp-96-personality", "identity-graph"],
+      "rubric": "Must describe dynamic NFTs with evolving personalities, dAMP-96"
+    },
+    {
+      "id": "product-003",
+      "level": "Product",
+      "question": "How does the allowlist system work for Phase 1 access?",
+      "expected_sources": ["dixie-architecture"],
+      "rubric": "Must describe wallet + API key allowlist, admin API, defense-in-depth"
+    },
+    {
+      "id": "process-001",
+      "level": "Process",
+      "question": "How are Oracle knowledge sources curated and updated?",
+      "expected_sources": ["dixie-architecture"],
+      "rubric": "Must describe sources.json registry, Docker bake + EFS sync"
+    },
+    {
+      "id": "process-002",
+      "level": "Process",
+      "question": "How is the Oracle deployed to production?",
+      "expected_sources": ["dixie-architecture", "freeside-infrastructure"],
+      "rubric": "Must mention ECS Fargate, Terraform, ALB, auto-scaling"
+    },
+    {
+      "id": "process-003",
+      "level": "Process",
+      "question": "What monitoring and observability exists for Dixie?",
+      "expected_sources": ["dixie-architecture"],
+      "rubric": "Must mention structured logging, OTel tracing, CloudWatch alarms"
+    },
+    {
+      "id": "cultural-001",
+      "level": "Cultural",
+      "question": "What is the Honeycomb and how does it relate to the bears?",
+      "expected_sources": ["ecosystem-overview"],
+      "rubric": "Must describe THJ ecosystem, bears as community, Honeycomb as platform"
+    },
+    {
+      "id": "cultural-002",
+      "level": "Cultural",
+      "question": "What is conviction scoring and how does it affect access?",
+      "expected_sources": ["freeside-economics"],
+      "rubric": "Must describe conviction as engagement metric, tier-based model access"
+    },
+    {
+      "id": "cultural-003",
+      "level": "Cultural",
+      "question": "Why is the Oracle named 'The Oracle' and what role does it play?",
+      "expected_sources": ["oracle-persona", "ecosystem-overview"],
+      "rubric": "Must describe institutional memory, ecosystem consciousness, truthful voice"
+    },
+    {
+      "id": "econ-001",
+      "level": "Economic",
+      "question": "How does the x402 payment protocol work?",
+      "expected_sources": ["x402-payment-flow"],
+      "rubric": "Must describe HTTP 402, payment headers, micro-transactions"
+    },
+    {
+      "id": "econ-002",
+      "level": "Economic",
+      "question": "What are the settlement tiers and how do they affect billing?",
+      "expected_sources": ["freeside-economics"],
+      "rubric": "Must describe stability tiers, BigInt micro-USD, budget enforcement"
+    },
+    {
+      "id": "econ-003",
+      "level": "Economic",
+      "question": "How does NFT ownership relate to agent access?",
+      "expected_sources": ["identity-graph", "damp-96-personality"],
+      "rubric": "Must describe ownership verification, tier mapping, holder benefits"
+    },
+    {
+      "id": "edu-001",
+      "level": "Educational",
+      "question": "How does the dAMP-96 personality framework generate unique agent voices?",
+      "expected_sources": ["damp-96-personality"],
+      "rubric": "Must describe personality parameters, trait generation, BEAUVOIR.md"
+    },
+    {
+      "id": "edu-002",
+      "level": "Educational",
+      "question": "What is the identity graph and how does it connect NFTs to agents?",
+      "expected_sources": ["identity-graph"],
+      "rubric": "Must describe NFT→agent mapping, personality loading, trait evolution"
+    },
+    {
+      "id": "cross-001",
+      "level": "Cross-cutting",
+      "question": "How does a chat message flow from the web UI through to the model?",
+      "expected_sources": ["dixie-architecture", "freeside-api-reference"],
+      "rubric": "Must trace: browser→Dixie BFF→loa-finn gateway→model pool→knowledge enrichment→response"
+    },
+    {
+      "id": "cross-002",
+      "level": "Cross-cutting",
+      "question": "What happens when a new dNFT is minted? What infrastructure is involved?",
+      "expected_sources": ["identity-graph", "damp-96-personality", "freeside-api-reference"],
+      "rubric": "Must describe mint event, personality generation, identity graph registration, agent availability"
+    },
+    {
+      "id": "cross-003",
+      "level": "Cross-cutting",
+      "question": "How do governance decisions flow through the technical infrastructure?",
+      "expected_sources": ["governance-model", "freeside-api-reference"],
+      "rubric": "Must describe LoT voting, settlement execution, on-chain governance interface"
+    }
+  ]
+}

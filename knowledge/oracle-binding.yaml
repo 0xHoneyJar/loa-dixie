@@ -1,0 +1,32 @@
+# Oracle Agent Binding Configuration
+# Loaded by loa-finn's provider registry to configure the Oracle dNFT.
+#
+# This file tells loa-finn how to route requests for the Oracle agent:
+# which model to use, what persona to load, and where to find knowledge sources.
+
+agent_id: oracle
+name: "The Oracle"
+description: "Institutional consciousness of the 0xHoneyJar ecosystem"
+
+# Model configuration
+model:
+  pool: default
+  temperature: 0.3  # Consistent, factual responses
+  max_tokens: 4096
+
+# Persona
+persona:
+  path: /data/knowledge/oracle/persona/oracle.md
+  version: "1.0.0"
+
+# Knowledge enrichment
+knowledge:
+  enabled: true
+  sources_config: /data/knowledge/oracle/sources.json
+  default_budget_tokens: 30000
+  mode: full  # Use full enrichment pipeline
+
+# Identity
+identity:
+  type: institutional  # Not a standard dAMP-96 generated personality
+  nft_id: oracle
