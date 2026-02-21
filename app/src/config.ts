@@ -10,6 +10,30 @@ export interface DixieConfig {
   logLevel: string;
   rateLimitRpm: number;
   otelEndpoint: string | null;
+
+  // Phase 2: Infrastructure connections
+  databaseUrl: string | null;
+  redisUrl: string | null;
+  natsUrl: string | null;
+
+  // Phase 2: Memory configuration
+  memoryProjectionTtlSec: number;
+  memoryMaxEventsPerQuery: number;
+
+  // Phase 2: Conviction tier cache
+  convictionTierTtlSec: number;
+
+  // Phase 2: BEAUVOIR personality cache
+  personalityTtlSec: number;
+
+  // Phase 2: Autonomous mode
+  autonomousBudgetDefaultMicroUsd: number;
+
+  // Phase 2: Rate limiting backend
+  rateLimitBackend: 'memory' | 'redis';
+
+  // Phase 2: Schedule callback HMAC secret (Bridge high-2)
+  scheduleCallbackSecret: string;
 }
 
 /**
@@ -26,6 +50,18 @@ export interface DixieConfig {
  * NODE_ENV              (optional) — runtime environment; default 'development'
  * LOG_LEVEL             (optional) — structured log level; default 'info'
  * OTEL_EXPORTER_OTLP_ENDPOINT (optional) — OpenTelemetry collector endpoint; null disables tracing export
+ *
+ * Phase 2 additions:
+ * DATABASE_URL           (optional) — PostgreSQL connection string; null disables DB features
+ * REDIS_URL              (optional) — Redis connection string; null disables Redis features
+ * NATS_URL               (optional) — NATS server URL; null disables NATS features
+ * DIXIE_MEMORY_PROJECTION_TTL (optional) — projection cache TTL in seconds; default 300
+ * DIXIE_MEMORY_MAX_EVENTS     (optional) — max events per query; default 100
+ * DIXIE_CONVICTION_TIER_TTL   (optional) — conviction tier cache TTL in seconds; default 300
+ * DIXIE_PERSONALITY_TTL       (optional) — BEAUVOIR personality cache TTL in seconds; default 1800
+ * DIXIE_AUTONOMOUS_BUDGET     (optional) — default autonomous budget in micro-USD; default 100000
+ * DIXIE_RATE_LIMIT_BACKEND    (optional) — 'memory' or 'redis'; default 'memory' (auto-upgrades to 'redis' when REDIS_URL set)
+ * DIXIE_SCHEDULE_CALLBACK_SECRET (optional) — HMAC secret for schedule callback verification; default '' (rejects all callbacks in production)
  */
 export function loadConfig(): DixieConfig {
   const finnUrl = process.env.FINN_URL;
@@ -64,6 +100,17 @@ export function loadConfig(): DixieConfig {
   const corsOriginsRaw = process.env.DIXIE_CORS_ORIGINS ?? `http://localhost:${port}`;
   const corsOrigins = corsOriginsRaw.split(',').map(o => o.trim());
 
+  const redisUrl = process.env.REDIS_URL ?? null;
+
+  // Rate limit backend: explicit override, or auto-upgrade when Redis available
+  const rateLimitBackendRaw = process.env.DIXIE_RATE_LIMIT_BACKEND;
+  let rateLimitBackend: 'memory' | 'redis' = 'memory';
+  if (rateLimitBackendRaw === 'redis' || rateLimitBackendRaw === 'memory') {
+    rateLimitBackend = rateLimitBackendRaw;
+  } else if (redisUrl) {
+    rateLimitBackend = 'redis';
+  }
+
   return {
     port,
     finnUrl,
@@ -76,5 +123,29 @@ export function loadConfig(): DixieConfig {
     logLevel: process.env.LOG_LEVEL ?? 'info',
     rateLimitRpm: parseInt(process.env.DIXIE_RATE_LIMIT_RPM ?? '100', 10),
     otelEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? null,
+
+    // Phase 2: Infrastructure
+    databaseUrl: process.env.DATABASE_URL ?? null,
+    redisUrl,
+    natsUrl: process.env.NATS_URL ?? null,
+
+    // Phase 2: Memory config
+    memoryProjectionTtlSec: parseInt(process.env.DIXIE_MEMORY_PROJECTION_TTL ?? '300', 10),
+    memoryMaxEventsPerQuery: parseInt(process.env.DIXIE_MEMORY_MAX_EVENTS ?? '100', 10),
+
+    // Phase 2: Conviction
+    convictionTierTtlSec: parseInt(process.env.DIXIE_CONVICTION_TIER_TTL ?? '300', 10),
+
+    // Phase 2: Personality
+    personalityTtlSec: parseInt(process.env.DIXIE_PERSONALITY_TTL ?? '1800', 10),
+
+    // Phase 2: Autonomous
+    autonomousBudgetDefaultMicroUsd: parseInt(process.env.DIXIE_AUTONOMOUS_BUDGET ?? '100000', 10),
+
+    // Phase 2: Rate limiting
+    rateLimitBackend,
+
+    // Phase 2: Schedule callback HMAC
+    scheduleCallbackSecret: process.env.DIXIE_SCHEDULE_CALLBACK_SECRET ?? '',
   };
 }

@@ -54,6 +54,8 @@ The project exposes 15 key entry points across its public API surface.
 The architecture follows a three-zone model: System (`.claude/`) contains framework-managed scripts and skills, State (`grimoires/`, `.beads/`) holds project-specific artifacts and memory, and App (`src/`, `lib/`) contains developer-owned application code. The framework orchestrates 29 specialized skills through slash commands.
 ```mermaid
 graph TD
+    app[app]
+    deploy[deploy]
     docs[docs]
     evals[evals]
     grimoires[grimoires]
@@ -61,6 +63,8 @@ graph TD
     persona[persona]
     tests[tests]
     Root[Project Root]
+    Root --> app
+    Root --> deploy
     Root --> docs
     Root --> evals
     Root --> grimoires
@@ -70,6 +74,12 @@ graph TD
 ```
 Directory structure:
 ```
+./app
+./app/src
+./app/tests
+./deploy
+./deploy/scripts
+./deploy/terraform
 ./docs
 ./docs/architecture
 ./docs/integration
@@ -92,14 +102,30 @@ Directory structure:
 ./tests/e2e
 ./tests/edge-cases
 ./tests/fixtures
+./tests/gold-set
 ./tests/helpers
-./tests/integration
-./tests/performance
-./tests/unit
 ```
 
 ## Interfaces
 <!-- provenance: DERIVED -->
+### HTTP Routes
+
+- **DELETE** `/allowlist/:entry` (`app/src/routes/admin.ts:100`)
+- **GET** `/:nftId/audit` (`app/src/routes/autonomous.ts:101`)
+- **GET** `/:nftId/gaps` (`app/src/routes/learning.ts:53`)
+- **GET** `/:nftId/insights` (`app/src/routes/learning.ts:22`)
+- **GET** `/:nftId/permissions` (`app/src/routes/autonomous.ts:34`)
+- **GET** `/:nftId/summary` (`app/src/routes/autonomous.ts:133`)
+- **GET** `/:nftId` (`app/src/routes/memory.ts:135`)
+- **GET** `/` (`app/src/routes/health.ts:25`)
+- **GET** `/allowlist` (`app/src/routes/admin.ts:59`)
+- **GET** `/capabilities` (`app/src/routes/agent.ts:239`)
+- **GET** `/knowledge` (`app/src/routes/agent.ts:292`)
+- **GET** `/oracle` (`app/src/routes/identity.ts:47`)
+- **GET** `/verify` (`app/src/routes/auth.ts:78`)
+- **POST** `/:nftId/seal` (`app/src/routes/memory.ts:171`)
+- **POST** `/` (`app/src/routes/chat.ts:51`)
+
 ### Skill Commands
 
 #### Loa Core
@@ -138,17 +164,20 @@ Directory structure:
 <!-- provenance: DERIVED -->
 | Module | Files | Purpose | Documentation |
 |--------|-------|---------|---------------|
+| `app/` | 60056 | Source code | \u2014 |
+| `deploy/` | 6 | Infrastructure and deployment | \u2014 |
 | `docs/` | 9 | Documentation | \u2014 |
 | `evals/` | 122 | Benchmarking and regression framework for the Loa agent development system. Ensures framework changes don't degrade agent behavior through | [evals/README.md](evals/README.md) |
-| `grimoires/` | 42 | Home to all grimoire directories for the Loa | [grimoires/README.md](grimoires/README.md) |
-| `knowledge/` | 11 | Documentation | \u2014 |
+| `grimoires/` | 58 | Home to all grimoire directories for the Loa | [grimoires/README.md](grimoires/README.md) |
+| `knowledge/` | 23 | Documentation | \u2014 |
 | `persona/` | 1 | Persona | \u2014 |
-| `tests/` | 155 | Test suites | \u2014 |
+| `tests/` | 156 | Test suites | \u2014 |
+| `web/` | 96673 | Web | \u2014 |
 
 ## Verification
 <!-- provenance: CODE-FACTUAL -->
 - Trust Level: **L2 — CI Verified**
-- 155 test files across 1 suite
+- 157 test files across 1 suite
 - CI/CD: GitHub Actions (0 workflows)
 - Security: SECURITY.md present
 
@@ -160,15 +189,15 @@ The project defines 1 specialized agent persona.
 |-------|----------|-------|
 | Bridgebuilder | You are the Bridgebuilder — a senior engineering mentor who has spent decades building systems at scale. | Your voice is warm, precise, and rich with analogy. |
 <!-- ground-truth-meta
-head_sha: 6a69d8c09ca2c7ab325543a0a3427d2d3fca9f71
-generated_at: 2026-02-20T08:14:58Z
+head_sha: 34580e3d7947f5c09fba3aaf1cfb5d49bc371807
+generated_at: 2026-02-21T05:27:50Z
 generator: butterfreezone-gen v1.0.0
 sections:
   agent_context: 58765014d4b1d2099c2917bbc2958aafa67a8bc0717a2aecab4def9162b97839
   capabilities: ab2576b1f2e7e8141f0e93e807d26ed2b7b155e21c96d787507a3ba933bb9795
-  architecture: 39eafc0a8fd07efa98584c631c7949e9511b8a4081f9bfa6d8a2ecfc1f5cbe32
-  interfaces: 120e3b3a6d65d4939b251dd049f213e32254a91510d48457be2e4f1b3f7399d3
-  module_map: 94829ce23ba5779e4fd247648aa039718f94142e9138a053430cc1e6a534b3c6
-  verification: 5adbc850f927069328341f443580b3487ffac2ae6e3697433d91b055f9eb3040
+  architecture: fdc96e78bd0a06581b17eb997d1593cf88917e37bccbfe10beb9f94e31026a4e
+  interfaces: 55125fdf09985fc93e1c8dad1c4cc88dce14287a2bd03d296f3c4d5aff97e7fd
+  module_map: fb550c56b7bec2841adc1874734a92024f26f4d53afbba2a65ad7a30a66d6665
+  verification: c3957dbf54ca4365ee41e393b8a4d4e24f6e746c31b81b1c9387dc147544664d
   agents: ca263d1e05fd123434a21ef574fc8d76b559d22060719640a1f060527ef6a0b6
 -->

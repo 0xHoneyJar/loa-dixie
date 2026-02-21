@@ -5,10 +5,13 @@
       "id": "cycle-001",
       "label": "Dixie MVP — Oracle Orchestration Layer",
       "started": "2026-02-20",
-      "status": "active",
+      "completed": "2026-02-21",
+      "status": "archived",
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
+      "bridge_reviews": 3,
+      "bridge_flatline": true,
       "sprints": [
         {
           "id": "sprint-1",
@@ -144,10 +147,114 @@
           "status": "completed"
         }
       ]
+    },
+    {
+      "id": "cycle-002",
+      "label": "Dixie Phase 2 — Experience Orchestrator with Economic Awareness",
+      "started": "2026-02-21",
+      "status": "active",
+      "prd": "grimoires/loa/prd.md",
+      "sdd": "grimoires/loa/sdd.md",
+      "sprint_plan": "grimoires/loa/sprint.md",
+      "bridge_reviews": 3,
+      "bridge_flatline": true,
+      "sprints": [
+        {
+          "id": "sprint-1",
+          "global_id": 20,
+          "label": "Database Foundation & Memory Infrastructure",
+          "tasks": 8,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-2",
+          "global_id": 21,
+          "label": "Soul Memory API & Governance Enforcement",
+          "tasks": 9,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-3",
+          "global_id": 22,
+          "label": "Tool Event Streaming & Economic Metadata",
+          "tasks": 8,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-4",
+          "global_id": 23,
+          "label": "BEAUVOIR Personality Surfacing & Phase 2a Integration",
+          "tasks": 8,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-5",
+          "global_id": 24,
+          "label": "Conviction-Gated Access (Ostrom's Commons)",
+          "tasks": 6,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-6",
+          "global_id": 25,
+          "label": "Autonomous Operation Mode & Delegation",
+          "tasks": 8,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-7",
+          "global_id": 26,
+          "label": "Hounfour Level 2 Compliance & Bridge Insights",
+          "tasks": 6,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-8",
+          "global_id": 27,
+          "label": "NL Scheduling & Cron Integration",
+          "tasks": 6,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-9",
+          "global_id": 28,
+          "label": "Agent API Surface (TBA Auth + x402 Metering)",
+          "tasks": 7,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-10",
+          "global_id": 29,
+          "label": "Compound Learning Pipeline & E2E Validation",
+          "tasks": 8,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-11",
+          "global_id": 30,
+          "label": "Security Hardening (Bridge Iter 1)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-12",
+          "global_id": 31,
+          "label": "Reliability & Correctness (Bridge Iter 1)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-13",
+          "global_id": 32,
+          "label": "Pre-Launch Polish (Bridge Iter 2 LOWs + Cross-Repo)",
+          "tasks": 9,
+          "status": "completed"
+        }
+      ]
     }
   ],
-  "active_cycle": "cycle-001",
+  "active_cycle": "cycle-002",
   "active_bugfix": null,
-  "global_sprint_counter": 19,
+  "global_sprint_counter": 32,
   "bugfix_cycles": []
 }

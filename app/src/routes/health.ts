@@ -1,35 +1,63 @@
 import { Hono } from 'hono';
 import type { FinnClient } from '../proxy/finn-client.js';
 import type { HealthResponse, ServiceHealth } from '../types.js';
+import type { DbPool } from '../db/client.js';
+import type { RedisClient } from '../services/redis-client.js';
+import type { SignalEmitter } from '../services/signal-emitter.js';
 
-const VERSION = '1.0.0';
+const VERSION = '2.0.0';
 const startedAt = Date.now();
 
 /** Cached finn health to avoid hitting upstream on every request */
 let cachedFinnHealth: { data: ServiceHealth; expiresAt: number } | null = null;
 const CACHE_TTL_MS = 10_000;
 
-export function createHealthRoutes(finnClient: FinnClient): Hono {
+export interface HealthDependencies {
+  finnClient: FinnClient;
+  dbPool?: DbPool | null;
+  redisClient?: RedisClient | null;
+  signalEmitter?: SignalEmitter | null;
+}
+
+export function createHealthRoutes(deps: HealthDependencies): Hono {
   const app = new Hono();
 
   app.get('/', async (c) => {
-    const finnHealth = await getFinnHealth(finnClient);
+    const finnHealth = await getFinnHealth(deps.finnClient);
+    const pgHealth = deps.dbPool ? await getDbHealth(deps.dbPool) : null;
+    const redisHealth = deps.redisClient ? await getRedisHealth(deps.redisClient) : null;
+    const natsHealth = deps.signalEmitter ? getNatsHealth(deps.signalEmitter) : null;
 
-    const overallStatus =
-      finnHealth.status === 'healthy'
-        ? 'healthy'
-        : finnHealth.status === 'degraded'
-          ? 'degraded'
-          : 'unhealthy';
+    // Overall: unhealthy if finn is unreachable, degraded if any infra service is down
+    let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+    if (finnHealth.status === 'unreachable') {
+      overallStatus = 'unhealthy';
+    } else if (
+      finnHealth.status === 'degraded' ||
+      pgHealth?.status === 'unreachable' ||
+      redisHealth?.status === 'unreachable' ||
+      natsHealth?.status === 'unreachable'
+    ) {
+      overallStatus = 'degraded';
+    }
+
+    const services: HealthResponse['services'] = {
+      dixie: { status: 'healthy' },
+      loa_finn: finnHealth,
+    };
+
+    // Phase 2 infrastructure services (only included when configured)
+    const infraServices: Record<string, ServiceHealth> = {};
+    if (pgHealth) infraServices.postgresql = pgHealth;
+    if (redisHealth) infraServices.redis = redisHealth;
+    if (natsHealth) infraServices.nats = natsHealth;
 
     const response: HealthResponse = {
       status: overallStatus,
       version: VERSION,
       uptime_seconds: Math.floor((Date.now() - startedAt) / 1000),
-      services: {
-        dixie: { status: 'healthy' },
-        loa_finn: finnHealth,
-      },
+      services,
+      infrastructure: Object.keys(infraServices).length > 0 ? infraServices : undefined,
       timestamp: new Date().toISOString(),
     };
 
@@ -37,6 +65,11 @@ export function createHealthRoutes(finnClient: FinnClient): Hono {
   });
 
   return app;
+}
+
+// Overload for backward compatibility with Phase 1 call signature
+export function createHealthRoutesCompat(finnClient: FinnClient): Hono {
+  return createHealthRoutes({ finnClient });
 }
 
 async function getFinnHealth(client: FinnClient): Promise<ServiceHealth> {
@@ -63,6 +96,49 @@ async function getFinnHealth(client: FinnClient): Promise<ServiceHealth> {
     cachedFinnHealth = { data: result, expiresAt: now + CACHE_TTL_MS };
     return result;
   }
+}
+
+async function getDbHealth(pool: DbPool): Promise<ServiceHealth> {
+  const start = Date.now();
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('SELECT 1');
+    } finally {
+      client.release();
+    }
+    return { status: 'healthy', latency_ms: Date.now() - start };
+  } catch (err) {
+    return {
+      status: 'unreachable',
+      latency_ms: Date.now() - start,
+      error: err instanceof Error ? err.message : 'PostgreSQL health check failed',
+    };
+  }
+}
+
+async function getRedisHealth(client: RedisClient): Promise<ServiceHealth> {
+  const start = Date.now();
+  try {
+    const result = await client.ping();
+    if (result !== 'PONG') {
+      return { status: 'degraded', latency_ms: Date.now() - start, error: `Unexpected PING response: ${result}` };
+    }
+    return { status: 'healthy', latency_ms: Date.now() - start };
+  } catch (err) {
+    return {
+      status: 'unreachable',
+      latency_ms: Date.now() - start,
+      error: err instanceof Error ? err.message : 'Redis health check failed',
+    };
+  }
+}
+
+function getNatsHealth(emitter: SignalEmitter): ServiceHealth {
+  if (emitter.connected) {
+    return { status: 'healthy' };
+  }
+  return { status: 'unreachable', error: 'NATS not connected' };
 }
 
 /** Reset cache — useful for testing */
