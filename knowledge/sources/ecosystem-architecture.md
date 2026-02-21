@@ -37,8 +37,8 @@ The ecosystem comprises five interconnected repositories, each with a distinct r
 
 ### loa-dixie (0xHoneyJar/loa-dixie)
 **Purpose**: Experience orchestration layer (BFF gateway) for the Oracle dNFT agent.
-**Contains**: Hono BFF gateway with JWT authentication, WebSocket proxying with ticket-based auth, conviction-gated commons access (5-tier BGT staking), soul memory injection, tool event streaming, economic metadata enrichment, autonomous operation mode with 7-step permission engine, NL scheduling with cron integration, agent API surface (ERC-6551 TBA auth + x402 metering), and compound learning signal aggregation.
-**Role**: The experience orchestration layer — a Hono BFF gateway that sits between end users and loa-finn. Handles JWT authentication, WebSocket proxying with ticket-based auth, conviction-gated commons access (5-tier BGT staking), soul memory injection, tool event streaming, economic metadata enrichment, autonomous operation mode with 7-step permission engine, NL scheduling with cron integration, agent API surface (ERC-6551 TBA auth + x402 metering), and compound learning signal aggregation.
+**Contains**: Hono BFF gateway, 15-position middleware pipeline (constitutional ordering), soul memory service, conviction resolver, autonomous engine with 7-step permission model, compound learning pipeline, agent API routes, NL scheduler, WebSocket proxy with ticket-based auth.
+**Role**: The experience orchestration layer — sits between end users and loa-finn, handling authentication, governance enforcement (5-tier BGT conviction gating), memory injection, economic metadata enrichment, autonomous operation delegation, agent-to-agent communication (ERC-6551 TBA + x402 metering), and compound learning signal aggregation.
 **Key modules**: `app/src/` (middleware, routes, services, websocket), 492 tests across 44 test files.
 
 ### loa-freeside (0xHoneyJar/loa-freeside)

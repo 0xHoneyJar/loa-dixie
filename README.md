@@ -73,10 +73,11 @@ loa-dixie is the Dixie Flatline of the ecosystem: institutional memory in querya
 
 ## Status
 
-**Phase 0: Foundation** (current)
-- Knowledge corpus extracted from loa-finn (10 curated sources)
-- Oracle persona defined
-- RFC and architecture documented
+**Phase 2: Experience Orchestrator** (complete)
+- 13 sprints, 492 tests across 44 test files
+- Soul memory, conviction-gated access, autonomous operation, agent API, compound learning
+- Bridge-converged at 1.0 (3 iterations, 19/19 findings addressed)
+- See [PR #3](https://github.com/0xHoneyJar/loa-dixie/pull/3) for full Phase 2 scope
 
 See [docs/rfc.md](docs/rfc.md) for the full product vision and phased implementation plan.
 
