@@ -31,6 +31,9 @@ import { AutonomousEngine } from './services/autonomous-engine.js';
 import { createAutonomousRoutes } from './routes/autonomous.js';
 import { ScheduleStore } from './services/schedule-store.js';
 import { createScheduleRoutes } from './routes/schedule.js';
+import { createTBAAuthMiddleware } from './middleware/tba-auth.js';
+import { createAgentRoutes } from './routes/agent.js';
+import type { TBAVerification } from './types/agent-api.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
 import { SignalEmitter } from './services/signal-emitter.js';
@@ -166,6 +169,16 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Phase 2: NL schedule store (uses finn client for cron registration)
   const scheduleStore = new ScheduleStore(finnClient);
 
+  // Phase 2: TBA verification cache (uses projection cache with tba prefix when Redis available)
+  let tbaProjectionCache: ProjectionCache<TBAVerification> | null = null;
+  if (redisClient) {
+    tbaProjectionCache = new ProjectionCache(
+      redisClient,
+      'tba',
+      300, // 5 minute TTL per SDD §7.2
+    );
+  }
+
   // DECISION: Middleware pipeline as constitutional ordering (communitarian architecture)
   // The middleware sequence is not arbitrary — it encodes governance priorities.
   // Allowlist (community membership) gates payment (economic access), which gates
@@ -294,6 +307,30 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.route('/api/personality', createPersonalityRoutes({ personalityCache }));
   app.route('/api/autonomous', createAutonomousRoutes({ autonomousEngine, convictionResolver }));
   app.route('/api/schedule', createScheduleRoutes({ scheduleStore, convictionResolver }));
+
+  // --- Phase 2: Agent API with TBA authentication ---
+  // TBA auth middleware applies only to /api/agent/* routes
+  app.use('/api/agent/*', createTBAAuthMiddleware({
+    cache: tbaProjectionCache,
+    verifyTBA: async (tbaAddress, signature, message) => {
+      // Verify via loa-finn/freeside TBA verification endpoint
+      try {
+        const result = await finnClient.request<TBAVerification>(
+          'POST',
+          '/api/auth/verify-tba',
+          { body: { tbaAddress, signature, message } },
+        );
+        return result;
+      } catch {
+        return null;
+      }
+    },
+  }));
+  app.route('/api/agent', createAgentRoutes({
+    finnClient,
+    convictionResolver,
+    memoryStore,
+  }));
   app.route('/api/memory', createMemoryRoutes({
     memoryStore,
     resolveNftOwnership: async (wallet: string) => {
