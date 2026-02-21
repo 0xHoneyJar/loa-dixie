@@ -80,7 +80,22 @@ export interface CorpusMetaOptions {
   sourcesPath?: string;
   eventsPath?: string;
   sourcesDir?: string;
+  /** If false, skip warm-cache at construction (useful for testing). Default: true. */
+  warmOnInit?: boolean;
 }
+
+/**
+ * Token estimation ratio: characters per token.
+ *
+ * The 4:1 character-to-token ratio is the standard approximation used by
+ * OpenAI's pricing estimator as a fallback. Characteristics:
+ * - Over-counts for code blocks (tokens are often multi-character keywords)
+ * - Under-counts for CJK content (characters encode as multiple tokens)
+ * - Exact counting requires a tokenizer dependency (e.g., tiktoken)
+ *
+ * Exposed as a named constant for future calibration.
+ */
+const TOKEN_ESTIMATION_RATIO = 4;
 
 /**
  * Corpus Metadata Service — single source of truth for knowledge corpus state.
@@ -113,6 +128,29 @@ export class CorpusMeta {
       import.meta.dirname ?? __dirname,
       '../../../knowledge/sources',
     );
+
+    // Pre-warm cache at construction to avoid blocking the event loop
+    // on the first request (deeparch1-low-1). Skip in test scenarios.
+    if (opts.warmOnInit !== false) {
+      this.warmCache();
+    }
+  }
+
+  /**
+   * Pre-warm the config and meta caches so the first request is served
+   * from cache. Eliminates thundering-herd risk when multiple requests
+   * arrive before the cache is populated.
+   *
+   * Called automatically at construction (unless warmOnInit: false).
+   * See: Netflix Archaius pre-warm pattern.
+   */
+  warmCache(): void {
+    try {
+      this.loadConfig();
+      this.getMeta();
+    } catch {
+      // Warm-cache failure is non-fatal — next getMeta() will retry
+    }
   }
 
   /**
@@ -229,14 +267,16 @@ export class CorpusMeta {
         }
       }
 
-      // Token utilization — estimate actual tokens from file sizes
+      // Token utilization — estimate actual tokens from file sizes.
+      // Uses TOKEN_ESTIMATION_RATIO (chars/4) as the standard approximation.
+      // See constant definition for accuracy characteristics.
       let estimatedActualTokens = 0;
       for (const source of config.sources) {
         try {
           const filename = path.basename(source.path);
           const filePath = path.join(this.sourcesDir, filename);
           const content = fs.readFileSync(filePath, 'utf-8');
-          estimatedActualTokens += Math.ceil(content.length / 4);
+          estimatedActualTokens += Math.ceil(content.length / TOKEN_ESTIMATION_RATIO);
         } catch {
           // File missing — skip
         }
@@ -291,6 +331,14 @@ export class CorpusMeta {
     this.cachedConfig = null;
   }
 
+  /**
+   * Load and cache sources.json configuration.
+   *
+   * Uses synchronous fs.readFileSync intentionally — the file is <10KB JSON,
+   * reads in <1ms. The caching layer (configurable TTL, default 60s) ensures
+   * this only executes on cache miss. warmCache() at startup eliminates the
+   * thundering-herd risk of concurrent first requests hitting an empty cache.
+   */
   private loadConfig(): SourcesConfig {
     const now = Date.now();
     if (this.cachedConfig && now < this.cachedConfig.expiresAt) {

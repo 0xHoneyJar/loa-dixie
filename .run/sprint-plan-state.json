@@ -1,29 +1,29 @@
 {
-  "plan_id": "plan-20260222-horizon",
+  "plan_id": "plan-20260222-deeparch",
   "branch": "feature/dixie-phase2",
-  "state": "RUNNING",
+  "state": "JACKED_OUT",
   "timestamps": {
-    "started": "2026-02-22T02:00:00Z",
-    "last_activity": "2026-02-22T02:00:00Z"
+    "started": "2026-02-22T20:00:00Z",
+    "last_activity": "2026-02-22T21:00:00Z"
   },
   "sprints": {
     "total": 2,
-    "completed": 0,
-    "current": "sprint-14",
+    "completed": 2,
+    "current": null,
     "list": [
-      {"id": "sprint-14", "status": "pending", "cycles": 0},
-      {"id": "sprint-15", "status": "pending", "cycles": 0}
+      {"id": "sprint-16", "status": "completed", "cycles": 1, "files_changed": 10},
+      {"id": "sprint-17", "status": "completed", "cycles": 1, "files_changed": 8}
     ]
   },
   "options": {
-    "from": 14,
-    "to": 15,
+    "from": 16,
+    "to": 17,
     "max_cycles": 20,
     "timeout_hours": 8
   },
   "metrics": {
-    "total_cycles": 0,
-    "total_files_changed": 0,
+    "total_cycles": 2,
+    "total_files_changed": 18,
     "total_findings_fixed": 0
   }
 }

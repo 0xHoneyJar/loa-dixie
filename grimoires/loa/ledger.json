@@ -276,13 +276,20 @@
           "global_id": 36,
           "label": "Knowledge Drift Detection + Consumer Contracts (Deep Review)",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
+        },
+        {
+          "id": "sprint-18",
+          "global_id": 37,
+          "label": "Bridge Convergence — LOW Findings + Determinism (Bridge Iter 2)",
+          "tasks": 3,
+          "status": "in_progress"
         }
       ]
     }
   ],
   "active_cycle": "cycle-002",
   "active_bugfix": null,
-  "global_sprint_counter": 36,
+  "global_sprint_counter": 37,
   "bugfix_cycles": []
 }

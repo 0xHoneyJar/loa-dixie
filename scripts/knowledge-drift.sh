@@ -6,7 +6,7 @@
 # and reports drift (days since last sync).
 #
 # Usage:
-#   ./scripts/knowledge-drift.sh [--threshold DAYS] [--json]
+#   ./scripts/knowledge-drift.sh [--threshold DAYS] [--date YYYY-MM-DD] [--json]
 #
 # Exit codes:
 #   0 — all files within threshold
@@ -19,7 +19,7 @@ set -euo pipefail
 THRESHOLD=30
 JSON_OUTPUT=false
 SOURCES_DIR="$(cd "$(dirname "$0")/../knowledge/sources" && pwd)"
-TODAY=$(date -u +%Y-%m-%d)
+TODAY=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -28,16 +28,21 @@ while [[ $# -gt 0 ]]; do
       THRESHOLD="$2"
       shift 2
       ;;
+    --date)
+      TODAY="$2"
+      shift 2
+      ;;
     --json)
       JSON_OUTPUT=true
       shift
       ;;
     -h|--help)
-      echo "Usage: $0 [--threshold DAYS] [--json]"
+      echo "Usage: $0 [--threshold DAYS] [--date YYYY-MM-DD] [--json]"
       echo ""
       echo "Options:"
-      echo "  --threshold DAYS  Maximum allowed drift in days (default: 30)"
-      echo "  --json            Output machine-readable JSON"
+      echo "  --threshold DAYS      Maximum allowed drift in days (default: 30)"
+      echo "  --date YYYY-MM-DD     Override today's date for deterministic testing"
+      echo "  --json                Output machine-readable JSON"
       echo ""
       echo "Parses <!-- upstream-source --> markers and reports drift."
       exit 0
@@ -48,6 +53,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Default to system date if --date not provided
+if [[ -z "$TODAY" ]]; then
+  TODAY=$(date -u +%Y-%m-%d)
+fi
 
 # Compute days between two dates (YYYY-MM-DD)
 days_between() {

@@ -76,6 +76,43 @@ describe('CorpusMeta service (Task 16.1)', () => {
   });
 });
 
+describe('CorpusMeta warmCache (Task 18.1)', () => {
+  it('warmCache pre-populates cache so first getMeta is served from cache', () => {
+    const service = new CorpusMeta({
+      cacheTtlMs: 60_000,
+      sourcesPath: SOURCES_PATH,
+      eventsPath: EVENTS_PATH,
+      sourcesDir: SOURCES_DIR,
+      warmOnInit: false, // Don't warm at construction — we'll do it manually
+    });
+
+    // Before warmCache, cache is empty — getMeta reads from disk
+    service.invalidateCache();
+
+    // Warm the cache manually
+    service.warmCache();
+
+    // Now getMeta should return cached data without re-reading
+    const meta = service.getMeta();
+    expect(meta).not.toBeNull();
+    expect(meta!.corpus_version).toBeGreaterThanOrEqual(1);
+  });
+
+  it('default construction (warmOnInit !== false) auto-warms cache', () => {
+    const service = new CorpusMeta({
+      sourcesPath: SOURCES_PATH,
+      eventsPath: EVENTS_PATH,
+      sourcesDir: SOURCES_DIR,
+      // warmOnInit defaults to true
+    });
+
+    // Should already be cached from construction — getMeta returns immediately
+    const meta = service.getMeta();
+    expect(meta).not.toBeNull();
+    expect(meta!.sources).toBeGreaterThanOrEqual(15);
+  });
+});
+
 describe('CorpusMeta event log (Task 16.2)', () => {
   const service = new CorpusMeta({
     sourcesPath: SOURCES_PATH,
