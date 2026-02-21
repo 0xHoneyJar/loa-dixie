@@ -156,6 +156,8 @@
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
+      "bridge_reviews": 3,
+      "bridge_flatline": true,
       "sprints": [
         {
           "id": "sprint-1",

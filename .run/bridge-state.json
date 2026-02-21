@@ -1,30 +1,76 @@
 {
   "schema_version": 1,
-  "bridge_id": "bridge-20260220-8ab2ce",
-  "state": "JACK_IN",
+  "bridge_id": "bridge-20260221-f7ca7a",
+  "state": "JACKED_OUT",
   "config": {
-    "depth": 5,
+    "depth": 1,
     "mode": "full",
     "flatline_threshold": 0.05,
     "per_sprint": false,
-    "branch": "feat/cycle-030-butterfreezone-provenance",
+    "branch": "feature/dixie-phase2",
     "repo": ""
   },
-  "pr": 392,
   "timestamps": {
-    "started": "2026-02-20T13:00:00Z",
-    "last_activity": "2026-02-20T13:00:00Z"
+    "started": "2026-02-21T05:27:47Z",
+    "last_activity": "2026-02-21T16:30:00Z"
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "state": "completed",
+      "sprint_plan_source": "existing",
+      "sprints_executed": 1,
+      "bridgebuilder": {
+        "total_findings": 6,
+        "by_severity": {
+          "critical": 0,
+          "high": 0,
+          "medium": 0,
+          "low": 0,
+          "vision": 0,
+          "praise": 6
+        },
+        "improvement_score": 1.0,
+        "convergence_signal": "CONVERGED",
+        "severity_weighted_score": 0,
+        "pr_comment_url": "https://github.com/0xHoneyJar/loa-dixie/pull/3#issuecomment-3938213754"
+      },
+      "enrichment": {
+        "persona_loaded": true,
+        "persona_validation": "passed",
+        "findings_format": "json",
+        "field_fill_rates": {
+          "faang_parallel": 0.33,
+          "metaphor": 0,
+          "teachable_moment": 0.67,
+          "connection": 0
+        },
+        "praise_count": 6,
+        "insights_size_bytes": 15200,
+        "redactions_applied": 0
+      },
+      "visions_captured": 0,
+      "started_at": "2026-02-21T05:27:47Z",
+      "updated_at": "2026-02-21T16:30:00Z"
+    }
+  ],
   "flatline": {
-    "initial_score": null,
-    "last_score": null,
-    "consecutive_below_threshold": 0
+    "initial_score": 0.96,
+    "last_score": 1.0,
+    "improvement_delta": 0.04,
+    "consecutive_below_threshold": 1,
+    "flatlined": true
   },
   "metrics": {
-    "total_sprints_executed": 0,
-    "total_files_changed": 0,
-    "total_findings_addressed": 0,
+    "total_sprints_executed": 1,
+    "total_files_changed": 11,
+    "total_findings_addressed": 8,
     "total_visions_captured": 0
+  },
+  "finalization": {
+    "ground_truth_updated": false,
+    "rtfm_passed": true,
+    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/3",
+    "butterfreezone_generated": true
   }
 }
