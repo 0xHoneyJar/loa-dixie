@@ -315,6 +315,41 @@ describe('Agent API routes', () => {
       expect(res.headers.get('X-Receipt-Id')).toBeTruthy();
     });
 
+    it('includes freshness metadata in response (Task 19.3)', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ query: 'What is Berachain?' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body: AgentQueryResponse = await res.json();
+      expect(body.freshness).toBeDefined();
+      expect(['high', 'medium', 'low']).toContain(body.freshness!.confidence);
+      expect(typeof body.freshness!.staleSourceCount).toBe('number');
+    });
+
+    it('sets X-Knowledge-Confidence header (Task 19.3)', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ query: 'test' }),
+      });
+
+      expect(res.headers.get('X-Knowledge-Confidence')).toBeTruthy();
+      expect(['high', 'medium', 'low']).toContain(res.headers.get('X-Knowledge-Confidence'));
+    });
+
     it('rejects missing query field', async () => {
       const app = createApp();
       const res = await app.request('/api/agent/query', {
@@ -517,6 +552,23 @@ describe('Agent API routes', () => {
         headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
       });
       expect(res.status).toBe(403);
+    });
+
+    it('includes source_weights in response (Task 19.4)', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.source_weights).toBeDefined();
+      expect(body.source_weights.length).toBeGreaterThan(0);
+      for (const w of body.source_weights) {
+        expect(w.sourceId).toBeTruthy();
+        expect(typeof w.weight).toBe('number');
+        expect(w.tags).toBeInstanceOf(Array);
+      }
     });
   });
 

@@ -22,7 +22,7 @@ interface CorpusEventLog {
 }
 
 /** Source entry in sources.json */
-interface SourceEntry {
+export interface SourceEntry {
   id: string;
   type: string;
   path: string;
@@ -33,6 +33,19 @@ interface SourceEntry {
   max_age_days: number;
   last_updated: string;
   required?: boolean;
+}
+
+/** Per-source freshness weight (Task 19.1: Adaptive Retrieval) */
+export interface SourceWeight {
+  readonly sourceId: string;
+  /** 1.0 (fresh) → 0.1 (very stale), linear degradation */
+  readonly weight: number;
+  /** days_elapsed / max_age_days — values >1.0 indicate staleness */
+  readonly ageRatio: number;
+  /** Days past max_age_days. 0 if fresh. */
+  readonly staleDays: number;
+  /** Source tags for domain identification */
+  readonly tags: readonly string[];
 }
 
 /** Parsed sources.json shape */
@@ -73,6 +86,12 @@ export interface SelfKnowledgeResponse {
     utilization_percent: number;
   };
   confidence: 'high' | 'medium' | 'low';
+  /** Per-source freshness weights (Task 19.4: Adaptive Retrieval) */
+  source_weights?: ReadonlyArray<{
+    sourceId: string;
+    weight: number;
+    tags: readonly string[];
+  }>;
 }
 
 export interface CorpusMetaOptions {
@@ -288,6 +307,14 @@ export class CorpusMeta {
         staleSources.length < 3 ? 'medium' :
         'low';
 
+      // Per-source freshness weights (Task 19.4)
+      const sourceWeightsMap = this.getSourceWeights(today);
+      const sourceWeightsArray = [...sourceWeightsMap.values()].map((w) => ({
+        sourceId: w.sourceId,
+        weight: w.weight,
+        tags: w.tags,
+      }));
+
       return {
         corpus_version: config.corpus_version ?? 0,
         last_mutation: latestEvent
@@ -317,10 +344,63 @@ export class CorpusMeta {
             : 0,
         },
         confidence,
+        source_weights: sourceWeightsArray,
       };
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Compute per-source freshness weights (Task 19.1: Adaptive Retrieval).
+   *
+   * Fresh sources get weight 1.0. Stale sources degrade linearly by
+   * days-over-limit / max_age_days, floored at 0.1. This enables adaptive
+   * retrieval — the Oracle can weight stale sources lower in ranking.
+   *
+   * Weight formula: max(0.1, 1.0 - staleDays / max_age_days)
+   * See: Google Spanner TrueTime — confidence-proportional commitment.
+   */
+  getSourceWeights(nowOverride?: Date): Map<string, SourceWeight> {
+    const weights = new Map<string, SourceWeight>();
+    try {
+      const config = this.loadConfig();
+      const today = nowOverride ?? new Date();
+
+      for (const source of config.sources) {
+        if (!source.last_updated) {
+          weights.set(source.id, {
+            sourceId: source.id,
+            weight: 0.5, // Unknown freshness — moderate weight
+            ageRatio: 0,
+            staleDays: 0,
+            tags: source.tags,
+          });
+          continue;
+        }
+
+        const lastUpdated = new Date(source.last_updated);
+        const ageDays = Math.floor(
+          (today.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        const staleDays = Math.max(0, ageDays - source.max_age_days);
+        const ageRatio = source.max_age_days > 0 ? ageDays / source.max_age_days : 0;
+        const weight = staleDays === 0
+          ? 1.0
+          : Math.max(0.1, 1.0 - staleDays / source.max_age_days);
+
+        weights.set(source.id, {
+          sourceId: source.id,
+          weight: Math.round(weight * 100) / 100, // Round to 2 decimals
+          ageRatio: Math.round(ageRatio * 100) / 100,
+          staleDays,
+          tags: source.tags,
+        });
+      }
+    } catch {
+      // Config load failure — return empty map
+    }
+    return weights;
   }
 
   /**

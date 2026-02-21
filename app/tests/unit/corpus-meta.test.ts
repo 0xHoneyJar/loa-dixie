@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
-import { CorpusMeta, getCorpusMeta, resetCorpusMetaCache, corpusMeta } from '../../src/services/corpus-meta.js';
+import { CorpusMeta, getCorpusMeta, resetCorpusMetaCache, corpusMeta, type SourceWeight } from '../../src/services/corpus-meta.js';
 
 const SOURCES_PATH = path.resolve(__dirname, '../../../knowledge/sources.json');
 const EVENTS_PATH = path.resolve(__dirname, '../../../knowledge/corpus-events.json');
@@ -156,6 +156,62 @@ describe('CorpusMeta event log (Task 16.2)', () => {
   });
 });
 
+describe('CorpusMeta source weights (Task 19.1)', () => {
+  const service = new CorpusMeta({
+    sourcesPath: SOURCES_PATH,
+    eventsPath: EVENTS_PATH,
+    sourcesDir: SOURCES_DIR,
+  });
+
+  it('all sources get weight 1.0 when none are stale (recent date)', () => {
+    // Use a date very close to last_updated so nothing is stale
+    const weights = service.getSourceWeights(new Date('2026-02-22'));
+    expect(weights.size).toBeGreaterThanOrEqual(15);
+
+    for (const [, w] of weights) {
+      expect(w.weight).toBe(1);
+      expect(w.staleDays).toBe(0);
+    }
+  });
+
+  it('stale sources get degraded weights (far future date)', () => {
+    // Use a date far in the future so sources become stale
+    const weights = service.getSourceWeights(new Date('2027-06-01'));
+    expect(weights.size).toBeGreaterThanOrEqual(15);
+
+    let hasStale = false;
+    for (const [, w] of weights) {
+      if (w.staleDays > 0) {
+        hasStale = true;
+        expect(w.weight).toBeLessThan(1);
+        expect(w.weight).toBeGreaterThanOrEqual(0.1); // Floor at 0.1
+      }
+    }
+    expect(hasStale).toBe(true);
+  });
+
+  it('very stale sources floor at weight 0.1', () => {
+    // Use a date extremely far in the future
+    const weights = service.getSourceWeights(new Date('2030-01-01'));
+    let hasFloored = false;
+    for (const [, w] of weights) {
+      if (w.staleDays > 0) {
+        expect(w.weight).toBeGreaterThanOrEqual(0.1);
+        if (w.weight === 0.1) hasFloored = true;
+      }
+    }
+    expect(hasFloored).toBe(true);
+  });
+
+  it('source weights include tags for domain identification', () => {
+    const weights = service.getSourceWeights(new Date('2026-02-22'));
+    for (const [, w] of weights) {
+      expect(w.tags).toBeInstanceOf(Array);
+      expect(w.sourceId).toBeTruthy();
+    }
+  });
+});
+
 describe('CorpusMeta self-knowledge (Task 16.3)', () => {
   const service = new CorpusMeta({
     sourcesPath: SOURCES_PATH,
@@ -217,5 +273,27 @@ describe('CorpusMeta self-knowledge (Task 16.3)', () => {
     // Budget is 50K, actual should be significant
     expect(sk!.token_utilization.budget).toBe(50000);
     expect(sk!.token_utilization.estimated_actual).toBeGreaterThan(5000);
+  });
+
+  it('source_weights included in self-knowledge response (Task 19.4)', () => {
+    const sk = service.getSelfKnowledge(new Date('2026-02-22'));
+    expect(sk).not.toBeNull();
+    expect(sk!.source_weights).toBeDefined();
+    expect(sk!.source_weights!.length).toBeGreaterThanOrEqual(15);
+
+    for (const w of sk!.source_weights!) {
+      expect(w.sourceId).toBeTruthy();
+      expect(w.weight).toBeGreaterThanOrEqual(0.1);
+      expect(w.weight).toBeLessThanOrEqual(1.0);
+      expect(w.tags).toBeInstanceOf(Array);
+    }
+  });
+
+  it('source_weights tags match corpus sources (Task 19.4)', () => {
+    const sk = service.getSelfKnowledge(new Date('2026-02-22'));
+    expect(sk).not.toBeNull();
+    // Each source weight should have at least one tag
+    const withTags = sk!.source_weights!.filter(w => w.tags.length > 0);
+    expect(withTags.length).toBeGreaterThan(0);
   });
 });

@@ -283,13 +283,34 @@
           "global_id": 37,
           "label": "Bridge Convergence — LOW Findings + Determinism (Bridge Iter 2)",
           "tasks": 3,
-          "status": "in_progress"
+          "status": "completed"
+        },
+        {
+          "id": "sprint-19",
+          "global_id": 38,
+          "label": "Adaptive Retrieval from Self-Knowledge (Meditation §VII.1)",
+          "tasks": 5,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-20",
+          "global_id": 39,
+          "label": "Resource Governance Generalization — ResourceGovernor<T> (Meditation §VII.2)",
+          "tasks": 5,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-21",
+          "global_id": 40,
+          "label": "Communitarian Knowledge Governance — Conviction Voting (Meditation §VII.3)",
+          "tasks": 5,
+          "status": "pending"
         }
       ]
     }
   ],
   "active_cycle": "cycle-002",
   "active_bugfix": null,
-  "global_sprint_counter": 37,
+  "global_sprint_counter": 40,
   "bugfix_cycles": []
 }

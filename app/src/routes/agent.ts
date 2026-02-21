@@ -4,6 +4,7 @@ import type { ConvictionResolver } from '../services/conviction-resolver.js';
 import type { MemoryStore } from '../services/memory-store.js';
 import { getRequestContext } from '../validation.js';
 import { getCorpusMeta, corpusMeta } from '../services/corpus-meta.js';
+import { generateDisclaimer } from '../services/freshness-disclaimer.js';
 import { tierMeetsRequirement } from '../types/conviction.js';
 import type {
   AgentQueryRequest,
@@ -164,6 +165,15 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     }
 
     try {
+      // Adaptive retrieval: assess knowledge confidence before querying (Task 19.5)
+      const selfKnowledge = corpusMeta.getSelfKnowledge();
+      const disclaimer = selfKnowledge ? generateDisclaimer(selfKnowledge) : null;
+      let systemNote: string | undefined;
+      if (selfKnowledge && selfKnowledge.confidence === 'low') {
+        const staleList = selfKnowledge.freshness.staleSources.join(', ');
+        systemNote = `Note: Knowledge freshness is degraded. Sources [${staleList}] may be outdated. Hedge appropriately and flag uncertainty in your response.`;
+      }
+
       // Forward to loa-finn with agent context
       const finnResponse = await finnClient.request<{
         response: string;
@@ -179,6 +189,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
           maxTokens: body.maxTokens,
           knowledgeDomain: body.knowledgeDomain,
           sessionId: body.sessionId,
+          systemNote, // Adaptive routing: hedging instruction on low confidence
         },
       });
 
@@ -216,12 +227,22 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
         },
         receipt,
         sessionId: body.sessionId,
+        // Task 19.3: Freshness metadata in response
+        freshness: selfKnowledge ? {
+          confidence: selfKnowledge.confidence,
+          disclaimer: disclaimer?.message ?? null,
+          staleSourceCount: selfKnowledge.freshness.stale,
+        } : undefined,
       };
 
       // Set economic headers
       c.header('X-Cost-Micro-USD', String(costMicroUsd));
       c.header('X-Model-Used', finnResponse.model);
       c.header('X-Receipt-Id', receipt.receiptId);
+      // Task 19.3: Knowledge confidence header
+      if (selfKnowledge) {
+        c.header('X-Knowledge-Confidence', selfKnowledge.confidence);
+      }
       if (budgetWarning) {
         c.header('X-Budget-Warning', budgetWarning);
       }
