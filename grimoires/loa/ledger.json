@@ -240,12 +240,19 @@
           "label": "Reliability & Correctness (Bridge Iter 1)",
           "tasks": 5,
           "status": "completed"
+        },
+        {
+          "id": "sprint-13",
+          "global_id": 32,
+          "label": "Pre-Launch Polish (Bridge Iter 2 LOWs + Cross-Repo)",
+          "tasks": 9,
+          "status": "completed"
         }
       ]
     }
   ],
   "active_cycle": "cycle-002",
   "active_bugfix": null,
-  "global_sprint_counter": 31,
+  "global_sprint_counter": 32,
   "bugfix_cycles": []
 }

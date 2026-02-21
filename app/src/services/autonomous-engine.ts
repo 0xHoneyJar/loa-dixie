@@ -27,15 +27,18 @@ import {
  */
 export class AutonomousEngine {
   private readonly auditLog: AutonomousAuditEntry[] = [];
-  private readonly maxAuditEntries = 10_000;
+  private readonly maxAuditEntries: number;
   private readonly budgetDefaultMicroUsd: number;
+  private readonly log?: (level: string, data: Record<string, unknown>) => void;
 
   constructor(
     private readonly finnClient: FinnClient,
     private readonly cache: ProjectionCache<AutonomousPermissions> | null,
-    opts?: { budgetDefaultMicroUsd?: number },
+    opts?: { budgetDefaultMicroUsd?: number; maxAuditEntries?: number; log?: (level: string, data: Record<string, unknown>) => void },
   ) {
     this.budgetDefaultMicroUsd = opts?.budgetDefaultMicroUsd ?? 100_000;
+    this.maxAuditEntries = opts?.maxAuditEntries ?? 10_000;
+    this.log = opts?.log;
   }
 
   /**
@@ -310,9 +313,17 @@ export class AutonomousEngine {
 
     this.auditLog.push(entry);
 
-    // Bounded buffer — evict oldest half when full
+    // Bounded buffer — evict oldest half when full (Bridge iter2-low-5)
     if (this.auditLog.length > this.maxAuditEntries) {
       const evictCount = Math.floor(this.auditLog.length / 2);
+      if (this.log) {
+        this.log('warn', {
+          event: 'audit_log_eviction',
+          nftId: action.nftId,
+          evictedCount: evictCount,
+          remainingCount: this.auditLog.length - evictCount,
+        });
+      }
       this.auditLog.splice(0, evictCount);
     }
   }

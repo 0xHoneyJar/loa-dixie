@@ -3,6 +3,7 @@ import type { RedisClient } from '../services/redis-client.js';
 
 interface RateLimitEntry {
   timestamps: number[];
+  lastAccess: number;
 }
 
 /**
@@ -18,27 +19,36 @@ interface RateLimitEntry {
  *
  * See: SDD §9.2 (Distributed Rate Limiting)
  */
-export function createRateLimit(maxRpm: number, opts?: { redis?: RedisClient }) {
+export function createRateLimit(maxRpm: number, opts?: { redis?: RedisClient; maxTracked?: number }) {
   if (opts?.redis) {
     return createRedisRateLimit(maxRpm, opts.redis);
   }
-  return createMemoryRateLimit(maxRpm);
+  return createMemoryRateLimit(maxRpm, opts?.maxTracked);
 }
 
 /**
  * In-memory rate limiter (Phase 1 behavior).
  * Single-instance only — does not share state across ECS tasks.
  */
-function createMemoryRateLimit(maxRpm: number) {
+function createMemoryRateLimit(maxRpm: number, maxTracked?: number) {
+  const MAX_TRACKED = maxTracked ?? 10_000;
   const store = new Map<string, RateLimitEntry>();
 
-  // Clean up expired entries every 60 seconds
+  // Clean up expired entries every 60 seconds, then evict LRU if over MAX_TRACKED (Bridge iter2-low-2)
   const cleanupInterval = setInterval(() => {
     const cutoff = Date.now() - 60_000;
     for (const [key, entry] of store) {
       entry.timestamps = entry.timestamps.filter((t) => t > cutoff);
       if (entry.timestamps.length === 0) {
         store.delete(key);
+      }
+    }
+    // Evict oldest by lastAccess if store exceeds MAX_TRACKED
+    if (store.size > MAX_TRACKED) {
+      const sorted = [...store.entries()].sort((a, b) => a[1].lastAccess - b[1].lastAccess);
+      const evictCount = store.size - MAX_TRACKED;
+      for (let i = 0; i < evictCount; i++) {
+        store.delete(sorted[i]![0]);
       }
     }
   }, 60_000);
@@ -58,12 +68,13 @@ function createMemoryRateLimit(maxRpm: number) {
 
     let entry = store.get(key);
     if (!entry) {
-      entry = { timestamps: [] };
+      entry = { timestamps: [], lastAccess: now };
       store.set(key, entry);
     }
 
     // Remove expired timestamps
     entry.timestamps = entry.timestamps.filter((t) => t > windowStart);
+    entry.lastAccess = now;
 
     if (entry.timestamps.length >= maxRpm) {
       const oldestInWindow = entry.timestamps[0]!;

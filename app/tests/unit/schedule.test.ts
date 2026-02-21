@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Hono } from 'hono';
 import {
   parseNLToCron,
   MAX_SCHEDULES_PER_NFT,
   NL_SCHEDULE_PATTERNS,
 } from '../../src/types/schedule.js';
 import { ScheduleStore } from '../../src/services/schedule-store.js';
+import { createScheduleRoutes } from '../../src/routes/schedule.js';
 import type { FinnClient } from '../../src/proxy/finn-client.js';
+import type { ConvictionResolver } from '../../src/services/conviction-resolver.js';
 
 // --- NL Parser Tests ---
 
@@ -377,5 +380,130 @@ describe('ScheduleStore', () => {
       const execs = store.getExecutions(id, 3);
       expect(execs).toHaveLength(3);
     });
+  });
+});
+
+// --- Schedule Route Tests (Bridge iter2-low-7, iter2-low-3) ---
+
+describe('Schedule route — history ownership check (iter2-low-7)', () => {
+  let scheduleStore: ScheduleStore;
+  let mockFinnClient: FinnClient;
+  let mockConvictionResolver: ConvictionResolver;
+
+  beforeEach(() => {
+    mockFinnClient = {
+      request: vi.fn().mockResolvedValue({ cronId: 'finn-cron-001' }),
+    } as unknown as FinnClient;
+    scheduleStore = new ScheduleStore(mockFinnClient);
+    mockConvictionResolver = {
+      resolve: vi.fn().mockResolvedValue({ tier: 'builder', bgtStaked: 100, source: 'freeside' }),
+    } as unknown as ConvictionResolver;
+  });
+
+  function createApp(resolveNftOwnership?: (wallet: string) => Promise<{ nftId: string } | null>) {
+    const app = new Hono();
+    app.route('/api/schedule', createScheduleRoutes({
+      scheduleStore,
+      convictionResolver: mockConvictionResolver,
+      callbackSecret: 'test-secret',
+      resolveNftOwnership,
+    }));
+    return app;
+  }
+
+  it('returns 403 when wallet does not own the NFT', async () => {
+    const result = await scheduleStore.createSchedule('nft-001', '0xOwner', {
+      nlExpression: 'every morning',
+      prompt: 'test',
+    });
+    const id = result.schedule!.id;
+    scheduleStore.handleCallback(id, 'msg-1');
+
+    const app = createApp(async () => ({ nftId: 'nft-OTHER' })); // wrong NFT
+    const res = await app.request(`/api/schedule/${id}/history`, {
+      headers: { 'x-wallet-address': '0xStranger' },
+    });
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('forbidden');
+  });
+
+  it('returns 403 when resolveNftOwnership returns null', async () => {
+    const result = await scheduleStore.createSchedule('nft-001', '0xOwner', {
+      nlExpression: 'every morning',
+      prompt: 'test',
+    });
+    const id = result.schedule!.id;
+
+    const app = createApp(async () => null); // no ownership
+    const res = await app.request(`/api/schedule/${id}/history`, {
+      headers: { 'x-wallet-address': '0xStranger' },
+    });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 200 when wallet owns the NFT', async () => {
+    const result = await scheduleStore.createSchedule('nft-001', '0xOwner', {
+      nlExpression: 'every morning',
+      prompt: 'test',
+    });
+    const id = result.schedule!.id;
+    scheduleStore.handleCallback(id, 'msg-1');
+
+    const app = createApp(async () => ({ nftId: 'nft-001' })); // correct NFT
+    const res = await app.request(`/api/schedule/${id}/history`, {
+      headers: { 'x-wallet-address': '0xOwner' },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.executions).toHaveLength(1);
+  });
+
+  it('returns 404 when schedule does not exist', async () => {
+    const app = createApp(async () => ({ nftId: 'nft-001' }));
+    const res = await app.request('/api/schedule/nonexistent-id/history', {
+      headers: { 'x-wallet-address': '0xOwner' },
+    });
+
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe('not_found');
+  });
+});
+
+describe('Schedule route — empty callback secret warning (iter2-low-3)', () => {
+  it('warns when callbackSecret is empty', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const mockFinn = { request: vi.fn() } as unknown as FinnClient;
+    const mockResolver = { resolve: vi.fn() } as unknown as ConvictionResolver;
+
+    createScheduleRoutes({
+      scheduleStore: new ScheduleStore(mockFinn),
+      convictionResolver: mockResolver,
+      callbackSecret: '',
+    });
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('callbackSecret is empty'),
+    );
+    spy.mockRestore();
+  });
+
+  it('does not warn when callbackSecret is set', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const mockFinn = { request: vi.fn() } as unknown as FinnClient;
+    const mockResolver = { resolve: vi.fn() } as unknown as ConvictionResolver;
+
+    createScheduleRoutes({
+      scheduleStore: new ScheduleStore(mockFinn),
+      convictionResolver: mockResolver,
+      callbackSecret: 'a-real-secret',
+    });
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

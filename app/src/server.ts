@@ -317,6 +317,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     scheduleStore,
     convictionResolver,
     callbackSecret: config.scheduleCallbackSecret,
+    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
+    // resolve the primary. Multi-NFT support tracked in loa-finn issue
+    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
     resolveNftOwnership: async (wallet: string) => {
       try {
         const result = await finnClient.request<{ nftId: string }>(
@@ -355,6 +358,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   }));
   app.route('/api/learning', createLearningRoutes({
     learningEngine,
+    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
+    // resolve the primary. Multi-NFT support tracked in loa-finn issue
+    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
     resolveNftOwnership: async (wallet: string) => {
       try {
         const result = await finnClient.request<{ nftId: string }>(
@@ -369,6 +375,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   }));
   app.route('/api/memory', createMemoryRoutes({
     memoryStore,
+    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
+    // resolve the primary. Multi-NFT support tracked in loa-finn issue
+    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
     resolveNftOwnership: async (wallet: string) => {
       try {
         const result = await finnClient.request<{

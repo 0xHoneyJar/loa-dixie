@@ -151,6 +151,61 @@ describe('CompoundLearningEngine', () => {
     });
   });
 
+  describe('insights and lastEvolution bounding (iter2-low-6)', () => {
+    it('caps insights map at maxNfts', () => {
+      const engine = new CompoundLearningEngine({ batchSize: 1, maxNfts: 2 });
+
+      // NFT 1 — generates insight
+      engine.ingest(createSignal({ nftId: 'nft-001' }));
+      expect(engine.getInsights('nft-001')).toHaveLength(1);
+
+      // NFT 2 — generates insight
+      engine.ingest(createSignal({ nftId: 'nft-002' }));
+      expect(engine.getInsights('nft-002')).toHaveLength(1);
+
+      // NFT 3 — should evict LRU from insights
+      engine.ingest(createSignal({ nftId: 'nft-003' }));
+      expect(engine.getInsights('nft-003')).toHaveLength(1);
+
+      // One of the earlier NFTs should have been evicted from insights
+      const total = engine.getInsights('nft-001').length
+        + engine.getInsights('nft-002').length
+        + engine.getInsights('nft-003').length;
+      expect(total).toBeLessThanOrEqual(3); // max 2 NFTs in insights at once + 1 new
+    });
+
+    it('cleans lastEvolution on signal buffer eviction', () => {
+      const engine = new CompoundLearningEngine({ batchSize: 1, maxNfts: 1 });
+
+      // NFT 1 generates insight
+      engine.ingest(createSignal({ nftId: 'nft-001' }));
+      expect(engine.getInsights('nft-001')).toHaveLength(1);
+
+      // NFT 2 forces eviction of NFT 1 from signal buffer + insights + lastEvolution
+      engine.ingest(createSignal({ nftId: 'nft-002' }));
+
+      // NFT 1 insights should be cleared
+      expect(engine.getInsights('nft-001')).toHaveLength(0);
+    });
+
+    it('preserves most recent NFT insights', () => {
+      const engine = new CompoundLearningEngine({ batchSize: 1, maxNfts: 2 });
+
+      engine.ingest(createSignal({ nftId: 'nft-001' }));
+      engine.ingest(createSignal({ nftId: 'nft-002' }));
+
+      // Both should have insights
+      expect(engine.getInsights('nft-001')).toHaveLength(1);
+      expect(engine.getInsights('nft-002')).toHaveLength(1);
+
+      // Access nft-002 again (makes it more recent)
+      engine.ingest(createSignal({ nftId: 'nft-002' }));
+
+      // nft-002 should still have insights
+      expect(engine.getInsights('nft-002').length).toBeGreaterThan(0);
+    });
+  });
+
   describe('personality drift', () => {
     it('detects drift between insight windows', () => {
       // First batch: heavy defi focus

@@ -365,7 +365,7 @@ describe('Agent API routes', () => {
 
       const app = createApp();
       const res = await app.request('/api/agent/knowledge', {
-        headers: { 'x-agent-tba': '0xTBA001' },
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
       });
 
       expect(res.status).toBe(200);
@@ -380,12 +380,38 @@ describe('Agent API routes', () => {
 
       const app = createApp();
       const res = await app.request('/api/agent/knowledge', {
-        headers: { 'x-agent-tba': '0xTBA001' },
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
       });
 
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.totalDocuments).toBe(0);
+    });
+
+    it('rejects without x-agent-owner (iter2-low-8)', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001' },
+      });
+
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body.message).toContain('x-agent-owner');
+    });
+
+    it('rejects insufficient conviction tier (iter2-low-8)', async () => {
+      (mockConvictionResolver.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tier: 'builder',
+        bgtStaked: 100,
+        source: 'freeside',
+      });
+
+      const app = createApp();
+      const res = await app.request('/api/agent/knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(403);
     });
   });
 
@@ -499,6 +525,88 @@ describe('Agent API routes', () => {
         body: JSON.stringify({ query: 'test' }),
       });
       expect(res2.status).toBe(200);
+    });
+
+    it('enforces daily RPD limit (iter2-low-1)', async () => {
+      const app = new Hono();
+      app.route('/api/agent', createAgentRoutes({
+        finnClient: mockFinnClient,
+        convictionResolver: mockConvictionResolver,
+        memoryStore: null,
+        rateLimits: { agentRpm: 100, agentRpd: 3 }, // High RPM, low RPD
+      }));
+
+      // First 3 requests succeed (RPD = 3)
+      for (let i = 0; i < 3; i++) {
+        const res = await app.request('/api/agent/query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-agent-tba': '0xDailyAgent',
+            'x-agent-owner': '0xOwner',
+          },
+          body: JSON.stringify({ query: `test ${i}` }),
+        });
+        expect(res.status).toBe(200);
+      }
+
+      // 4th request should be daily-limited
+      const res = await app.request('/api/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xDailyAgent',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ query: 'test overflow' }),
+      });
+      expect(res.status).toBe(429);
+    });
+
+    it('tracks RPD separately per agent (iter2-low-1)', async () => {
+      const app = new Hono();
+      app.route('/api/agent', createAgentRoutes({
+        finnClient: mockFinnClient,
+        convictionResolver: mockConvictionResolver,
+        memoryStore: null,
+        rateLimits: { agentRpm: 100, agentRpd: 1 },
+      }));
+
+      // Agent A uses its daily quota
+      const resA = await app.request('/api/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xAgentA',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ query: 'test' }),
+      });
+      expect(resA.status).toBe(200);
+
+      // Agent B still has its own daily quota
+      const resB = await app.request('/api/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xAgentB',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ query: 'test' }),
+      });
+      expect(resB.status).toBe(200);
+
+      // Agent A is daily-limited
+      const resA2 = await app.request('/api/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xAgentA',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ query: 'test' }),
+      });
+      expect(resA2.status).toBe(429);
     });
   });
 });

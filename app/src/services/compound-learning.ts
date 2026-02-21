@@ -263,6 +263,11 @@ export class CompoundLearningEngine {
       personalityDrift,
     };
 
+    // Cap insights map to maxNfts entries (Bridge iter2-low-6)
+    if (!this.insights.has(nftId) && this.insights.size >= this.maxNfts) {
+      this.evictLruInsight();
+    }
+
     // Store insights
     const nftInsights = this.insights.get(nftId) ?? [];
     nftInsights.push(insight);
@@ -323,6 +328,31 @@ export class CompoundLearningEngine {
     return flushed;
   }
 
+  /** Evict LRU entry from insights map when at capacity (Bridge iter2-low-6) */
+  private evictLruInsight(): void {
+    // Use the oldest insight window end time as LRU proxy
+    let oldestNft: string | null = null;
+    let oldestTime = Infinity;
+    for (const [nftId, windows] of this.insights) {
+      if (windows.length > 0) {
+        const lastWindow = windows[windows.length - 1]!;
+        const t = new Date(lastWindow.windowEnd).getTime();
+        if (t < oldestTime) {
+          oldestTime = t;
+          oldestNft = nftId;
+        }
+      } else {
+        // Empty array — evict immediately
+        oldestNft = nftId;
+        break;
+      }
+    }
+    if (oldestNft) {
+      this.insights.delete(oldestNft);
+      this.lastEvolution.delete(oldestNft);
+    }
+  }
+
   private evictLruNft(): void {
     let oldestNft: string | null = null;
     let oldestTime = Infinity;
@@ -339,6 +369,9 @@ export class CompoundLearningEngine {
         this.processBatch(oldestNft, entry.signals);
       }
       this.signalBuffer.delete(oldestNft);
+      // Also evict from insights and lastEvolution maps (Bridge iter2-low-6)
+      this.insights.delete(oldestNft);
+      this.lastEvolution.delete(oldestNft);
     }
   }
 }

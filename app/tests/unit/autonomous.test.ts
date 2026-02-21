@@ -283,4 +283,85 @@ describe('autonomous engine', () => {
       expect(perms.nftId).toBe('unknown');
     });
   });
+
+  describe('audit log eviction logging (iter2-low-5)', () => {
+    it('calls log callback on eviction with correct counts', async () => {
+      const logFn = vi.fn();
+      const finn = mockFinnClient({
+        '/api/autonomous/oracle/permissions': enabledPermissions,
+      });
+      const engine = new AutonomousEngine(finn, null, {
+        maxAuditEntries: 5,
+        log: logFn,
+      });
+
+      // Fill audit log beyond maxAuditEntries
+      for (let i = 0; i < 7; i++) {
+        await engine.checkPermission({
+          nftId: 'oracle',
+          capability: 'chat_initiate',
+          requestedBy: '0xowner',
+          estimatedCostMicroUsd: 10,
+        });
+      }
+
+      // Log should have been called when buffer exceeded 5 entries (at entry 6)
+      expect(logFn).toHaveBeenCalledWith('warn', expect.objectContaining({
+        event: 'audit_log_eviction',
+        nftId: 'oracle',
+      }));
+
+      // Verify eviction metadata
+      const call = logFn.mock.calls.find(
+        (c: unknown[]) => (c[1] as Record<string, unknown>).event === 'audit_log_eviction',
+      );
+      expect(call).toBeDefined();
+      expect((call![1] as Record<string, unknown>).evictedCount).toBeGreaterThan(0);
+      expect((call![1] as Record<string, unknown>).remainingCount).toBeGreaterThan(0);
+    });
+
+    it('does not call log when below threshold', async () => {
+      const logFn = vi.fn();
+      const finn = mockFinnClient({
+        '/api/autonomous/oracle/permissions': enabledPermissions,
+      });
+      const engine = new AutonomousEngine(finn, null, {
+        maxAuditEntries: 100,
+        log: logFn,
+      });
+
+      // Only 3 entries — well below threshold
+      for (let i = 0; i < 3; i++) {
+        await engine.checkPermission({
+          nftId: 'oracle',
+          capability: 'chat_initiate',
+          requestedBy: '0xowner',
+        });
+      }
+
+      expect(logFn).not.toHaveBeenCalled();
+    });
+
+    it('eviction still works without log callback', async () => {
+      const finn = mockFinnClient({
+        '/api/autonomous/oracle/permissions': enabledPermissions,
+      });
+      const engine = new AutonomousEngine(finn, null, {
+        maxAuditEntries: 5,
+        // no log callback
+      });
+
+      for (let i = 0; i < 10; i++) {
+        await engine.checkPermission({
+          nftId: 'oracle',
+          capability: 'chat_initiate',
+          requestedBy: '0xowner',
+        });
+      }
+
+      // Audit log should be bounded (not 10 entries)
+      const log = engine.getAuditLog('oracle', 100);
+      expect(log.length).toBeLessThan(10);
+    });
+  });
 });

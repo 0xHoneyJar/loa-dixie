@@ -37,6 +37,8 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
   // Bounded to MAX_TRACKED_AGENTS entries (Bridge medium-1)
   const MAX_TRACKED_AGENTS = 1000;
   const agentRequestCounts = new Map<string, { timestamps: number[]; lastAccess: number }>();
+  // Daily request counts — keyed by `${agentTba}:${YYYY-MM-DD}` for auto-rollover (Bridge iter2-low-1)
+  const agentDailyCounts = new Map<string, number>();
   let lastCleanup = Date.now();
 
   const cleanupStaleEntries = (now: number) => {
@@ -44,6 +46,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     if (now - lastCleanup < 60_000) return;
     lastCleanup = now;
     const windowStart = now - 60_000;
+    const today = new Date(now).toISOString().split('T')[0]!;
     for (const [key, entry] of agentRequestCounts) {
       entry.timestamps = entry.timestamps.filter((t) => t > windowStart);
       if (entry.timestamps.length === 0) {
@@ -56,6 +59,20 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       const evictCount = agentRequestCounts.size - MAX_TRACKED_AGENTS;
       for (let i = 0; i < evictCount; i++) {
         agentRequestCounts.delete(sorted[i]![0]);
+      }
+    }
+    // Evict stale daily entries (past dates) and enforce MAX_TRACKED cap
+    for (const key of agentDailyCounts.keys()) {
+      if (!key.endsWith(today)) {
+        agentDailyCounts.delete(key);
+      }
+    }
+    if (agentDailyCounts.size > MAX_TRACKED_AGENTS) {
+      const entries = [...agentDailyCounts.entries()];
+      entries.sort((a, b) => a[1] - b[1]); // evict lowest-count first
+      const evictCount = agentDailyCounts.size - MAX_TRACKED_AGENTS;
+      for (let i = 0; i < evictCount; i++) {
+        agentDailyCounts.delete(entries[i]![0]);
       }
     }
   };
@@ -81,7 +98,16 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       return { allowed: false, retryAfter };
     }
 
+    // Check daily limit (Bridge iter2-low-1)
+    const today = new Date(now).toISOString().split('T')[0]!;
+    const dailyKey = `${agentTba}:${today}`;
+    const dailyCount = agentDailyCounts.get(dailyKey) ?? 0;
+    if (dailyCount >= limits.agentRpd) {
+      return { allowed: false, retryAfter: undefined };
+    }
+
     entry.timestamps.push(now);
+    agentDailyCounts.set(dailyKey, dailyCount + 1);
     return { allowed: true };
   };
 
@@ -267,6 +293,23 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     const agentTba = c.req.header('x-agent-tba');
     if (!agentTba) {
       return c.json({ error: 'unauthorized', message: 'TBA authentication required' }, 401);
+    }
+
+    // Verify architect+ tier (Bridge iter2-low-8)
+    const ownerWallet = c.req.header('x-agent-owner');
+    if (!ownerWallet) {
+      return c.json(
+        { error: 'unauthorized', message: 'x-agent-owner header required (set by TBA auth middleware)' },
+        401,
+      );
+    }
+
+    const conviction = await convictionResolver.resolve(ownerWallet);
+    if (!tierMeetsRequirement(conviction.tier, 'architect')) {
+      return c.json(
+        { error: 'forbidden', message: 'Architect conviction tier or higher required' },
+        403,
+      );
     }
 
     try {

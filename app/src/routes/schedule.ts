@@ -58,6 +58,11 @@ export function createScheduleRoutes(deps: ScheduleRouteDeps): Hono {
   const { scheduleStore, convictionResolver, callbackSecret, resolveNftOwnership } = deps;
   const app = new Hono();
 
+  // Warn if callback secret is missing — all callbacks will fail (Bridge iter2-low-3)
+  if (!callbackSecret) {
+    console.warn('[dixie:schedule] WARNING: callbackSecret is empty — all schedule callbacks will be rejected. Set DIXIE_SCHEDULE_CALLBACK_SECRET.');
+  }
+
   /** POST / — Create a schedule from NL expression */
   app.post('/', async (c) => {
     const { wallet } = getRequestContext(c);
@@ -157,6 +162,19 @@ export function createScheduleRoutes(deps: ScheduleRouteDeps): Hono {
     const { wallet } = getRequestContext(c);
     if (!wallet) {
       return c.json({ error: 'unauthorized', message: 'Wallet required' }, 401);
+    }
+
+    // Verify schedule exists and wallet owns the NFT (Bridge iter2-low-7)
+    const schedule = scheduleStore.getSchedule(scheduleId);
+    if (!schedule) {
+      return c.json({ error: 'not_found', message: 'Schedule not found' }, 404);
+    }
+
+    if (resolveNftOwnership) {
+      const ownership = await resolveNftOwnership(wallet);
+      if (!ownership || ownership.nftId !== schedule.nftId) {
+        return c.json({ error: 'forbidden', message: 'Not authorized for this NFT' }, 403);
+      }
     }
 
     const executions = scheduleStore.getExecutions(scheduleId);
