@@ -1,0 +1,31 @@
+{
+  "events": [
+    {
+      "seq": 1,
+      "type": "initial_release",
+      "timestamp": "2026-02-22T00:00:00Z",
+      "detail": "arrakis→freeside migration, 16 files updated, schema v2, corpus_version 1",
+      "author": "bridge-20260222-horizon",
+      "files_affected": 16,
+      "corpus_version_after": 1
+    },
+    {
+      "seq": 2,
+      "type": "schema_upgrade",
+      "timestamp": "2026-02-22T20:00:00Z",
+      "detail": "Token budget 30K→50K (corpus budget ≠ per-query context window; budget is total corpus capacity, retrieval selects subset per query). corpus_version 1→2",
+      "author": "bridge-20260222-deeparch",
+      "files_affected": 1,
+      "corpus_version_after": 2
+    },
+    {
+      "seq": 3,
+      "type": "add_source",
+      "timestamp": "2026-02-22T20:01:00Z",
+      "detail": "Corpus service extraction (corpus-meta.ts), event log (corpus-events.json), Oracle self-knowledge endpoint, contract test framework",
+      "author": "bridge-20260222-deeparch",
+      "files_affected": 6,
+      "corpus_version_after": 2
+    }
+  ]
+}

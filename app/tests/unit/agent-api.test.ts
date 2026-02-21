@@ -470,6 +470,56 @@ describe('Agent API routes', () => {
     });
   });
 
+  describe('GET /self-knowledge (Task 16.3)', () => {
+    it('returns Oracle self-knowledge response', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.corpus_version).toBeGreaterThanOrEqual(1);
+      expect(body.freshness).toBeDefined();
+      expect(body.freshness.healthy).toBeGreaterThanOrEqual(0);
+      expect(body.freshness.total).toBe(body.freshness.healthy + body.freshness.stale);
+      expect(body.freshness.staleSources).toBeInstanceOf(Array);
+      expect(body.coverage).toBeDefined();
+      expect(body.coverage.repos_with_code_reality).toBeInstanceOf(Array);
+      expect(body.token_utilization).toBeDefined();
+      expect(body.token_utilization.budget).toBeGreaterThan(0);
+      expect(['high', 'medium', 'low']).toContain(body.confidence);
+    });
+
+    it('rejects without TBA auth', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/self-knowledge');
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects without x-agent-owner', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001' },
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects insufficient conviction tier', async () => {
+      (mockConvictionResolver.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tier: 'builder',
+        bgtStaked: 100,
+        source: 'freeside',
+      });
+
+      const app = createApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+      expect(res.status).toBe(403);
+    });
+  });
+
   describe('POST /schedule', () => {
     it('creates agent-initiated schedule', async () => {
       (mockFinnClient.request as ReturnType<typeof vi.fn>).mockResolvedValue({

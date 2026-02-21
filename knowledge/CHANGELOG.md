@@ -7,6 +7,28 @@ Corpus versions follow integer increment (not semver) — each corpus mutation i
 
 ---
 
+## [2] - 2026-02-22
+
+### Added
+- `corpus-events.json` — append-only mutation log (CQRS write model; CHANGELOG is the read projection)
+- `CorpusMeta` service class (`app/src/services/corpus-meta.ts`) — extracted from health.ts
+- `GET /self-knowledge` endpoint — Oracle metacognition (corpus version, freshness, coverage, confidence)
+- Knowledge contract tests (`knowledge-contracts.test.ts`) — bilateral producer/consumer pattern
+- Contract report output summarizing pass/fail per contract
+
+### Changed
+- `default_budget_tokens` raised from 30,000 to 50,000 (budget ≠ per-query context window; total corpus capacity with retrieval selecting subset per query)
+- `corpus_version` incremented to 2
+- Knowledge health tests restructured: structural tests stay in `knowledge-health.test.ts`, contracts moved to `knowledge-contracts.test.ts`
+- `agent.ts` imports `getCorpusMeta` from `corpus-meta` service (not health.ts)
+- `health.ts` delegates corpus metadata to `CorpusMeta` service
+
+### Architecture
+- Billing-Knowledge Isomorphism: event log (write) + CHANGELOG (read projection) mirrors CQRS billing pattern
+- Contract tests parallel Pact-style bilateral contracts: producer promises + consumer requirements
+
+---
+
 ## [1] - 2026-02-22
 
 ### Changed

@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "corpus_version": 1,
-  "default_budget_tokens": 30000,
+  "corpus_version": 2,
+  "default_budget_tokens": 50000,
   "glossary_terms": {
     "hounfour": ["technical", "architectural"],
     "péristyle": ["architectural"],

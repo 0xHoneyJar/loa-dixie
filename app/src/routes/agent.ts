@@ -3,7 +3,7 @@ import type { FinnClient } from '../proxy/finn-client.js';
 import type { ConvictionResolver } from '../services/conviction-resolver.js';
 import type { MemoryStore } from '../services/memory-store.js';
 import { getRequestContext } from '../validation.js';
-import { getCorpusMeta } from './health.js';
+import { getCorpusMeta, corpusMeta } from '../services/corpus-meta.js';
 import { tierMeetsRequirement } from '../types/conviction.js';
 import type {
   AgentQueryRequest,
@@ -345,6 +345,38 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
         ...(localCorpus ?? {}),
       });
     }
+  });
+
+  /** GET /self-knowledge — Oracle metacognition (Task 16.3, deep-review build-next-5) */
+  app.get('/self-knowledge', async (c) => {
+    const agentTba = c.req.header('x-agent-tba');
+    if (!agentTba) {
+      return c.json({ error: 'unauthorized', message: 'TBA authentication required' }, 401);
+    }
+
+    // Verify architect+ tier (same auth as /knowledge)
+    const ownerWallet = c.req.header('x-agent-owner');
+    if (!ownerWallet) {
+      return c.json(
+        { error: 'unauthorized', message: 'x-agent-owner header required (set by TBA auth middleware)' },
+        401,
+      );
+    }
+
+    const conviction = await convictionResolver.resolve(ownerWallet);
+    if (!tierMeetsRequirement(conviction.tier, 'architect')) {
+      return c.json(
+        { error: 'forbidden', message: 'Architect conviction tier or higher required' },
+        403,
+      );
+    }
+
+    const selfKnowledge = corpusMeta.getSelfKnowledge();
+    if (!selfKnowledge) {
+      return c.json({ error: 'internal_error', message: 'Failed to compute self-knowledge' }, 500);
+    }
+
+    return c.json(selfKnowledge);
   });
 
   /** POST /schedule — Agent-initiated schedule creation */
