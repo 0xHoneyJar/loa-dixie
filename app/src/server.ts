@@ -37,6 +37,7 @@ import { CompoundLearningEngine } from './services/compound-learning.js';
 import { createLearningRoutes } from './routes/learning.js';
 import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
+import { KnowledgePriorityStore } from './services/knowledge-priority-store.js';
 import type { TBAVerification } from './types/agent-api.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
@@ -177,6 +178,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
 
   // Phase 2: Compound learning engine (batch processing every 10 interactions)
   const learningEngine = new CompoundLearningEngine();
+
+  // Phase 2: Knowledge priority store (conviction-weighted community governance, Task 21.4)
+  const priorityStore = new KnowledgePriorityStore();
 
   // Phase 2: TBA verification cache (uses projection cache with tba prefix when Redis available)
   let tbaProjectionCache: ProjectionCache<TBAVerification> | null = null;
@@ -357,6 +361,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     finnClient,
     convictionResolver,
     memoryStore,
+    priorityStore,
   }));
   app.route('/api/learning', createLearningRoutes({
     learningEngine,

@@ -10,6 +10,7 @@ import {
 } from '../../src/types/agent-api.js';
 import type { FinnClient } from '../../src/proxy/finn-client.js';
 import type { ConvictionResolver } from '../../src/services/conviction-resolver.js';
+import { KnowledgePriorityStore } from '../../src/services/knowledge-priority-store.js';
 
 // --- TBA Auth Middleware Tests ---
 
@@ -764,6 +765,198 @@ describe('Agent API routes', () => {
         body: JSON.stringify({ query: 'test' }),
       });
       expect(resA2.status).toBe(429);
+    });
+  });
+});
+
+// --- Knowledge Priority Voting Tests (Sprint 21) ---
+
+describe('Knowledge priority voting (Task 21.2-21.5)', () => {
+  let mockFinnClient: FinnClient;
+  let mockConvictionResolver: ConvictionResolver;
+  let priorityStore: KnowledgePriorityStore;
+
+  beforeEach(() => {
+    mockFinnClient = {
+      request: vi.fn().mockResolvedValue({}),
+    } as unknown as FinnClient;
+
+    mockConvictionResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        tier: 'architect',
+        bgtStaked: 1000,
+        source: 'freeside',
+      }),
+    } as unknown as ConvictionResolver;
+
+    priorityStore = new KnowledgePriorityStore();
+  });
+
+  function createVotingApp() {
+    const app = new Hono();
+    app.route('/api/agent', createAgentRoutes({
+      finnClient: mockFinnClient,
+      convictionResolver: mockConvictionResolver,
+      memoryStore: null,
+      priorityStore,
+    }));
+    return app;
+  }
+
+  describe('POST /knowledge/priorities/vote', () => {
+    it('accepts vote from participant+ tier', async () => {
+      (mockConvictionResolver.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tier: 'participant',
+        bgtStaked: 1,
+        source: 'freeside',
+      });
+
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ sourceId: 'glossary', priority: 4 }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.sourceId).toBe('glossary');
+      expect(body.yourVote).toBe(4);
+      expect(body.aggregateScore).toBeGreaterThan(0);
+    });
+
+    it('rejects observer tier (Ostrom Principle 3)', async () => {
+      (mockConvictionResolver.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tier: 'observer',
+        bgtStaked: 0,
+        source: 'freeside',
+      });
+
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xObserver',
+        },
+        body: JSON.stringify({ sourceId: 'glossary', priority: 5 }),
+      });
+
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.message).toContain('Participation required');
+    });
+
+    it('rejects invalid priority (outside 1-5)', async () => {
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ sourceId: 'glossary', priority: 10 }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.message).toContain('1-5');
+    });
+
+    it('rejects missing required fields', async () => {
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('GET /knowledge/priorities', () => {
+    it('returns aggregated priorities', async () => {
+      // Seed some votes
+      priorityStore.vote({
+        wallet: '0xAlice',
+        sourceId: 'glossary',
+        priority: 5,
+        tier: 'architect',
+        timestamp: new Date().toISOString(),
+      });
+
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities', {
+        headers: { 'x-agent-tba': '0xTBA001' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.priorities).toBeInstanceOf(Array);
+      expect(body.priorities.length).toBe(1);
+      expect(body.priorities[0].sourceId).toBe('glossary');
+      expect(body.totalVoters).toBe(1);
+      expect(body.lastUpdated).toBeTruthy();
+    });
+
+    it('returns empty state without error', async () => {
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities', {
+        headers: { 'x-agent-tba': '0xTBA001' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.priorities).toEqual([]);
+      expect(body.totalVoters).toBe(0);
+    });
+  });
+
+  describe('GET /self-knowledge governance enrichment', () => {
+    it('includes governance section with priority store', async () => {
+      priorityStore.vote({
+        wallet: '0xVoter',
+        sourceId: 'glossary',
+        priority: 5,
+        tier: 'sovereign',
+        timestamp: new Date().toISOString(),
+      });
+
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.governance).toBeDefined();
+      expect(body.governance.communityPriorities).toBeInstanceOf(Array);
+      expect(body.governance.totalVoters).toBe(1);
+      expect(body.governance.governanceModel).toBe('conviction-weighted-vote');
+    });
+
+    it('handles empty governance state gracefully', async () => {
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.governance).toBeDefined();
+      expect(body.governance.communityPriorities).toEqual([]);
+      expect(body.governance.totalVoters).toBe(0);
     });
   });
 });

@@ -14,12 +14,15 @@ import type {
   AgentRateLimitConfig,
 } from '../types/agent-api.js';
 import { DEFAULT_AGENT_RATE_LIMITS } from '../types/agent-api.js';
+import type { KnowledgePriorityStore } from '../services/knowledge-priority-store.js';
 
 export interface AgentRouteDeps {
   finnClient: FinnClient;
   convictionResolver: ConvictionResolver;
   memoryStore: MemoryStore | null;
   rateLimits?: AgentRateLimitConfig;
+  /** Task 21.4: Conviction-weighted knowledge priority voting store */
+  priorityStore?: KnowledgePriorityStore;
 }
 
 /**
@@ -31,7 +34,7 @@ export interface AgentRouteDeps {
  * See: SDD §6.1.3, §7.2, PRD FR-6
  */
 export function createAgentRoutes(deps: AgentRouteDeps): Hono {
-  const { finnClient, convictionResolver, memoryStore } = deps;
+  const { finnClient, convictionResolver, memoryStore, priorityStore } = deps;
   const limits = deps.rateLimits ?? DEFAULT_AGENT_RATE_LIMITS;
   const app = new Hono();
 
@@ -397,7 +400,122 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       return c.json({ error: 'internal_error', message: 'Failed to compute self-knowledge' }, 500);
     }
 
-    return c.json(selfKnowledge);
+    // Task 21.5: Enrich with community governance data
+    const governance = priorityStore
+      ? {
+          communityPriorities: priorityStore.getAggregatedPriorities().slice(0, 10),
+          totalVoters: priorityStore.getVoterCount(),
+          governanceModel: 'conviction-weighted-vote' as const,
+        }
+      : undefined;
+
+    return c.json({ ...selfKnowledge, governance });
+  });
+
+  /** POST /knowledge/priorities/vote — Conviction-gated priority voting (Task 21.2) */
+  app.post('/knowledge/priorities/vote', async (c) => {
+    const agentTba = c.req.header('x-agent-tba');
+    if (!agentTba) {
+      return c.json({ error: 'unauthorized', message: 'TBA authentication required' }, 401);
+    }
+
+    const ownerWallet = c.req.header('x-agent-owner');
+    if (!ownerWallet) {
+      return c.json(
+        { error: 'unauthorized', message: 'x-agent-owner header required (set by TBA auth middleware)' },
+        401,
+      );
+    }
+
+    // Require participant+ tier (Ostrom Principle 3: collective-choice arrangements)
+    const conviction = await convictionResolver.resolve(ownerWallet);
+    if (!tierMeetsRequirement(conviction.tier, 'participant')) {
+      return c.json(
+        { error: 'forbidden', message: 'Participation required to vote on knowledge priorities' },
+        403,
+      );
+    }
+
+    if (!priorityStore) {
+      return c.json({ error: 'not_available', message: 'Knowledge priority voting not configured' }, 503);
+    }
+
+    const body = await c.req.json<{ sourceId?: string; priority?: number }>().catch(() => null);
+    if (!body || !body.sourceId || body.priority == null) {
+      return c.json({ error: 'invalid_request', message: 'Required: sourceId, priority' }, 400);
+    }
+
+    // Validate priority range
+    if (!Number.isInteger(body.priority) || body.priority < 1 || body.priority > 5) {
+      return c.json({ error: 'invalid_request', message: 'priority must be an integer 1-5' }, 400);
+    }
+
+    // Validate sourceId against known sources
+    const meta = getCorpusMeta();
+    const selfKnowledge = corpusMeta.getSelfKnowledge();
+    const knownSources = selfKnowledge
+      ? Object.keys(selfKnowledge.coverage.sources_by_tag).length > 0
+        ? [...(selfKnowledge.source_weights ?? [])].map((w) => w.sourceId)
+        : []
+      : [];
+    if (knownSources.length > 0 && !knownSources.includes(body.sourceId)) {
+      return c.json({ error: 'invalid_request', message: `Unknown sourceId: ${body.sourceId}` }, 400);
+    }
+
+    priorityStore.vote({
+      wallet: ownerWallet,
+      sourceId: body.sourceId,
+      priority: body.priority,
+      tier: conviction.tier,
+      timestamp: new Date().toISOString(),
+    });
+
+    const aggregated = priorityStore.getAggregatedPriorities();
+    const sourceAgg = aggregated.find((p) => p.sourceId === body.sourceId);
+
+    return c.json({
+      sourceId: body.sourceId,
+      yourVote: body.priority,
+      aggregateScore: sourceAgg?.score ?? 0,
+      voteCount: sourceAgg?.voteCount ?? 0,
+    });
+  });
+
+  /** GET /knowledge/priorities — Aggregated community priorities (Task 21.3) */
+  app.get('/knowledge/priorities', async (c) => {
+    const agentTba = c.req.header('x-agent-tba');
+    if (!agentTba) {
+      return c.json({ error: 'unauthorized', message: 'TBA authentication required' }, 401);
+    }
+
+    if (!priorityStore) {
+      return c.json({
+        priorities: [],
+        totalVoters: 0,
+        lastUpdated: new Date().toISOString(),
+      });
+    }
+
+    // Get aggregated priorities with source tags from corpus metadata
+    const priorities = priorityStore.getAggregatedPriorities();
+    const selfKnowledge = corpusMeta.getSelfKnowledge();
+    const sourceWeights = selfKnowledge?.source_weights ?? [];
+
+    const enriched = priorities.map((p) => {
+      const weight = sourceWeights.find((w) => w.sourceId === p.sourceId);
+      return {
+        sourceId: p.sourceId,
+        score: p.score,
+        voteCount: p.voteCount,
+        tags: weight ? [...weight.tags] : [],
+      };
+    });
+
+    return c.json({
+      priorities: enriched,
+      totalVoters: priorityStore.getVoterCount(),
+      lastUpdated: new Date().toISOString(),
+    });
   });
 
   /** POST /schedule — Agent-initiated schedule creation */
