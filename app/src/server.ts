@@ -27,6 +27,8 @@ import { createConvictionTierMiddleware } from './middleware/conviction-tier.js'
 import { createPersonalityRoutes } from './routes/personality.js';
 import { PersonalityCache } from './services/personality-cache.js';
 import { ConvictionResolver } from './services/conviction-resolver.js';
+import { AutonomousEngine } from './services/autonomous-engine.js';
+import { createAutonomousRoutes } from './routes/autonomous.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
 import { SignalEmitter } from './services/signal-emitter.js';
@@ -54,6 +56,8 @@ export interface DixieApp {
   personalityCache: PersonalityCache;
   /** Phase 2: Conviction tier resolver */
   convictionResolver: ConvictionResolver;
+  /** Phase 2: Autonomous operation engine */
+  autonomousEngine: AutonomousEngine;
 }
 
 /**
@@ -141,6 +145,19 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     convictionProjectionCache,
     allowlistStore,
   );
+
+  // Phase 2: Autonomous engine (uses projection cache with autonomous prefix when Redis available)
+  let autonomousProjectionCache: ProjectionCache<import('./types/autonomous.js').AutonomousPermissions> | null = null;
+  if (redisClient) {
+    autonomousProjectionCache = new ProjectionCache(
+      redisClient,
+      'autonomous',
+      config.convictionTierTtlSec, // reuse same TTL
+    );
+  }
+  const autonomousEngine = new AutonomousEngine(finnClient, autonomousProjectionCache, {
+    budgetDefaultMicroUsd: config.autonomousBudgetDefaultMicroUsd,
+  });
 
   // DECISION: Middleware pipeline as constitutional ordering (communitarian architecture)
   // The middleware sequence is not arbitrary — it encodes governance priorities.
@@ -268,6 +285,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.route('/api/sessions', createSessionRoutes(finnClient));
   app.route('/api/identity', createIdentityRoutes(finnClient));
   app.route('/api/personality', createPersonalityRoutes({ personalityCache }));
+  app.route('/api/autonomous', createAutonomousRoutes({ autonomousEngine, convictionResolver }));
   app.route('/api/memory', createMemoryRoutes({
     memoryStore,
     resolveNftOwnership: async (wallet: string) => {
@@ -301,5 +319,6 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     memoryStore,
     personalityCache,
     convictionResolver,
+    autonomousEngine,
   };
 }
