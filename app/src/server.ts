@@ -33,6 +33,8 @@ import { ScheduleStore } from './services/schedule-store.js';
 import { createScheduleRoutes } from './routes/schedule.js';
 import { createTBAAuthMiddleware } from './middleware/tba-auth.js';
 import { createAgentRoutes } from './routes/agent.js';
+import { CompoundLearningEngine } from './services/compound-learning.js';
+import { createLearningRoutes } from './routes/learning.js';
 import type { TBAVerification } from './types/agent-api.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
@@ -65,6 +67,8 @@ export interface DixieApp {
   autonomousEngine: AutonomousEngine;
   /** Phase 2: NL schedule store */
   scheduleStore: ScheduleStore;
+  /** Phase 2: Compound learning engine */
+  learningEngine: CompoundLearningEngine;
 }
 
 /**
@@ -168,6 +172,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
 
   // Phase 2: NL schedule store (uses finn client for cron registration)
   const scheduleStore = new ScheduleStore(finnClient);
+
+  // Phase 2: Compound learning engine (batch processing every 10 interactions)
+  const learningEngine = new CompoundLearningEngine();
 
   // Phase 2: TBA verification cache (uses projection cache with tba prefix when Redis available)
   let tbaProjectionCache: ProjectionCache<TBAVerification> | null = null;
@@ -331,6 +338,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     convictionResolver,
     memoryStore,
   }));
+  app.route('/api/learning', createLearningRoutes({ learningEngine }));
   app.route('/api/memory', createMemoryRoutes({
     memoryStore,
     resolveNftOwnership: async (wallet: string) => {
@@ -366,5 +374,6 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     convictionResolver,
     autonomousEngine,
     scheduleStore,
+    learningEngine,
   };
 }
