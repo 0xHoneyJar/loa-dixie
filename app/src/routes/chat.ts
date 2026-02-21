@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { FinnClient } from '../proxy/finn-client.js';
+import type { SignalEmitter } from '../services/signal-emitter.js';
 import { isValidPathParam, getRequestContext } from '../validation.js';
 
 /**
@@ -32,10 +33,18 @@ export interface ChatResponse {
   messageId: string;
 }
 
+export interface ChatRouteDeps {
+  /** NATS signal emitter for interaction signals (null when NATS not configured) */
+  signalEmitter: SignalEmitter | null;
+}
+
 /**
  * Chat routes — proxies chat requests to loa-finn.
+ *
+ * Phase 2: After successful chat completion, emits an InteractionSignal
+ * to NATS for compound learning pipeline (SDD §4.5).
  */
-export function createChatRoutes(finnClient: FinnClient): Hono {
+export function createChatRoutes(finnClient: FinnClient, deps?: ChatRouteDeps): Hono {
   const app = new Hono();
 
   /** POST / — Send a chat message */
@@ -74,6 +83,14 @@ export function createChatRoutes(finnClient: FinnClient): Hono {
             },
           },
         );
+
+        // Phase 2: Emit interaction signal (fire-and-forget)
+        emitChatSignal(deps?.signalEmitter ?? null, {
+          wallet: wallet ?? '',
+          sessionId: body.sessionId,
+          messageId: result.messageId ?? requestId,
+        });
+
         return c.json(result);
       }
 
@@ -93,6 +110,13 @@ export function createChatRoutes(finnClient: FinnClient): Hono {
         },
       );
 
+      // Phase 2: Emit interaction signal (fire-and-forget)
+      emitChatSignal(deps?.signalEmitter ?? null, {
+        wallet: wallet ?? '',
+        sessionId: session.sessionId,
+        messageId: requestId,
+      });
+
       return c.json({
         sessionId: session.sessionId,
         messageId: requestId,
@@ -110,4 +134,26 @@ export function createChatRoutes(finnClient: FinnClient): Hono {
   });
 
   return app;
+}
+
+/**
+ * Emit a lightweight interaction signal to NATS after a chat POST.
+ *
+ * This is a session-level signal (not per-token). The full token-level
+ * enrichment with economic metadata happens at the WebSocket stream layer
+ * via the stream enricher (SDD §4.4).
+ *
+ * Fire-and-forget: never blocks the response.
+ */
+function emitChatSignal(
+  signalEmitter: SignalEmitter | null,
+  context: { wallet: string; sessionId: string; messageId: string },
+): void {
+  if (!signalEmitter) return;
+  signalEmitter.publish('dixie.signal.interaction', {
+    wallet: context.wallet,
+    sessionId: context.sessionId,
+    messageId: context.messageId,
+    timestamp: new Date().toISOString(),
+  }).catch(() => {});
 }

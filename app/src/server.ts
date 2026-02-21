@@ -22,6 +22,7 @@ import { FinnClient } from './proxy/finn-client.js';
 import { TicketStore } from './services/ticket-store.js';
 import { MemoryStore } from './services/memory-store.js';
 import { createMemoryContext } from './middleware/memory-context.js';
+import { createEconomicMetadata } from './middleware/economic-metadata.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
 import { SignalEmitter } from './services/signal-emitter.js';
@@ -204,6 +205,12 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     },
   }));
 
+  // --- Phase 2 Position 15: Economic metadata ---
+  // Sets up cost tracking context (x-economic-start-ms, x-model-pool)
+  // After response: sets X-Duration-Ms, X-Cost-Micro-USD headers
+  // Graceful degradation: failure doesn't block request
+  app.use('/api/*', createEconomicMetadata());
+
   // --- Routes ---
   app.route('/api/health', createHealthRoutes({
     finnClient,
@@ -218,7 +225,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   }));
   app.route('/api/admin', createAdminRoutes(allowlistStore, config.adminKey));
   app.route('/api/ws/ticket', createWsTicketRoutes(ticketStore));
-  app.route('/api/chat', createChatRoutes(finnClient));
+  app.route('/api/chat', createChatRoutes(finnClient, { signalEmitter }));
   app.route('/api/sessions', createSessionRoutes(finnClient));
   app.route('/api/identity', createIdentityRoutes(finnClient));
   app.route('/api/memory', createMemoryRoutes({

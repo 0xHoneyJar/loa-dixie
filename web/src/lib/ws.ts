@@ -6,7 +6,14 @@ export type StreamEventType =
   | 'usage'
   | 'knowledge'
   | 'done'
-  | 'error';
+  | 'error'
+  // Phase 2 event types
+  | 'reasoning_trace'
+  | 'source_selection'
+  | 'model_selection'
+  | 'economic'
+  | 'personality'
+  | 'memory_inject';
 
 export interface StreamEvent {
   type: StreamEventType;
@@ -42,12 +49,54 @@ export interface ErrorEvent {
   data: { message: string };
 }
 
+// Phase 2 event interfaces
+export interface ReasoningTraceEvent {
+  type: 'reasoning_trace';
+  data: { step: number; thought: string };
+}
+
+export interface SourceSelectionEvent {
+  type: 'source_selection';
+  data: { sources: Array<{ name: string; type: string; relevance: number }>; classification: string[] };
+}
+
+export interface ModelSelectionEvent {
+  type: 'model_selection';
+  data: { model: string; pool: string; reason: string };
+}
+
+export interface EconomicEvent {
+  type: 'economic';
+  data: {
+    cost_micro_usd: number;
+    model: string;
+    tokens: { prompt: number; completion: number; memory_context: number; knowledge: number; total: number };
+  };
+}
+
+export interface PersonalityEvent {
+  type: 'personality';
+  data: { beauvoir_active: boolean; traits: string[] };
+}
+
+export interface MemoryInjectEvent {
+  type: 'memory_inject';
+  data: { context_tokens: number; topics: string[] };
+}
+
 export type ChatStreamEvent =
   | ChunkEvent
   | ToolCallEvent
   | KnowledgeEvent
   | DoneEvent
-  | ErrorEvent;
+  | ErrorEvent
+  // Phase 2
+  | ReasoningTraceEvent
+  | SourceSelectionEvent
+  | ModelSelectionEvent
+  | EconomicEvent
+  | PersonalityEvent
+  | MemoryInjectEvent;
 
 export type StreamCallback = (event: ChatStreamEvent) => void;
 

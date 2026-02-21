@@ -3,6 +3,9 @@ import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import { CitationPanel } from './CitationPanel';
 import { ToolUseDisplay } from './ToolUseDisplay';
+import { SourceChip } from './SourceChip';
+import { CostIndicator } from './CostIndicator';
+import { ReasoningTrace } from './ReasoningTrace';
 import type { ChatMessage } from '../hooks/useChat';
 
 interface Props {
@@ -41,6 +44,24 @@ export const MessageBubble: React.FC<Props> = ({ message }) => {
 
             {message.knowledge && (
               <CitationPanel knowledge={message.knowledge} />
+            )}
+
+            {/* Phase 2: Source selection chips */}
+            {message.sources && (
+              <SourceChip
+                sources={message.sources.sources}
+                classification={message.sources.classification}
+              />
+            )}
+
+            {/* Phase 2: Reasoning trace (show thinking) */}
+            {message.reasoningTraces && message.reasoningTraces.length > 0 && (
+              <ReasoningTrace traces={message.reasoningTraces} />
+            )}
+
+            {/* Phase 2: Cost indicator */}
+            {message.economic && (
+              <CostIndicator economic={message.economic} />
             )}
           </>
         )}

@@ -5,6 +5,12 @@ import {
   type ChatStreamEvent,
   type KnowledgeEvent,
   type ToolCallEvent,
+  type EconomicEvent,
+  type ReasoningTraceEvent,
+  type SourceSelectionEvent,
+  type ModelSelectionEvent,
+  type PersonalityEvent,
+  type MemoryInjectEvent,
 } from '../lib/ws';
 
 export interface ChatMessage {
@@ -14,6 +20,13 @@ export interface ChatMessage {
   isStreaming?: boolean;
   knowledge?: KnowledgeEvent['data'];
   toolCalls?: ToolCallEvent['data'][];
+  // Phase 2 metadata
+  economic?: EconomicEvent['data'];
+  reasoningTraces?: ReasoningTraceEvent['data'][];
+  sources?: SourceSelectionEvent['data'];
+  modelSelection?: ModelSelectionEvent['data'];
+  personality?: PersonalityEvent['data'];
+  memoryInject?: MemoryInjectEvent['data'];
 }
 
 export interface ChatState {
@@ -116,6 +129,46 @@ export function useChat() {
                     messages[lastIdx] = {
                       ...last,
                       knowledge: event.data as KnowledgeEvent['data'],
+                    };
+                    break;
+                  // Phase 2 event handlers
+                  case 'economic':
+                    messages[lastIdx] = {
+                      ...last,
+                      economic: event.data as EconomicEvent['data'],
+                    };
+                    break;
+                  case 'reasoning_trace':
+                    messages[lastIdx] = {
+                      ...last,
+                      reasoningTraces: [
+                        ...(last.reasoningTraces ?? []),
+                        event.data as ReasoningTraceEvent['data'],
+                      ],
+                    };
+                    break;
+                  case 'source_selection':
+                    messages[lastIdx] = {
+                      ...last,
+                      sources: event.data as SourceSelectionEvent['data'],
+                    };
+                    break;
+                  case 'model_selection':
+                    messages[lastIdx] = {
+                      ...last,
+                      modelSelection: event.data as ModelSelectionEvent['data'],
+                    };
+                    break;
+                  case 'personality':
+                    messages[lastIdx] = {
+                      ...last,
+                      personality: event.data as PersonalityEvent['data'],
+                    };
+                    break;
+                  case 'memory_inject':
+                    messages[lastIdx] = {
+                      ...last,
+                      memoryInject: event.data as MemoryInjectEvent['data'],
                     };
                     break;
                   case 'done':

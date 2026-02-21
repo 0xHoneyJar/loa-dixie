@@ -1,19 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createDbPool, checkDbHealth, closeDbPool } from '../../src/db/client.js';
 
-// Mock pg module
+// Mock pg module — uses a class (not arrow function) so `new Pool()` works
 vi.mock('pg', () => {
   const mockClient = {
     query: vi.fn().mockResolvedValue({ rows: [{ '?column?': 1 }] }),
     release: vi.fn(),
   };
 
-  const MockPool = vi.fn().mockImplementation(() => ({
-    connect: vi.fn().mockResolvedValue(mockClient),
-    end: vi.fn().mockResolvedValue(undefined),
-    on: vi.fn(),
-    _mockClient: mockClient,
-  }));
+  class MockPool {
+    connect = vi.fn().mockResolvedValue(mockClient);
+    end = vi.fn().mockResolvedValue(undefined);
+    on = vi.fn();
+    _mockClient = mockClient;
+    constructor(_opts?: unknown) {}
+  }
 
   return { default: { Pool: MockPool }, Pool: MockPool };
 });
