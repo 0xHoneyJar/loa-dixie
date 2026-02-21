@@ -31,6 +31,9 @@ export interface DixieConfig {
 
   // Phase 2: Rate limiting backend
   rateLimitBackend: 'memory' | 'redis';
+
+  // Phase 2: Schedule callback HMAC secret (Bridge high-2)
+  scheduleCallbackSecret: string;
 }
 
 /**
@@ -58,6 +61,7 @@ export interface DixieConfig {
  * DIXIE_PERSONALITY_TTL       (optional) — BEAUVOIR personality cache TTL in seconds; default 1800
  * DIXIE_AUTONOMOUS_BUDGET     (optional) — default autonomous budget in micro-USD; default 100000
  * DIXIE_RATE_LIMIT_BACKEND    (optional) — 'memory' or 'redis'; default 'memory' (auto-upgrades to 'redis' when REDIS_URL set)
+ * DIXIE_SCHEDULE_CALLBACK_SECRET (optional) — HMAC secret for schedule callback verification; default '' (rejects all callbacks in production)
  */
 export function loadConfig(): DixieConfig {
   const finnUrl = process.env.FINN_URL;
@@ -140,5 +144,8 @@ export function loadConfig(): DixieConfig {
 
     // Phase 2: Rate limiting
     rateLimitBackend,
+
+    // Phase 2: Schedule callback HMAC
+    scheduleCallbackSecret: process.env.DIXIE_SCHEDULE_CALLBACK_SECRET ?? '',
   };
 }

@@ -111,12 +111,12 @@ describe('TBA auth middleware', () => {
     expect(body.message).toContain('Invalid TBA');
   });
 
-  it('uses cache when available', async () => {
+  it('always verifies signature even with cache (Bridge high-1 fix)', async () => {
     const mockCache = {
       get: vi.fn().mockResolvedValue(mockVerification),
       set: vi.fn(),
     };
-    const verifyFn = vi.fn();
+    const verifyFn = vi.fn().mockResolvedValue(mockVerification);
 
     const app = new Hono();
     app.use('*', createTBAAuthMiddleware({
@@ -134,13 +134,39 @@ describe('TBA auth middleware', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(mockCache.get).toHaveBeenCalledWith('0xTBA001');
-    expect(verifyFn).not.toHaveBeenCalled(); // Did NOT call verifyTBA
+    // Signature verification ALWAYS happens — cache does NOT bypass auth
+    expect(verifyFn).toHaveBeenCalled();
   });
 
-  it('caches verification result after successful verify', async () => {
+  it('rejects invalid signature even when TBA is cached (Bridge high-1 fix)', async () => {
     const mockCache = {
-      get: vi.fn().mockResolvedValue(null), // cache miss
+      get: vi.fn().mockResolvedValue(mockVerification),
+      set: vi.fn(),
+    };
+    const verifyFn = vi.fn().mockResolvedValue(null); // Signature verification fails
+
+    const app = new Hono();
+    app.use('*', createTBAAuthMiddleware({
+      cache: mockCache as any,
+      verifyTBA: verifyFn,
+    }));
+    app.get('/test', (c) => c.json({ ok: true }));
+
+    const res = await app.request('/test', {
+      headers: {
+        'x-tba-address': '0xTBA001',
+        'x-tba-signature': 'bad-sig',
+        'x-tba-timestamp': String(nowSec()),
+      },
+    });
+
+    // Even though cache has this TBA, invalid signature is rejected
+    expect(res.status).toBe(401);
+  });
+
+  it('caches identity resolution after successful verify', async () => {
+    const mockCache = {
+      get: vi.fn().mockResolvedValue(null),
       set: vi.fn(),
     };
 
@@ -160,6 +186,7 @@ describe('TBA auth middleware', () => {
     });
 
     expect(res.status).toBe(200);
+    // Cache stores identity info for downstream middleware (not for auth bypass)
     expect(mockCache.set).toHaveBeenCalledWith('0xTBA001', mockVerification);
   });
 });
@@ -209,6 +236,22 @@ describe('Agent API routes', () => {
         body: JSON.stringify({ query: 'test' }),
       });
       expect(res.status).toBe(401);
+    });
+
+    it('rejects without x-agent-owner (Bridge medium-6)', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          // No x-agent-owner
+        },
+        body: JSON.stringify({ query: 'test' }),
+      });
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body.message).toContain('x-agent-owner');
     });
 
     it('rejects insufficient conviction tier', async () => {

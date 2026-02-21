@@ -75,16 +75,21 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       );
     }
 
-    // Verify architect+ tier via the agent's owner wallet
+    // Verify architect+ tier via the agent's owner wallet (Bridge medium-6: REQUIRED)
     const ownerWallet = c.req.header('x-agent-owner');
-    if (ownerWallet) {
-      const conviction = await convictionResolver.resolve(ownerWallet);
-      if (!tierMeetsRequirement(conviction.tier, 'architect')) {
-        return c.json(
-          { error: 'forbidden', message: 'Architect conviction tier or higher required for agent API' },
-          403,
-        );
-      }
+    if (!ownerWallet) {
+      return c.json(
+        { error: 'unauthorized', message: 'x-agent-owner header required (set by TBA auth middleware)' },
+        401,
+      );
+    }
+
+    const conviction = await convictionResolver.resolve(ownerWallet);
+    if (!tierMeetsRequirement(conviction.tier, 'architect')) {
+      return c.json(
+        { error: 'forbidden', message: 'Architect conviction tier or higher required for agent API' },
+        403,
+      );
     }
 
     const body = await c.req.json<AgentQueryRequest>().catch(() => null);
@@ -169,16 +174,21 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       return c.json({ error: 'unauthorized', message: 'TBA authentication required' }, 401);
     }
 
-    // Verify architect+ tier
+    // Verify architect+ tier (Bridge medium-6: REQUIRED)
     const ownerWallet = c.req.header('x-agent-owner');
-    if (ownerWallet) {
-      const conviction = await convictionResolver.resolve(ownerWallet);
-      if (!tierMeetsRequirement(conviction.tier, 'architect')) {
-        return c.json(
-          { error: 'forbidden', message: 'Architect conviction tier or higher required' },
-          403,
-        );
-      }
+    if (!ownerWallet) {
+      return c.json(
+        { error: 'unauthorized', message: 'x-agent-owner header required (set by TBA auth middleware)' },
+        401,
+      );
+    }
+
+    const conviction = await convictionResolver.resolve(ownerWallet);
+    if (!tierMeetsRequirement(conviction.tier, 'architect')) {
+      return c.json(
+        { error: 'forbidden', message: 'Architect conviction tier or higher required' },
+        403,
+      );
     }
 
     const capabilities: AgentCapabilities = {
@@ -240,16 +250,21 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       return c.json({ error: 'unauthorized', message: 'TBA authentication required' }, 401);
     }
 
-    // Verify architect+ tier
+    // Verify architect+ tier (Bridge medium-6: REQUIRED)
     const ownerWallet = c.req.header('x-agent-owner');
-    if (ownerWallet) {
-      const conviction = await convictionResolver.resolve(ownerWallet);
-      if (!tierMeetsRequirement(conviction.tier, 'architect')) {
-        return c.json(
-          { error: 'forbidden', message: 'Architect conviction tier or higher required' },
-          403,
-        );
-      }
+    if (!ownerWallet) {
+      return c.json(
+        { error: 'unauthorized', message: 'x-agent-owner header required (set by TBA auth middleware)' },
+        401,
+      );
+    }
+
+    const conviction = await convictionResolver.resolve(ownerWallet);
+    if (!tierMeetsRequirement(conviction.tier, 'architect')) {
+      return c.json(
+        { error: 'forbidden', message: 'Architect conviction tier or higher required' },
+        403,
+      );
     }
 
     const body = await c.req.json().catch(() => null);

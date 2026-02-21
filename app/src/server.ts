@@ -313,7 +313,22 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.route('/api/identity', createIdentityRoutes(finnClient));
   app.route('/api/personality', createPersonalityRoutes({ personalityCache }));
   app.route('/api/autonomous', createAutonomousRoutes({ autonomousEngine, convictionResolver }));
-  app.route('/api/schedule', createScheduleRoutes({ scheduleStore, convictionResolver }));
+  app.route('/api/schedule', createScheduleRoutes({
+    scheduleStore,
+    convictionResolver,
+    callbackSecret: config.scheduleCallbackSecret,
+    resolveNftOwnership: async (wallet: string) => {
+      try {
+        const result = await finnClient.request<{ nftId: string }>(
+          'GET',
+          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
+        );
+        return result;
+      } catch {
+        return null;
+      }
+    },
+  }));
 
   // --- Phase 2: Agent API with TBA authentication ---
   // TBA auth middleware applies only to /api/agent/* routes
@@ -338,7 +353,20 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     convictionResolver,
     memoryStore,
   }));
-  app.route('/api/learning', createLearningRoutes({ learningEngine }));
+  app.route('/api/learning', createLearningRoutes({
+    learningEngine,
+    resolveNftOwnership: async (wallet: string) => {
+      try {
+        const result = await finnClient.request<{ nftId: string }>(
+          'GET',
+          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
+        );
+        return result;
+      } catch {
+        return null;
+      }
+    },
+  }));
   app.route('/api/memory', createMemoryRoutes({
     memoryStore,
     resolveNftOwnership: async (wallet: string) => {

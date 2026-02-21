@@ -29,7 +29,7 @@ export function createAutonomousRoutes(deps: AutonomousRouteDeps): Hono {
 
   /**
    * GET /:nftId/permissions — Get current autonomous permissions.
-   * Requires authenticated wallet (owner or delegate).
+   * Requires owner or delegate wallet (Bridge medium-4).
    */
   app.get('/:nftId/permissions', async (c) => {
     const nftId = c.req.param('nftId');
@@ -43,6 +43,13 @@ export function createAutonomousRoutes(deps: AutonomousRouteDeps): Hono {
     }
 
     const permissions = await autonomousEngine.getPermissions(nftId);
+
+    // Verify requesting wallet is owner or delegate (Bridge medium-4)
+    if (permissions.ownerWallet && permissions.ownerWallet !== wallet &&
+        !permissions.delegatedWallets.includes(wallet)) {
+      return c.json({ error: 'forbidden', message: 'Not authorized for this NFT' }, 403);
+    }
+
     return c.json(permissions);
   });
 
@@ -89,7 +96,7 @@ export function createAutonomousRoutes(deps: AutonomousRouteDeps): Hono {
 
   /**
    * GET /:nftId/audit — Get audit trail for autonomous actions.
-   * Requires authenticated wallet (owner or delegate).
+   * Requires owner or delegate wallet (Bridge medium-5).
    */
   app.get('/:nftId/audit', async (c) => {
     const nftId = c.req.param('nftId');
@@ -100,6 +107,13 @@ export function createAutonomousRoutes(deps: AutonomousRouteDeps): Hono {
     const { wallet } = getRequestContext(c);
     if (!wallet) {
       return c.json({ error: 'unauthorized', message: 'Wallet required' }, 401);
+    }
+
+    // Verify requesting wallet is owner or delegate (Bridge medium-5)
+    const permissions = await autonomousEngine.getPermissions(nftId);
+    if (permissions.ownerWallet && permissions.ownerWallet !== wallet &&
+        !permissions.delegatedWallets.includes(wallet)) {
+      return c.json({ error: 'forbidden', message: 'Not authorized for this NFT' }, 403);
     }
 
     const limit = parseInt(c.req.query('limit') ?? '100', 10);
@@ -114,7 +128,7 @@ export function createAutonomousRoutes(deps: AutonomousRouteDeps): Hono {
 
   /**
    * GET /:nftId/summary — Get daily summary of autonomous activity.
-   * Requires authenticated wallet (owner or delegate).
+   * Requires owner or delegate wallet (Bridge medium-5).
    */
   app.get('/:nftId/summary', async (c) => {
     const nftId = c.req.param('nftId');
@@ -125,6 +139,13 @@ export function createAutonomousRoutes(deps: AutonomousRouteDeps): Hono {
     const { wallet } = getRequestContext(c);
     if (!wallet) {
       return c.json({ error: 'unauthorized', message: 'Wallet required' }, 401);
+    }
+
+    // Verify requesting wallet is owner or delegate (Bridge medium-5)
+    const permissions = await autonomousEngine.getPermissions(nftId);
+    if (permissions.ownerWallet && permissions.ownerWallet !== wallet &&
+        !permissions.delegatedWallets.includes(wallet)) {
+      return c.json({ error: 'forbidden', message: 'Not authorized for this NFT' }, 403);
     }
 
     const summary = autonomousEngine.getDailySummary(nftId);

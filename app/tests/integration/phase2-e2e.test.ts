@@ -35,6 +35,7 @@ const testConfig: DixieConfig = {
   personalityTtlSec: 1800,
   autonomousBudgetDefaultMicroUsd: 100000,
   rateLimitBackend: 'memory',
+  scheduleCallbackSecret: 'test-callback-secret-for-e2e',
 };
 
 describe('Phase 2 E2E Validation — PRD Success Criteria', () => {

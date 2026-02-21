@@ -176,55 +176,69 @@
           "global_id": 22,
           "label": "Tool Event Streaming & Economic Metadata",
           "tasks": 8,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-4",
           "global_id": 23,
           "label": "BEAUVOIR Personality Surfacing & Phase 2a Integration",
           "tasks": 8,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-5",
           "global_id": 24,
           "label": "Conviction-Gated Access (Ostrom's Commons)",
           "tasks": 6,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-6",
           "global_id": 25,
           "label": "Autonomous Operation Mode & Delegation",
           "tasks": 8,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-7",
           "global_id": 26,
           "label": "Hounfour Level 2 Compliance & Bridge Insights",
           "tasks": 6,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-8",
           "global_id": 27,
           "label": "NL Scheduling & Cron Integration",
           "tasks": 6,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-9",
           "global_id": 28,
           "label": "Agent API Surface (TBA Auth + x402 Metering)",
           "tasks": 7,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-10",
           "global_id": 29,
           "label": "Compound Learning Pipeline & E2E Validation",
           "tasks": 8,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-11",
+          "global_id": 30,
+          "label": "Security Hardening (Bridge Iter 1)",
+          "tasks": 5,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-12",
+          "global_id": 31,
+          "label": "Reliability & Correctness (Bridge Iter 1)",
+          "tasks": 5,
           "status": "pending"
         }
       ]
@@ -232,6 +246,6 @@
   ],
   "active_cycle": "cycle-002",
   "active_bugfix": null,
-  "global_sprint_counter": 29,
+  "global_sprint_counter": 31,
   "bugfix_cycles": []
 }
