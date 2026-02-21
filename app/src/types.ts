@@ -64,6 +64,8 @@ export interface HealthResponse {
       stale_sources: number;
     };
   };
+  /** Phase 2: Infrastructure service health (PostgreSQL, Redis, NATS) */
+  infrastructure?: Record<string, ServiceHealth>;
   timestamp: string;
 }
 

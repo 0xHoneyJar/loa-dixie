@@ -16,12 +16,17 @@
     "@0xhoneyjar/loa-hounfour": "file:../../loa-hounfour",
     "@hono/node-server": "^1.14.0",
     "hono": "^4.7.0",
+    "ioredis": "^5.9.3",
     "jose": "^6.0.0",
+    "nats": "^2.29.3",
+    "pg": "^8.18.0",
     "siwe": "^2.3.0",
-    "viem": "^2.23.0"
+    "viem": "^2.23.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.16.0",
     "@types/ws": "^8.18.1",
     "eslint": "^9.0.0",
     "tsx": "^4.19.0",

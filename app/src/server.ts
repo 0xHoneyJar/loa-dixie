@@ -19,6 +19,11 @@ import { createIdentityRoutes } from './routes/identity.js';
 import { createWsTicketRoutes } from './routes/ws-ticket.js';
 import { FinnClient } from './proxy/finn-client.js';
 import { TicketStore } from './services/ticket-store.js';
+import { createDbPool, type DbPool } from './db/client.js';
+import { createRedisClient, type RedisClient } from './services/redis-client.js';
+import { SignalEmitter } from './services/signal-emitter.js';
+import { ProjectionCache } from './services/projection-cache.js';
+import type { MemoryProjection } from './types/memory.js';
 import type { DixieConfig } from './config.js';
 import type { LogLevel } from './middleware/logger.js';
 
@@ -27,6 +32,14 @@ export interface DixieApp {
   finnClient: FinnClient;
   allowlistStore: AllowlistStore;
   ticketStore: TicketStore;
+  /** Phase 2: PostgreSQL pool (null when DATABASE_URL not configured) */
+  dbPool: DbPool | null;
+  /** Phase 2: Redis client (null when REDIS_URL not configured) */
+  redisClient: RedisClient | null;
+  /** Phase 2: NATS signal emitter (null when NATS_URL not configured) */
+  signalEmitter: SignalEmitter | null;
+  /** Phase 2: Memory projection cache (null when Redis not configured) */
+  projectionCache: ProjectionCache<MemoryProjection> | null;
 }
 
 /**
@@ -44,6 +57,48 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   });
   const ticketStore = new TicketStore();
 
+  // Phase 2: Infrastructure clients (null when not configured — graceful degradation)
+  let dbPool: DbPool | null = null;
+  if (config.databaseUrl) {
+    dbPool = createDbPool({
+      connectionString: config.databaseUrl,
+      log,
+    });
+  }
+
+  let redisClient: RedisClient | null = null;
+  if (config.redisUrl) {
+    redisClient = createRedisClient({
+      url: config.redisUrl,
+      log,
+    });
+  }
+
+  let signalEmitter: SignalEmitter | null = null;
+  if (config.natsUrl) {
+    signalEmitter = new SignalEmitter({
+      url: config.natsUrl,
+      log,
+    });
+    // Connect asynchronously — don't block startup
+    signalEmitter.connect().catch((err) => {
+      log('error', {
+        event: 'nats_connect_error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
+  // Phase 2: Projection cache (requires Redis)
+  let projectionCache: ProjectionCache<MemoryProjection> | null = null;
+  if (redisClient) {
+    projectionCache = new ProjectionCache<MemoryProjection>(
+      redisClient,
+      'memory:projection',
+      config.memoryProjectionTtlSec,
+    );
+  }
+
   // DECISION: Middleware pipeline as constitutional ordering (communitarian architecture)
   // The middleware sequence is not arbitrary — it encodes governance priorities.
   // Allowlist (community membership) gates payment (economic access), which gates
@@ -51,6 +106,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // economic flows, not the other way around. Reordering is an architectural decision.
   // See: grimoires/loa/context/adr-communitarian-agents.md
   // See: grimoires/loa/context/adr-conway-positioning.md
+  //
+  // Phase 2 extends the pipeline from 12 to 15 positions.
+  // See: SDD §2.3 Middleware Pipeline Evolution
   //
   // Middleware ordering rationale:
   // 1. requestId — generates trace ID before anything else
@@ -61,10 +119,14 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // 6. responseTime — wraps all downstream processing
   // 7. logger — logs with response time available
   // 8. jwt — extracts wallet from token
-  // 9. rateLimit — rate-limit by wallet/IP
-  // 10. allowlist — gate by wallet/API key
-  // 11. payment — x402 micropayment hook (noop)
-  // 12. routes — business logic
+  // 9. walletBridge — copy wallet to header for route handlers
+  // 10. rateLimit — rate-limit by wallet/IP (now distributed via Redis)
+  // 11. allowlist — gate by wallet/API key
+  // 12. payment — x402 micropayment hook (noop for human users)
+  // Positions 13-15 reserved for Phase 2 sprints 2-4:
+  // 13. convictionTier — BGT conviction resolver (Sprint 5)
+  // 14. memoryContext — soul memory injection (Sprint 2)
+  // 15. economicMetadata — cost tracking setup (Sprint 3)
 
   // --- Global middleware ---
   app.use('*', requestId());
@@ -101,8 +163,10 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // reset typed context. Route handlers read x-wallet-address header.
   app.use('/api/*', createWalletBridge());
 
-  // --- Rate limiting ---
-  app.use('/api/*', createRateLimit(config.rateLimitRpm));
+  // --- Rate limiting (Phase 2: Redis-backed when available) ---
+  app.use('/api/*', createRateLimit(config.rateLimitRpm, {
+    redis: config.rateLimitBackend === 'redis' ? redisClient ?? undefined : undefined,
+  }));
 
   // --- Allowlist gate (after JWT extraction so wallet is available) ---
   app.use('/api/*', createAllowlistMiddleware(allowlistStore));
@@ -113,7 +177,12 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.use('/api/*', createPaymentGate());
 
   // --- Routes ---
-  app.route('/api/health', createHealthRoutes(finnClient));
+  app.route('/api/health', createHealthRoutes({
+    finnClient,
+    dbPool,
+    redisClient,
+    signalEmitter,
+  }));
   app.route('/api/auth', createAuthRoutes(allowlistStore, {
     jwtPrivateKey: config.jwtPrivateKey,
     issuer: 'dixie-bff',
@@ -127,8 +196,17 @@ export function createDixieApp(config: DixieConfig): DixieApp {
 
   // --- SPA fallback (placeholder — web build integrated later) ---
   app.get('/', (c) =>
-    c.json({ service: 'dixie-bff', status: 'running', version: '1.0.0' }),
+    c.json({ service: 'dixie-bff', status: 'running', version: '2.0.0' }),
   );
 
-  return { app, finnClient, allowlistStore, ticketStore };
+  return {
+    app,
+    finnClient,
+    allowlistStore,
+    ticketStore,
+    dbPool,
+    redisClient,
+    signalEmitter,
+    projectionCache,
+  };
 }
