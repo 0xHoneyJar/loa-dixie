@@ -17,8 +17,11 @@ import { createChatRoutes } from './routes/chat.js';
 import { createSessionRoutes } from './routes/sessions.js';
 import { createIdentityRoutes } from './routes/identity.js';
 import { createWsTicketRoutes } from './routes/ws-ticket.js';
+import { createMemoryRoutes } from './routes/memory.js';
 import { FinnClient } from './proxy/finn-client.js';
 import { TicketStore } from './services/ticket-store.js';
+import { MemoryStore } from './services/memory-store.js';
+import { createMemoryContext } from './middleware/memory-context.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
 import { SignalEmitter } from './services/signal-emitter.js';
@@ -40,6 +43,8 @@ export interface DixieApp {
   signalEmitter: SignalEmitter | null;
   /** Phase 2: Memory projection cache (null when Redis not configured) */
   projectionCache: ProjectionCache<MemoryProjection> | null;
+  /** Phase 2: Soul memory store (null when finn/projection cache not available) */
+  memoryStore: MemoryStore | null;
 }
 
 /**
@@ -99,6 +104,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     );
   }
 
+  // Phase 2: Soul memory store (requires finn client; projection cache optional)
+  const memoryStore = new MemoryStore(finnClient, projectionCache);
+
   // DECISION: Middleware pipeline as constitutional ordering (communitarian architecture)
   // The middleware sequence is not arbitrary — it encodes governance priorities.
   // Allowlist (community membership) gates payment (economic access), which gates
@@ -123,9 +131,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // 10. rateLimit — rate-limit by wallet/IP (now distributed via Redis)
   // 11. allowlist — gate by wallet/API key
   // 12. payment — x402 micropayment hook (noop for human users)
-  // Positions 13-15 reserved for Phase 2 sprints 2-4:
+  // Phase 2 middleware positions:
   // 13. convictionTier — BGT conviction resolver (Sprint 5)
-  // 14. memoryContext — soul memory injection (Sprint 2)
+  // 14. memoryContext — soul memory injection (Sprint 2) ✅
   // 15. economicMetadata — cost tracking setup (Sprint 3)
 
   // --- Global middleware ---
@@ -176,6 +184,26 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Replace with @x402/hono when ready. See: app/src/middleware/payment.ts
   app.use('/api/*', createPaymentGate());
 
+  // --- Phase 2 Position 14: Memory context injection ---
+  // Resolves wallet → nftId → projection → InjectionContext
+  // Graceful degradation: failure doesn't block request
+  app.use('/api/*', createMemoryContext({
+    memoryStore,
+    resolveNftId: async (wallet: string) => {
+      // Resolve nftId from wallet via loa-finn identity graph
+      // Returns null if wallet has no associated dNFT
+      try {
+        const result = await finnClient.request<{ nftId: string }>(
+          'GET',
+          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
+        );
+        return result.nftId;
+      } catch {
+        return null;
+      }
+    },
+  }));
+
   // --- Routes ---
   app.route('/api/health', createHealthRoutes({
     finnClient,
@@ -193,6 +221,21 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.route('/api/chat', createChatRoutes(finnClient));
   app.route('/api/sessions', createSessionRoutes(finnClient));
   app.route('/api/identity', createIdentityRoutes(finnClient));
+  app.route('/api/memory', createMemoryRoutes({
+    memoryStore,
+    resolveNftOwnership: async (wallet: string) => {
+      try {
+        const result = await finnClient.request<{
+          nftId: string;
+          ownerWallet: string;
+          delegatedWallets: string[];
+        }>('GET', `/api/identity/wallet/${encodeURIComponent(wallet)}/ownership`);
+        return result;
+      } catch {
+        return null;
+      }
+    },
+  }));
 
   // --- SPA fallback (placeholder — web build integrated later) ---
   app.get('/', (c) =>
@@ -208,5 +251,6 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     redisClient,
     signalEmitter,
     projectionCache,
+    memoryStore,
   };
 }
