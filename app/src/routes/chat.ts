@@ -91,6 +91,9 @@ export function createChatRoutes(finnClient: FinnClient, deps?: ChatRouteDeps): 
           messageId: result.messageId ?? requestId,
         });
 
+        // Phase 2: Extended response headers (SDD §6.2)
+        setPhase2Headers(c);
+
         return c.json(result);
       }
 
@@ -117,6 +120,9 @@ export function createChatRoutes(finnClient: FinnClient, deps?: ChatRouteDeps): 
         messageId: requestId,
       });
 
+      // Phase 2: Extended response headers (SDD §6.2)
+      setPhase2Headers(c);
+
       return c.json({
         sessionId: session.sessionId,
         messageId: requestId,
@@ -134,6 +140,24 @@ export function createChatRoutes(finnClient: FinnClient, deps?: ChatRouteDeps): 
   });
 
   return app;
+}
+
+/**
+ * Set Phase 2 extended response headers (SDD §6.2).
+ *
+ * X-Model-Pool: model pool used (read from economic metadata middleware)
+ * X-Memory-Tokens: tokens injected from soul memory context
+ * X-Conviction-Tier: user's resolved conviction tier (placeholder until Sprint 5)
+ */
+function setPhase2Headers(c: { req: { header: (name: string) => string | undefined }; header: (name: string, value: string) => void }): void {
+  const modelPool = c.req.header('x-model-pool');
+  if (modelPool) c.header('X-Model-Pool', modelPool);
+
+  const memoryTokens = c.req.header('x-memory-tokens');
+  if (memoryTokens) c.header('X-Memory-Tokens', memoryTokens);
+
+  // Conviction tier — placeholder until Sprint 5 implements conviction resolver
+  c.header('X-Conviction-Tier', 'observer');
 }
 
 /**

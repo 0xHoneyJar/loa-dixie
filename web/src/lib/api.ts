@@ -45,6 +45,11 @@ export interface SessionSummary {
 }
 
 export const api = {
+  /** Generic GET request */
+  get<T>(path: string): Promise<T> {
+    return apiFetch<T>(path);
+  },
+
   sendChat(prompt: string, sessionId?: string): Promise<ChatResponse> {
     return apiFetch('/api/chat', {
       method: 'POST',

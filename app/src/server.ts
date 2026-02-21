@@ -23,6 +23,8 @@ import { TicketStore } from './services/ticket-store.js';
 import { MemoryStore } from './services/memory-store.js';
 import { createMemoryContext } from './middleware/memory-context.js';
 import { createEconomicMetadata } from './middleware/economic-metadata.js';
+import { createPersonalityRoutes } from './routes/personality.js';
+import { PersonalityCache } from './services/personality-cache.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
 import { SignalEmitter } from './services/signal-emitter.js';
@@ -46,6 +48,8 @@ export interface DixieApp {
   projectionCache: ProjectionCache<MemoryProjection> | null;
   /** Phase 2: Soul memory store (null when finn/projection cache not available) */
   memoryStore: MemoryStore | null;
+  /** Phase 2: BEAUVOIR personality cache */
+  personalityCache: PersonalityCache;
 }
 
 /**
@@ -107,6 +111,17 @@ export function createDixieApp(config: DixieConfig): DixieApp {
 
   // Phase 2: Soul memory store (requires finn client; projection cache optional)
   const memoryStore = new MemoryStore(finnClient, projectionCache);
+
+  // Phase 2: Personality cache (uses projection cache with personality prefix when Redis available)
+  let personalityProjectionCache: ProjectionCache<import('./services/personality-cache.js').PersonalityData> | null = null;
+  if (redisClient) {
+    personalityProjectionCache = new ProjectionCache(
+      redisClient,
+      'personality',
+      config.personalityTtlSec,
+    );
+  }
+  const personalityCache = new PersonalityCache(finnClient, personalityProjectionCache);
 
   // DECISION: Middleware pipeline as constitutional ordering (communitarian architecture)
   // The middleware sequence is not arbitrary — it encodes governance priorities.
@@ -228,6 +243,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.route('/api/chat', createChatRoutes(finnClient, { signalEmitter }));
   app.route('/api/sessions', createSessionRoutes(finnClient));
   app.route('/api/identity', createIdentityRoutes(finnClient));
+  app.route('/api/personality', createPersonalityRoutes({ personalityCache }));
   app.route('/api/memory', createMemoryRoutes({
     memoryStore,
     resolveNftOwnership: async (wallet: string) => {
@@ -259,5 +275,6 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     signalEmitter,
     projectionCache,
     memoryStore,
+    personalityCache,
   };
 }
