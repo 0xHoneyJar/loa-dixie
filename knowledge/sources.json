@@ -1,5 +1,6 @@
 {
-  "version": 1,
+  "version": 2,
+  "corpus_version": 1,
   "default_budget_tokens": 30000,
   "glossary_terms": {
     "hounfour": ["technical", "architectural"],
@@ -45,221 +46,261 @@
       "id": "glossary",
       "type": "local",
       "path": "grimoires/oracle/glossary.md",
+      "source_file": "knowledge/sources/glossary.md",
       "format": "markdown",
       "tags": ["core"],
       "priority": 1,
       "maxTokens": 2000,
       "required": true,
-      "max_age_days": 90
+      "max_age_days": 90,
+      "last_updated": "2026-02-22"
     },
     {
       "id": "ecosystem-architecture",
       "type": "local",
       "path": "grimoires/oracle/ecosystem-architecture.md",
+      "source_file": "knowledge/sources/ecosystem-architecture.md",
       "format": "markdown",
       "tags": ["core", "architectural"],
       "priority": 2,
       "maxTokens": 8000,
       "required": true,
-      "max_age_days": 60
+      "max_age_days": 60,
+      "last_updated": "2026-02-22"
     },
     {
       "id": "code-reality-finn",
       "type": "local",
       "path": "grimoires/oracle/code-reality-finn.md",
+      "source_file": "knowledge/sources/code-reality-finn.md",
       "format": "markdown",
       "tags": ["technical"],
       "priority": 3,
       "maxTokens": 10000,
       "required": true,
-      "max_age_days": 30
+      "max_age_days": 30,
+      "last_updated": "2026-02-22"
     },
     {
       "id": "code-reality-hounfour",
       "type": "local",
       "path": "grimoires/oracle/code-reality-hounfour.md",
+      "source_file": "knowledge/sources/code-reality-hounfour.md",
       "format": "markdown",
       "tags": ["technical"],
       "priority": 4,
       "maxTokens": 8000,
       "required": false,
-      "max_age_days": 30
+      "max_age_days": 30,
+      "last_updated": "2026-02-22"
     },
     {
       "id": "code-reality-freeside",
       "type": "local",
       "path": "grimoires/oracle/code-reality-freeside.md",
+      "source_file": "knowledge/sources/code-reality-freeside.md",
       "format": "markdown",
       "tags": ["technical", "architectural"],
       "priority": 5,
       "maxTokens": 5000,
       "required": false,
-      "max_age_days": 30
+      "max_age_days": 30,
+      "last_updated": "2026-02-22"
     },
     {
       "id": "development-history",
       "type": "local",
       "path": "grimoires/oracle/development-history.md",
+      "source_file": "knowledge/sources/development-history.md",
       "format": "markdown",
       "tags": ["architectural", "philosophical"],
       "priority": 6,
       "maxTokens": 5000,
       "required": false,
-      "max_age_days": 90
+      "max_age_days": 90,
+      "last_updated": "2026-02-22"
     },
     {
       "id": "rfcs",
       "type": "local",
       "path": "grimoires/oracle/rfcs.md",
+      "source_file": "knowledge/sources/rfcs.md",
       "format": "markdown",
       "tags": ["architectural", "technical"],
       "priority": 7,
       "maxTokens": 12000,
       "required": false,
-      "max_age_days": 60
+      "max_age_days": 60,
+      "last_updated": "2026-02-22"
     },
     {
       "id": "bridgebuilder-reports",
       "type": "local",
       "path": "grimoires/oracle/bridgebuilder-reports.md",
+      "source_file": "knowledge/sources/bridgebuilder-reports.md",
       "format": "markdown",
       "tags": ["architectural", "philosophical"],
       "priority": 8,
       "maxTokens": 15000,
       "required": false,
-      "max_age_days": 90
+      "max_age_days": 90,
+      "last_updated": "2026-02-16"
     },
     {
       "id": "web4-manifesto",
       "type": "local",
       "path": "grimoires/oracle/web4-manifesto.md",
+      "source_file": "knowledge/sources/web4-manifesto.md",
       "format": "markdown",
       "tags": ["philosophical"],
       "priority": 9,
       "maxTokens": 3000,
       "required": false,
-      "max_age_days": 180
+      "max_age_days": 180,
+      "last_updated": "2026-02-16"
     },
     {
       "id": "meeting-geometries",
       "type": "local",
       "path": "grimoires/oracle/meeting-geometries.md",
+      "source_file": "knowledge/sources/meeting-geometries.md",
       "format": "markdown",
       "tags": ["philosophical"],
       "priority": 10,
       "maxTokens": 4000,
       "required": false,
-      "max_age_days": 180
+      "max_age_days": 180,
+      "last_updated": "2026-02-16"
     },
     {
       "id": "damp-96-personality",
       "type": "local",
       "path": "grimoires/oracle/damp-96-personality.md",
+      "source_file": "knowledge/sources/damp-96-personality.md",
       "format": "markdown",
       "tags": ["technical", "architectural"],
       "priority": 11,
       "maxTokens": 3000,
       "required": false,
-      "max_age_days": 60
+      "max_age_days": 60,
+      "last_updated": "2026-02-20"
     },
     {
       "id": "x402-payment-flow",
       "type": "local",
       "path": "grimoires/oracle/x402-payment-flow.md",
+      "source_file": "knowledge/sources/x402-payment-flow.md",
       "format": "markdown",
       "tags": ["technical", "architectural"],
       "priority": 12,
       "maxTokens": 3000,
       "required": false,
-      "max_age_days": 60
+      "max_age_days": 60,
+      "last_updated": "2026-02-20"
     },
     {
       "id": "identity-graph",
       "type": "local",
       "path": "grimoires/oracle/identity-graph.md",
+      "source_file": "knowledge/sources/identity-graph.md",
       "format": "markdown",
       "tags": ["technical", "architectural"],
       "priority": 13,
       "maxTokens": 3000,
       "required": false,
-      "max_age_days": 60
+      "max_age_days": 60,
+      "last_updated": "2026-02-20"
     },
     {
       "id": "governance-model",
       "type": "local",
       "path": "grimoires/oracle/governance-model.md",
+      "source_file": "knowledge/sources/governance-model.md",
       "format": "markdown",
       "tags": ["architectural", "philosophical"],
       "priority": 14,
       "maxTokens": 3000,
       "required": false,
-      "max_age_days": 90
+      "max_age_days": 90,
+      "last_updated": "2026-02-20"
     },
     {
       "id": "freeside-api-reference",
       "type": "local",
       "path": "grimoires/oracle/freeside-api-reference.md",
+      "source_file": "knowledge/sources/freeside-api-reference.md",
       "format": "markdown",
       "tags": ["technical", "architectural"],
       "priority": 15,
       "maxTokens": 2000,
       "required": false,
-      "max_age_days": 60
+      "max_age_days": 60,
+      "last_updated": "2026-02-20"
     },
     {
       "id": "freeside-economics",
       "type": "local",
       "path": "grimoires/oracle/freeside-economics.md",
+      "source_file": "knowledge/sources/freeside-economics.md",
       "format": "markdown",
       "tags": ["architectural", "philosophical"],
       "priority": 16,
       "maxTokens": 2000,
       "required": false,
-      "max_age_days": 90
+      "max_age_days": 90,
+      "last_updated": "2026-02-20"
     },
     {
       "id": "freeside-event-protocol",
       "type": "local",
       "path": "grimoires/oracle/freeside-event-protocol.md",
+      "source_file": "knowledge/sources/freeside-event-protocol.md",
       "format": "markdown",
       "tags": ["technical"],
       "priority": 17,
       "maxTokens": 2000,
       "required": false,
-      "max_age_days": 60
+      "max_age_days": 60,
+      "last_updated": "2026-02-20"
     },
     {
       "id": "freeside-infrastructure",
       "type": "local",
       "path": "grimoires/oracle/freeside-infrastructure.md",
+      "source_file": "knowledge/sources/freeside-infrastructure.md",
       "format": "markdown",
       "tags": ["technical", "architectural"],
       "priority": 18,
       "maxTokens": 3000,
       "required": false,
-      "max_age_days": 60
+      "max_age_days": 60,
+      "last_updated": "2026-02-20"
     },
     {
       "id": "freeside-glossary",
       "type": "local",
       "path": "grimoires/oracle/freeside-glossary.md",
+      "source_file": "knowledge/sources/freeside-glossary.md",
       "format": "markdown",
       "tags": ["core"],
       "priority": 19,
       "maxTokens": 2000,
       "required": false,
-      "max_age_days": 90
+      "max_age_days": 90,
+      "last_updated": "2026-02-20"
     },
     {
       "id": "dixie-architecture",
       "type": "local",
       "path": "grimoires/oracle/dixie-architecture.md",
+      "source_file": "knowledge/sources/dixie-architecture.md",
       "format": "markdown",
       "tags": ["technical", "architectural"],
       "priority": 20,
       "maxTokens": 3000,
       "required": false,
-      "max_age_days": 30
+      "max_age_days": 30,
+      "last_updated": "2026-02-20"
     }
   ]
 }

@@ -60,6 +60,7 @@ export interface HealthResponse {
     loa_finn: ServiceHealth;
     knowledge_corpus?: {
       status: 'healthy' | 'degraded';
+      corpus_version: number;
       sources: number;
       stale_sources: number;
     };

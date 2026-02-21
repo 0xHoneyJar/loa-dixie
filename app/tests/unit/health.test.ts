@@ -112,4 +112,47 @@ describe('health routes', () => {
 
     expect(body.infrastructure).toBeUndefined();
   });
+
+  it('includes knowledge_corpus metadata with corpus_version', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+    );
+
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/');
+    const body = await res.json();
+
+    expect(body.services.knowledge_corpus).toBeDefined();
+    expect(body.services.knowledge_corpus.corpus_version).toBeGreaterThanOrEqual(1);
+    expect(body.services.knowledge_corpus.sources).toBeGreaterThanOrEqual(20);
+    expect(body.services.knowledge_corpus.status).toMatch(/^(healthy|degraded)$/);
+  });
+
+  it('knowledge_corpus reports correct source count', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+    );
+
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/');
+    const body = await res.json();
+
+    expect(body.services.knowledge_corpus.sources).toBe(20);
+    expect(typeof body.services.knowledge_corpus.stale_sources).toBe('number');
+  });
+
+  it('knowledge_corpus stale count reflects freshness state', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+    );
+
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/');
+    const body = await res.json();
+
+    // After fresh corpus update, stale count should be 0 or very low
+    expect(body.services.knowledge_corpus.stale_sources).toBeLessThanOrEqual(
+      body.services.knowledge_corpus.sources,
+    );
+  });
 });

@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { FinnClient } from '../proxy/finn-client.js';
 import type { HealthResponse, ServiceHealth } from '../types.js';
 import type { DbPool } from '../db/client.js';
@@ -41,9 +43,12 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
       overallStatus = 'degraded';
     }
 
+    const corpusMeta = getCorpusMeta();
+
     const services: HealthResponse['services'] = {
       dixie: { status: 'healthy' },
       loa_finn: finnHealth,
+      knowledge_corpus: corpusMeta ?? undefined,
     };
 
     // Phase 2 infrastructure services (only included when configured)
@@ -141,7 +146,62 @@ function getNatsHealth(emitter: SignalEmitter): ServiceHealth {
   return { status: 'unreachable', error: 'NATS not connected' };
 }
 
+/** Cached corpus metadata — loaded once at startup, refreshed on cache miss */
+let cachedCorpusMeta: {
+  data: NonNullable<HealthResponse['services']['knowledge_corpus']>;
+  expiresAt: number;
+} | null = null;
+const CORPUS_CACHE_TTL_MS = 60_000; // 1 minute — corpus changes rarely
+
+function getCorpusMeta(
+  nowOverride?: Date,
+): NonNullable<HealthResponse['services']['knowledge_corpus']> | null {
+  const now = Date.now();
+  if (cachedCorpusMeta && now < cachedCorpusMeta.expiresAt) {
+    return cachedCorpusMeta.data;
+  }
+
+  try {
+    const sourcesPath = path.resolve(
+      import.meta.dirname ?? __dirname,
+      '../../../knowledge/sources.json',
+    );
+    const raw = fs.readFileSync(sourcesPath, 'utf-8');
+    const config = JSON.parse(raw) as {
+      corpus_version?: number;
+      sources: Array<{ last_updated?: string; max_age_days: number }>;
+    };
+
+    const today = nowOverride ?? new Date();
+    let staleCount = 0;
+
+    for (const source of config.sources) {
+      if (!source.last_updated) continue;
+      const lastUpdated = new Date(source.last_updated);
+      const ageDays = Math.floor(
+        (today.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      if (ageDays > source.max_age_days) {
+        staleCount++;
+      }
+    }
+
+    const result = {
+      status: (staleCount > 0 ? 'degraded' : 'healthy') as 'healthy' | 'degraded',
+      corpus_version: config.corpus_version ?? 0,
+      sources: config.sources.length,
+      stale_sources: staleCount,
+    };
+
+    cachedCorpusMeta = { data: result, expiresAt: now + CORPUS_CACHE_TTL_MS };
+    return result;
+  } catch {
+    return null;
+  }
+}
+
 /** Reset cache — useful for testing */
 export function resetHealthCache(): void {
   cachedFinnHealth = null;
+  cachedCorpusMeta = null;
 }

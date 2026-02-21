@@ -249,12 +249,26 @@
           "label": "Pre-Launch Polish (Bridge Iter 2 LOWs + Cross-Repo)",
           "tasks": 9,
           "status": "completed"
+        },
+        {
+          "id": "sprint-14",
+          "global_id": 33,
+          "label": "Knowledge Conservation Infrastructure (Bridge Horizon)",
+          "tasks": 6,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-15",
+          "global_id": 34,
+          "label": "Knowledge Product Surface & Bidirectional Freshness (Bridge Horizon)",
+          "tasks": 5,
+          "status": "pending"
         }
       ]
     }
   ],
   "active_cycle": "cycle-002",
   "active_bugfix": null,
-  "global_sprint_counter": 32,
+  "global_sprint_counter": 34,
   "bugfix_cycles": []
 }
