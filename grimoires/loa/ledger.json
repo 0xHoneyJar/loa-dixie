@@ -232,14 +232,14 @@
           "global_id": 30,
           "label": "Security Hardening (Bridge Iter 1)",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-12",
           "global_id": 31,
           "label": "Reliability & Correctness (Bridge Iter 1)",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         }
       ]
     }
