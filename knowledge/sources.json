@@ -10,7 +10,7 @@
     "finnnft": ["technical", "architectural"],
     "loa": ["architectural", "philosophical"],
     "freeside": ["architectural", "technical"],
-    "arrakis": ["architectural", "technical"],
+    "loa-freeside": ["architectural", "technical"],
     "spice gate": ["architectural"],
     "bridgebuilder": ["technical", "architectural"],
     "web4": ["philosophical"],
@@ -37,7 +37,8 @@
     "neuromancer codex": ["philosophical"],
     "s2s jwt": ["technical"],
     "waf": ["technical"],
-    "dixie": ["technical", "architectural"]
+    "dixie": ["technical", "architectural"],
+    "loa-dixie": ["technical", "architectural"]
   },
   "sources": [
     {

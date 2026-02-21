@@ -4,7 +4,7 @@
 
 > *"A construct is a ROM personality — a recorded consciousness that can be consulted for expertise. The Dixie Flatline remembered everything."* — William Gibson, Neuromancer
 
-loa-dixie is the educational and knowledge interface for the HoneyJar ecosystem. Named after McCoy Pauley's ROM construct personality in Neuromancer, it carries the institutional memory of everything built across four interconnected repositories — and makes that knowledge queryable by anyone, at any level of abstraction.
+loa-dixie is the educational and knowledge interface for the HoneyJar ecosystem. Named after McCoy Pauley's ROM construct personality in Neuromancer, it carries the institutional memory of everything built across five interconnected repositories — and makes that knowledge queryable by anyone, at any level of abstraction.
 
 ## What This Is
 
@@ -31,7 +31,7 @@ loa-finn (enrichment engine)
   Hounfour Routing   — Model selection, provider abstraction
   Trust Boundaries   — <reference_material> anti-instruction envelope
 
-arrakis (economics)
+loa-freeside (economics)
   Credit Ledger      — FIFO lot management, atomic reserve-finalize
   x402 Middleware     — Pay-per-question micropayments
   BYOK Proxy         — Community-funded model access
@@ -66,8 +66,8 @@ Spirits (loa) ride horses (cheval) in the temple (hounfour). Models are spirits,
 **Neuromancer (finn, flatline, dixie, simstim, ICE)**
 The Finn knows the street. The Dixie Flatline is a ROM construct — a recorded consciousness that can be consulted. Simstim lets you experience another's sensorium. ICE protects boundaries.
 
-**Dune (arrakis, spice gate, mentat)**
-Arrakis is where the spice flows. The billing system controls the flow of value — the spice must flow, but through metered gates.
+**Neuromancer (freeside, ICE, wintermute)**
+Freeside is the orbital habitat with its own economy. The billing and settlement layer controls the flow of value.
 
 loa-dixie is the Dixie Flatline of the ecosystem: institutional memory in queryable form.
 
@@ -85,7 +85,7 @@ See [docs/rfc.md](docs/rfc.md) for the full product vision and phased implementa
 | Repo | Role | Key Issues/PRs |
 |------|------|----------------|
 | [loa-finn](https://github.com/0xHoneyJar/loa-finn) | Knowledge enrichment pipeline | PR #75 (Oracle), Issue #31 (Permission Scape), Issue #66 (Launch) |
-| [arrakis](https://github.com/0xHoneyJar/arrakis) | Billing & identity | Issue #62 (Billing), PR #63 (Credit Ledger) |
+| [loa-freeside](https://github.com/0xHoneyJar/loa-freeside) | Billing & identity | Issue #62 (Billing), PR #63 (Credit Ledger) |
 | [loa-hounfour](https://github.com/0xHoneyJar/loa-hounfour) | Protocol types | PR #1 (Types), PR #2 (Agent Economy) |
 | [loa](https://github.com/0xHoneyJar/loa) | Framework & ceremonies | Issue #247 (Meeting Geometries) |
 

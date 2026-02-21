@@ -1,8 +1,8 @@
 # BUTTERFREEZONE Capability Schema v1.0
 
 > **Defined in**: `0xHoneyJar/loa`
-> **Consumed by**: loa-finn (pool routing), arrakis (billing), loa-hounfour (trust classification)
-> **Related**: [RFC #31 §5.2](https://github.com/0xHoneyJar/loa-finn/issues/31), [arrakis #62](https://github.com/0xHoneyJar/arrakis/issues/62), [loa-hounfour PR #2](https://github.com/0xHoneyJar/loa-hounfour/pull/2), [loa #43](https://github.com/0xHoneyJar/loa/issues/43)
+> **Consumed by**: loa-finn (pool routing), loa-freeside (billing), loa-hounfour (trust classification)
+> **Related**: [RFC #31 §5.2](https://github.com/0xHoneyJar/loa-finn/issues/31), [loa-freeside #62](https://github.com/0xHoneyJar/loa-freeside/issues/62), [loa-hounfour PR #2](https://github.com/0xHoneyJar/loa-hounfour/pull/2), [loa #43](https://github.com/0xHoneyJar/loa/issues/43)
 
 ## Agent-API Interface Standard
 
@@ -19,12 +19,12 @@ This document defines the formal schema for BUTTERFREEZONE `capability_requireme
 
 **Permission Scape flow**:
 ```
-BUTTERFREEZONE declares needs → Hounfour provides trust-verified pools → arrakis maps pool usage to costs
+BUTTERFREEZONE declares needs → Hounfour provides trust-verified pools → loa-freeside maps pool usage to costs
 ```
 
 ## Capability Vocabulary
 
-Each capability has actions, scopes, a Hounfour pool routing hint, and a billing weight for arrakis cost mapping.
+Each capability has actions, scopes, a Hounfour pool routing hint, and a billing weight for loa-freeside cost mapping.
 
 ```yaml
 capability_vocabulary:
@@ -169,7 +169,7 @@ The `trust_scopes` field provides 6-dimensional trust classification per loa-hou
 | `governance` | Protocol-level rule changes | Constraint modification, policy updates |
 | `external_communication` | Outbound network/messaging | GitHub API, Slack, email |
 
-Values are `high`, `medium`, or `none`. The flat `trust_level` (L1-L4) is retained as a backward-compatible summary; `trust_scopes` provides the granular detail that downstream consumers (loa-finn pool routing, arrakis billing tiers) can use for fine-grained gating.
+Values are `high`, `medium`, or `none`. The flat `trust_level` (L1-L4) is retained as a backward-compatible summary; `trust_scopes` provides the granular detail that downstream consumers (loa-finn pool routing, loa-freeside billing tiers) can use for fine-grained gating.
 
 ### BUTTERFREEZONE Trust Level Syntax
 
@@ -206,7 +206,7 @@ And in the `## Verification` section:
    ├── Maps L2 → hounfour_trust: "verified"
    └── Applies trust-appropriate safety constraints
 
-4. arrakis (billing)
+4. loa-freeside (billing)
    ├── Reads capability_requirements from BUTTERFREEZONE.md
    ├── Sums billing_weight per capability used
    └── Maps to cost tiers: 0 (free), 1 (metered), 3 (premium)
@@ -238,9 +238,9 @@ The `MonetaryPolicy` correspondence is the deepest structural match. The same co
 
 - **Loa**: `RemainderAccumulator` ensures `total_micro_usd == sum(distributed) + remainder`
 - **loa-hounfour**: `MonetaryPolicy` enforces `total_budget == sum(allocations) + reserve`
-- **arrakis**: `lot_invariant` CHECK constraint ensures `total_value == sum(lot_values)`
+- **loa-freeside**: `lot_invariant` CHECK constraint ensures `total_value == sum(lot_values)`
 
-This is not coincidental — it's the same pattern (double-entry accounting / conservation law) applied at different scales. See [arrakis #62](https://github.com/0xHoneyJar/arrakis/issues/62) for the billing-side analysis.
+This is not coincidental — it's the same pattern (double-entry accounting / conservation law) applied at different scales. See [loa-freeside #62](https://github.com/0xHoneyJar/loa-freeside/issues/62) for the billing-side analysis.
 
 ## Hounfour Version Lineage
 
