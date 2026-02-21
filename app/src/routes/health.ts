@@ -5,6 +5,7 @@ import type { DbPool } from '../db/client.js';
 import type { RedisClient } from '../services/redis-client.js';
 import type { SignalEmitter } from '../services/signal-emitter.js';
 import { getCorpusMeta, resetCorpusMetaCache } from '../services/corpus-meta.js';
+import { governorRegistry } from '../services/governor-registry.js';
 
 const VERSION = '2.0.0';
 const startedAt = Date.now();
@@ -66,6 +67,21 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     };
 
     return c.json(response);
+  });
+
+  /**
+   * GET /governance — unified health of all registered resource governors.
+   * System-level self-knowledge: "what resources does this system govern?"
+   * See: Deep Bridgebuilder Meditation §VII.2, Kubernetes operator pattern.
+   */
+  app.get('/governance', (c) => {
+    const snapshot = governorRegistry.getAll();
+    return c.json({
+      governors: snapshot,
+      totalResources: snapshot.length,
+      degradedResources: snapshot.filter((g) => g.health?.status === 'degraded').length,
+      timestamp: new Date().toISOString(),
+    });
   });
 
   return app;

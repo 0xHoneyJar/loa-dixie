@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
 import { CorpusMeta, getCorpusMeta, resetCorpusMetaCache, corpusMeta, type SourceWeight } from '../../src/services/corpus-meta.js';
+import type { ResourceGovernor } from '../../src/services/resource-governor.js';
 
 const SOURCES_PATH = path.resolve(__dirname, '../../../knowledge/sources.json');
 const EVENTS_PATH = path.resolve(__dirname, '../../../knowledge/corpus-events.json');
@@ -295,5 +296,47 @@ describe('CorpusMeta self-knowledge (Task 16.3)', () => {
     // Each source weight should have at least one tag
     const withTags = sk!.source_weights!.filter(w => w.tags.length > 0);
     expect(withTags.length).toBeGreaterThan(0);
+  });
+});
+
+describe('CorpusMeta ResourceGovernor conformance (Task 20.2)', () => {
+  const service = new CorpusMeta({
+    sourcesPath: SOURCES_PATH,
+    eventsPath: EVENTS_PATH,
+    sourcesDir: SOURCES_DIR,
+  });
+
+  it('resourceType returns "knowledge_corpus"', () => {
+    expect(service.resourceType).toBe('knowledge_corpus');
+  });
+
+  it('getHealth() returns correct ResourceHealth shape', () => {
+    const health = service.getHealth(new Date('2026-02-22'));
+    expect(health).not.toBeNull();
+    expect(health!.status).toMatch(/^(healthy|degraded)$/);
+    expect(health!.totalItems).toBeGreaterThanOrEqual(15);
+    expect(health!.staleItems).toBeGreaterThanOrEqual(0);
+    expect(health!.version).toBeGreaterThanOrEqual(1);
+  });
+
+  it('getGovernorSelfKnowledge() returns ResourceSelfKnowledge shape', () => {
+    const sk = service.getGovernorSelfKnowledge(new Date('2026-02-22'));
+    expect(sk).not.toBeNull();
+    expect(sk!.version).toBeGreaterThanOrEqual(1);
+    expect(['high', 'medium', 'low']).toContain(sk!.confidence);
+    expect(sk!.healthSummary.totalItems).toBeGreaterThanOrEqual(15);
+    expect(sk!.healthSummary.status).toMatch(/^(healthy|degraded)$/);
+  });
+
+  it('satisfies ResourceGovernor interface structurally', () => {
+    // TypeScript compile-time check: CorpusMeta satisfies ResourceGovernor<SourceEntry>
+    const governor: ResourceGovernor<unknown> = service;
+    expect(governor.resourceType).toBe('knowledge_corpus');
+    expect(typeof governor.getHealth).toBe('function');
+    expect(typeof governor.getGovernorSelfKnowledge).toBe('function');
+    expect(typeof governor.getEventLog).toBe('function');
+    expect(typeof governor.getLatestEvent).toBe('function');
+    expect(typeof governor.invalidateCache).toBe('function');
+    expect(typeof governor.warmCache).toBe('function');
   });
 });

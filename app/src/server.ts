@@ -35,6 +35,8 @@ import { createTBAAuthMiddleware } from './middleware/tba-auth.js';
 import { createAgentRoutes } from './routes/agent.js';
 import { CompoundLearningEngine } from './services/compound-learning.js';
 import { createLearningRoutes } from './routes/learning.js';
+import { governorRegistry } from './services/governor-registry.js';
+import { corpusMeta } from './services/corpus-meta.js';
 import type { TBAVerification } from './types/agent-api.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
@@ -391,6 +393,14 @@ export function createDixieApp(config: DixieConfig): DixieApp {
       }
     },
   }));
+
+  // --- Resource governance registration (Task 20.5) ---
+  // Register all resource governors for unified observability via GET /health/governance.
+  // Additional governors (model pools, memory quotas, etc.) will register here as built.
+  // Idempotent: skip if already registered (e.g., multiple createDixieApp calls in tests).
+  if (!governorRegistry.get(corpusMeta.resourceType)) {
+    governorRegistry.register(corpusMeta);
+  }
 
   // --- SPA fallback (placeholder — web build integrated later) ---
   app.get('/', (c) =>

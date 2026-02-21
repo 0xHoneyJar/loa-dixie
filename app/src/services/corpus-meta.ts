@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { HealthResponse } from '../types.js';
+import type { ResourceGovernor, ResourceHealth, ResourceSelfKnowledge, GovernanceEvent } from './resource-governor.js';
 
 /**
  * Corpus event — a single mutation in the knowledge corpus history.
@@ -124,7 +125,8 @@ const TOKEN_ESTIMATION_RATIO = 4;
  *
  * See: SDD §4.2 (Knowledge Infrastructure), PRD FR-10 (Bridge Insights)
  */
-export class CorpusMeta {
+export class CorpusMeta implements ResourceGovernor<SourceEntry> {
+  readonly resourceType = 'knowledge_corpus';
   private readonly cacheTtlMs: number;
   private readonly sourcesPath: string;
   private readonly eventsPath: string;
@@ -401,6 +403,41 @@ export class CorpusMeta {
       // Config load failure — return empty map
     }
     return weights;
+  }
+
+  /**
+   * ResourceGovernor implementation — get health as generic ResourceHealth.
+   * Delegates to getMeta() with type mapping (Task 20.2).
+   */
+  getHealth(nowOverride?: Date): ResourceHealth | null {
+    const meta = this.getMeta(nowOverride);
+    if (!meta) return null;
+    return {
+      status: meta.status,
+      totalItems: meta.sources,
+      staleItems: meta.stale_sources,
+      version: meta.corpus_version,
+    };
+  }
+
+  /**
+   * ResourceGovernor implementation — get self-knowledge as generic ResourceSelfKnowledge.
+   * Delegates to getSelfKnowledge() with type mapping (Task 20.2).
+   */
+  getGovernorSelfKnowledge(nowOverride?: Date): ResourceSelfKnowledge | null {
+    const sk = this.getSelfKnowledge(nowOverride);
+    if (!sk) return null;
+    return {
+      version: sk.corpus_version,
+      confidence: sk.confidence,
+      lastMutation: sk.last_mutation,
+      healthSummary: {
+        status: sk.freshness.stale > 0 ? 'degraded' : 'healthy',
+        totalItems: sk.freshness.total,
+        staleItems: sk.freshness.stale,
+        version: sk.corpus_version,
+      },
+    };
   }
 
   /**

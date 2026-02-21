@@ -4,6 +4,8 @@ import {
   resetHealthCache,
 } from '../../src/routes/health.js';
 import { FinnClient } from '../../src/proxy/finn-client.js';
+import { GovernorRegistry, governorRegistry } from '../../src/services/governor-registry.js';
+import { corpusMeta } from '../../src/services/corpus-meta.js';
 
 describe('health routes', () => {
   let finnClient: FinnClient;
@@ -154,5 +156,59 @@ describe('health routes', () => {
     expect(body.services.knowledge_corpus.stale_sources).toBeLessThanOrEqual(
       body.services.knowledge_corpus.sources,
     );
+  });
+});
+
+describe('GET /governance (Task 20.4)', () => {
+  let finnClient: FinnClient;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetHealthCache();
+    finnClient = new FinnClient('http://finn:4000');
+    // Clear and re-register for test isolation
+    governorRegistry.clear();
+  });
+
+  it('returns governance snapshot with registered governors', async () => {
+    governorRegistry.register(corpusMeta);
+
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/governance');
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.governors).toBeInstanceOf(Array);
+    expect(body.governors.length).toBeGreaterThanOrEqual(1);
+    expect(body.totalResources).toBeGreaterThanOrEqual(1);
+    expect(typeof body.degradedResources).toBe('number');
+    expect(body.timestamp).toBeTruthy();
+  });
+
+  it('includes knowledge_corpus governor in snapshot', async () => {
+    governorRegistry.register(corpusMeta);
+
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/governance');
+    const body = await res.json();
+
+    const corpusGov = body.governors.find(
+      (g: any) => g.resourceType === 'knowledge_corpus',
+    );
+    expect(corpusGov).toBeDefined();
+    expect(corpusGov.health).not.toBeNull();
+    expect(corpusGov.health.status).toMatch(/^(healthy|degraded)$/);
+    expect(corpusGov.health.totalItems).toBeGreaterThanOrEqual(15);
+    expect(corpusGov.health.version).toBeGreaterThanOrEqual(1);
+  });
+
+  it('returns empty list when no governors registered', async () => {
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/governance');
+    const body = await res.json();
+
+    expect(body.governors).toEqual([]);
+    expect(body.totalResources).toBe(0);
+    expect(body.degradedResources).toBe(0);
   });
 });
