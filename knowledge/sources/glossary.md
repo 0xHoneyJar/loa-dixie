@@ -31,15 +31,19 @@ The framework and the agent development system. Named after the spirits in Haiti
 
 ### Finn
 **Tags**: technical
-The persistent agent runtime built on Pi SDK. Finn is the first production agent in the Loa ecosystem, providing the invoke endpoint, billing integration, and multi-model routing through Hounfour. The name represents the runtime's identity as a distinct operational entity. Repository: 0xHoneyJar/loa-finn. Cross-reference: Loa, Hounfour, Arrakis.
+The persistent agent runtime built on Pi SDK. Finn is the first production agent in the Loa ecosystem, providing the invoke endpoint, billing integration, and multi-model routing through Hounfour. The name represents the runtime's identity as a distinct operational entity. Repository: 0xHoneyJar/loa-finn. Cross-reference: Loa, Hounfour, Freeside, Dixie.
 
-### Arrakis
+### Dixie
+**Tags**: technical, architectural
+The experience orchestration layer (BFF gateway) for the Oracle dNFT agent. Named after the Dixie Flatline from Gibson's Neuromancer — a construct that retains personality and memory. Dixie sits between users and loa-finn, handling JWT authentication, WebSocket proxying, soul memory injection, conviction-gated access, tool event streaming, economic metadata, autonomous operation, NL scheduling, agent API (ERC-6551 TBA), and compound learning. 492 tests across 44 test files. Repository: 0xHoneyJar/loa-dixie. Cross-reference: Finn, Hounfour, Freeside, Oracle.
+
+### Freeside (formerly Arrakis)
 **Tags**: architectural, technical
-Billing settlement and token-gating infrastructure. Named after the desert planet in Frank Herbert's Dune — where spice is the universal resource that enables interstellar travel. In this ecosystem, Arrakis handles billing finalization, usage tracking, and NFT-based access control. It receives settlement requests from loa-finn via the Spice Gate protocol. Repository: 0xHoneyJar/arrakis. Cross-reference: Spice Gate, Conservation Invariant, DLQ.
+The infrastructure and billing settlement layer. Named after the orbital habitat in Gibson's Neuromancer — a self-contained space station with its own economy and governance. Formerly known as Arrakis. Handles billing finalization, credit ledger CQRS, lot invariant enforcement, usage tracking, and NFT-based access control via x402 micropayments. Graduated identity trust provides 4 levels of verification. Repository: 0xHoneyJar/loa-freeside. Cross-reference: Settlement Protocol, Conservation Invariant, DLQ.
 
-### Spice Gate
+### Settlement Protocol (formerly Spice Gate)
 **Tags**: architectural
-The billing settlement protocol between loa-finn and Arrakis. Uses server-to-server (S2S) JWT authentication with ES256 signing. Named after the spice trade routes in Dune — the gate through which all economic value flows. Implemented in `BillingFinalizeClient` on the loa-finn side. Cross-reference: Arrakis, Conservation Invariant.
+The billing settlement protocol between loa-finn and Freeside. Uses server-to-server (S2S) JWT authentication with ES256 signing. Formerly named Spice Gate after Dune's spice trade routes. Implements lot invariant conservation (total_cost = sum(line_items)) with atomic counters and DLQ for transient failure recovery. Implemented in BillingFinalizeClient on the loa-finn side. Cross-reference: Freeside, Conservation Invariant.
 
 ### Mibera
 **Tags**: philosophical
@@ -47,7 +51,7 @@ The universe and narrative setting in which the HoneyJar ecosystem exists. Miber
 
 ### finnNFT
 **Tags**: technical, architectural
-NFT-based identity and access control for agents. Each finnNFT holder receives per-model routing preferences and BYOK proxy access. The NFT functions as both an identity credential and a configuration object — a "soul" for the agent that lives on-chain. Planned for future cycles (see RFC #27). Cross-reference: BYOK, Arrakis.
+NFT-based identity and access control for agents. Each finnNFT holder receives per-model routing preferences and BYOK proxy access. The NFT functions as both an identity credential and a configuration object — a "soul" for the agent that lives on-chain. Planned for future cycles (see RFC #27). Cross-reference: BYOK, Freeside.
 
 ### BYOK
 **Tags**: technical
@@ -55,11 +59,11 @@ Bring Your Own Key — a feature enabling finnNFT holders to provide their own A
 
 ### DLQ
 **Tags**: technical
-Dead Letter Queue — persistent store for failed billing finalization attempts. When a billing settlement request to Arrakis fails (network error, timeout, transient server error), the failed request is persisted to the DLQ for later retry. Implements Ostrom Principle 7 (graduated sanctions) — failures are handled with escalating retry strategies rather than immediate rejection. Cross-reference: Arrakis, Spice Gate, Conservation Invariant.
+Dead Letter Queue — persistent store for failed billing finalization attempts. When a billing settlement request to Freeside fails (network error, timeout, transient server error), the failed request is persisted to the DLQ for later retry. Implements Ostrom Principle 7 (graduated sanctions) — failures are handled with escalating retry strategies rather than immediate rejection. Cross-reference: Freeside, Settlement Protocol, Conservation Invariant.
 
 ### Conservation Invariant
 **Tags**: architectural, philosophical
-The billing principle that `total_cost = sum(line_items)` at every state transition. This invariant functions as both an accounting rule (ensuring no value is created or destroyed in billing flows) and a social contract (ensuring users are charged exactly for what they consume). The conservation invariant is enforced across the full billing pipeline from token metering through DLQ recovery. Cross-reference: Arrakis, Spice Gate, DLQ.
+The billing principle that `total_cost = sum(line_items)` at every state transition. This invariant functions as both an accounting rule (ensuring no value is created or destroyed in billing flows) and a social contract (ensuring users are charged exactly for what they consume). The conservation invariant is enforced across the full billing pipeline from token metering through DLQ recovery. Cross-reference: Freeside, Settlement Protocol, DLQ.
 
 ### Permission Scape
 **Tags**: philosophical, architectural

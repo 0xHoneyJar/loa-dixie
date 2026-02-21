@@ -1,16 +1,16 @@
 ---
-generated_date: "2026-02-16"
-source_repo: 0xHoneyJar/arrakis
-provenance: cycle-025-sprint-61-task-2.4
+generated_date: "2026-02-20"
+source_repo: 0xHoneyJar/loa-freeside
+provenance: cycle-001-sprint-3
 tags: ["technical", "architectural"]
 ---
 
-# Code Reality: arrakis (Integration Surface)
+# Code Reality: loa-freeside (Integration Surface)
 
-Technical knowledge source documenting the arrakis infrastructure as observed
-from loa-finn's integration points. arrakis is a separate repository
-(`0xHoneyJar/arrakis`); this document captures the contract surface visible
-from loa-finn code and Terraform definitions.
+Technical knowledge source documenting the loa-freeside infrastructure as observed
+from loa-finn's integration points. Formerly known as Arrakis. loa-freeside is a
+separate repository (`0xHoneyJar/loa-freeside`); this document captures the
+contract surface visible from loa-finn code and Terraform definitions.
 
 ---
 
@@ -18,7 +18,7 @@ from loa-finn code and Terraform definitions.
 
 ### 1.1 Wire Contract
 
-loa-finn's `BillingFinalizeClient` calls arrakis at:
+loa-finn's `BillingFinalizeClient` calls loa-freeside at:
 
 ```
 POST {billingUrl}/api/internal/finalize
@@ -38,7 +38,7 @@ Request body (camelCase at wire boundary):
 ```
 
 Field mapping from loa-finn internal representation:
-- `tenant_id` (snake_case) maps to `accountId` (arrakis identity field)
+- `tenant_id` (snake_case) maps to `accountId` (loa-freeside identity field)
 - `reservation_id` maps to `reservationId`
 - `actual_cost_micro` maps to `actualCostMicro` (string-serialized BigInt)
 - `trace_id` maps to `traceId`
@@ -89,11 +89,13 @@ Reference: `loa-finn/src/hounfour/s2s-jwt.ts#S2SJwtSigner`
 
 ### 2.1 Protocol Handshake
 
-loa-finn calls arrakis health at boot time for version compatibility:
+loa-finn calls loa-freeside health at boot time for version compatibility:
 
 ```
-GET {arrakisBaseUrl}/api/internal/health
+GET {freesideBaseUrl}/api/internal/health
 ```
+
+> **Note**: Infrastructure may still use legacy `arrakisBaseUrl` naming in environment variables and Terraform definitions.
 
 Reference: `loa-finn/src/hounfour/protocol-handshake.ts#validateProtocolAtBoot`
 
@@ -111,7 +113,7 @@ The `contract_version` field is validated against loa-hounfour's
 ### 2.2 Base URL Derivation
 
 Priority:
-1. `ARRAKIS_BASE_URL` environment variable (explicit)
+1. `ARRAKIS_BASE_URL` environment variable (explicit) *(infrastructure may still use legacy 'arrakis' naming)*
 2. `new URL(billingUrl).origin` (derived from billing URL)
 
 Production: missing URL is a fatal error.
@@ -119,13 +121,13 @@ Development: missing URL causes handshake skip.
 
 ---
 
-## 3. JWT Issuance (arrakis to loa-finn)
+## 3. JWT Issuance (loa-freeside to loa-finn)
 
-arrakis issues ES256 JWTs for tenant-authenticated requests to loa-finn.
+loa-freeside issues ES256 JWTs for tenant-authenticated requests to loa-finn.
 
 ### 3.1 JWKS Discovery
 
-loa-finn fetches arrakis public keys from the configured `FINN_JWKS_URL`.
+loa-finn fetches loa-freeside public keys from the configured `FINN_JWKS_URL`.
 The JWKS state machine tracks key freshness:
 
 | State | Condition | Behavior |
@@ -138,12 +140,12 @@ Reference: `loa-finn/src/hounfour/jwt-auth.ts#JWKSStateMachine`
 
 ### 3.2 JWT Claims Structure
 
-arrakis-issued JWTs carry the following claims (consumed by loa-finn):
+loa-freeside-issued JWTs carry the following claims (consumed by loa-finn):
 
 | Claim | Type | Required | Description |
 |-------|------|----------|-------------|
 | `iss` | string | Yes | Issuer identifier (validated against allowlist) |
-| `aud` | string | Yes | Audience (`loa-finn`, `loa-finn-admin`, `arrakis`) |
+| `aud` | string | Yes | Audience (`loa-finn`, `loa-finn-admin`, `loa-freeside`) |
 | `sub` | string | Yes | Subject (tenant or service identity) |
 | `tenant_id` | string | Yes | Tenant identifier for data isolation |
 | `tier` | string | Yes | `"free"`, `"pro"`, or `"enterprise"` |
@@ -166,7 +168,7 @@ Reference: `loa-finn/src/hounfour/jwt-auth.ts#reqHashMiddleware`
 
 ### 3.4 Admin JWKS Invalidation
 
-arrakis can trigger JWKS cache invalidation on loa-finn via:
+loa-freeside can trigger JWKS cache invalidation on loa-finn via:
 
 ```
 POST /admin/jwks/invalidate
@@ -179,7 +181,7 @@ Clears known kids and forces re-fetch from JWKS endpoint.
 
 ## 4. Token Gating via finnNFT
 
-NFT-based routing is driven by JWT claims from arrakis:
+NFT-based routing is driven by JWT claims from loa-freeside:
 
 1. `nft_id` claim identifies the NFT personality
 2. `model_preferences` maps task types to pool IDs
@@ -264,8 +266,8 @@ Based on `loa-finn/deploy/terraform/finn.tf`:
 | Compute | ECS Fargate (single task, desired_count=1) |
 | CPU / Memory | 512 CPU units / 1024 MiB (configurable) |
 | Storage | EFS-backed `/data` volume (encrypted, transit encryption) |
-| Load Balancer | ALB with HTTPS listener, host-header rule: `finn.arrakis.community` |
-| Service Discovery | Cloud Map: `finn.arrakis.local` (DNS A record, TTL 10s) |
+| Load Balancer | ALB with HTTPS listener, host-header rule: `finn.arrakis.community` *(infrastructure may still use legacy 'arrakis' naming)* |
+| Service Discovery | Cloud Map: `finn.arrakis.local` (DNS A record, TTL 10s) *(infrastructure may still use legacy 'arrakis' naming)* |
 | Logs | CloudWatch: `/ecs/finn` (30-day retention) |
 
 ### 6.2 Network Architecture
@@ -326,8 +328,10 @@ loa-finn sends traces to Tempo via gRPC OTLP:
 OTLP_ENDPOINT=http://tempo.arrakis.local:4317
 ```
 
+> **Note**: Infrastructure may still use legacy 'arrakis' naming in DNS and Cloud Map namespaces.
+
 The Tempo service is discovered via Cloud Map within the `arrakis.local`
-namespace. Optional dependency (`@opentelemetry/sdk-trace-node` in
+namespace *(infrastructure may still use legacy 'arrakis' naming)*. Optional dependency (`@opentelemetry/sdk-trace-node` in
 optionalDependencies).
 
 ### 7.2 Structured Logging
@@ -339,15 +343,15 @@ for Datadog/Grafana ingestion via CloudWatch Logs.
 
 ## 8. S2S Trust Boundary
 
-The S2S communication between loa-finn and arrakis follows a mutual
+The S2S communication between loa-finn and loa-freeside follows a mutual
 authentication pattern:
 
 | Direction | Mechanism | Purpose |
 |-----------|-----------|---------|
-| arrakis to loa-finn | ES256 JWT via JWKS | Tenant authentication, pool authorization |
-| loa-finn to arrakis | ES256/HS256 S2S JWT | Billing finalize, usage reports |
+| loa-freeside to loa-finn | ES256 JWT via JWKS | Tenant authentication, pool authorization |
+| loa-finn to loa-freeside | ES256/HS256 S2S JWT | Billing finalize, usage reports |
 
-loa-finn publishes its public key at `/.well-known/jwks.json` for arrakis
+loa-finn publishes its public key at `/.well-known/jwks.json` for loa-freeside
 to verify S2S JWTs if needed.
 
 Key rotation support:
@@ -362,11 +366,11 @@ Key rotation support:
 
 | Integration | Direction | Protocol | Endpoint |
 |-------------|-----------|----------|----------|
-| Invoke | arrakis to finn | HTTPS + ES256 JWT | `POST /api/v1/invoke` |
-| Usage query | arrakis to finn | HTTPS + ES256 JWT | `GET /api/v1/usage` |
-| Billing finalize | finn to arrakis | HTTPS + S2S JWT | `POST /api/internal/finalize` |
-| Health/version | finn to arrakis | HTTPS (no auth) | `GET /api/internal/health` |
-| JWKS discovery | finn from arrakis | HTTPS | Configured JWKS URL |
-| JWKS publish | arrakis from finn | HTTPS | `GET /.well-known/jwks.json` |
-| JWKS invalidation | arrakis to finn | HTTPS + admin JWT | `POST /admin/jwks/invalidate` |
-| Service discovery | finn to arrakis | DNS (Cloud Map) | `finn.arrakis.local` |
+| Invoke | loa-freeside to finn | HTTPS + ES256 JWT | `POST /api/v1/invoke` |
+| Usage query | loa-freeside to finn | HTTPS + ES256 JWT | `GET /api/v1/usage` |
+| Billing finalize | finn to loa-freeside | HTTPS + S2S JWT | `POST /api/internal/finalize` |
+| Health/version | finn to loa-freeside | HTTPS (no auth) | `GET /api/internal/health` |
+| JWKS discovery | finn from loa-freeside | HTTPS | Configured JWKS URL |
+| JWKS publish | loa-freeside from finn | HTTPS | `GET /.well-known/jwks.json` |
+| JWKS invalidation | loa-freeside to finn | HTTPS + admin JWT | `POST /admin/jwks/invalidate` |
+| Service discovery | finn to loa-freeside | DNS (Cloud Map) | `finn.arrakis.local` *(legacy naming)* |

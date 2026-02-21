@@ -9,7 +9,8 @@
     "finnNFT": ["technical", "architectural"],
     "finnnft": ["technical", "architectural"],
     "loa": ["architectural", "philosophical"],
-    "arrakis": ["architectural", "technical"],
+    "freeside": ["architectural", "technical"],
+    "loa-freeside": ["architectural", "technical"],
     "spice gate": ["architectural"],
     "bridgebuilder": ["technical", "architectural"],
     "web4": ["philosophical"],
@@ -22,7 +23,22 @@
     "billing": ["technical", "architectural"],
     "oracle": ["technical", "architectural"],
     "ensemble": ["technical"],
-    "byok": ["technical"]
+    "byok": ["technical"],
+    "damp": ["technical", "architectural"],
+    "damp-96": ["technical", "architectural"],
+    "beauvoir": ["technical", "philosophical"],
+    "x402": ["technical", "architectural"],
+    "conviction": ["architectural", "philosophical"],
+    "identity graph": ["technical", "architectural"],
+    "siwe": ["technical"],
+    "lot": ["technical"],
+    "settlement": ["technical"],
+    "stability tier": ["technical"],
+    "neuromancer codex": ["philosophical"],
+    "s2s jwt": ["technical"],
+    "waf": ["technical"],
+    "dixie": ["technical", "architectural"],
+    "loa-dixie": ["technical", "architectural"]
   },
   "sources": [
     {
@@ -70,9 +86,9 @@
       "max_age_days": 30
     },
     {
-      "id": "code-reality-arrakis",
+      "id": "code-reality-freeside",
       "type": "local",
-      "path": "grimoires/oracle/code-reality-arrakis.md",
+      "path": "grimoires/oracle/code-reality-freeside.md",
       "format": "markdown",
       "tags": ["technical", "architectural"],
       "priority": 5,

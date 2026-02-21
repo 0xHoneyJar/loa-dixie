@@ -172,7 +172,7 @@ Local (non-tenant) dispatch. Resolution order:
 
 ### 2.4 invokeForTenant()
 
-Tenant-aware dispatch for arrakis-originated requests:
+Tenant-aware dispatch for loa-freeside-originated requests:
 
 1. Resolve agent binding
 2. Pool selection via `selectAuthorizedPool(tenantContext, taskType)`
@@ -183,7 +183,7 @@ Tenant-aware dispatch for arrakis-originated requests:
 7. Execution path: BYOK proxy vs direct provider adapter
 8. Rate limit enforcement
 9. Cost recording with pool and tenant attribution
-10. Billing finalize (S2S call to arrakis, DLQ fallback on failure)
+10. Billing finalize (S2S call to loa-freeside, DLQ fallback on failure)
 
 ### 2.5 invokeWithTools()
 
@@ -641,7 +641,7 @@ resolvedPools membership.
 `loa-finn/src/hounfour/s2s-jwt.ts#S2SJwtSigner`
 
 Supports ES256 (asymmetric) and HS256 (symmetric). Used for:
-- Signing JWTs for billing finalize calls to arrakis
+- Signing JWTs for billing finalize calls to loa-freeside
 - Signing JWS payloads for usage reports
 - Serving JWKS at `/.well-known/jwks.json`
 
@@ -690,8 +690,8 @@ Backoff schedule: 1m, 2m, 4m, 8m, 10m. Max retries: 5.
 - **Dockerfile**: Multi-stage Node 22 build, non-root `finn` user, port 3000
 - **Terraform** (`deploy/terraform/finn.tf`): ECS Fargate task, single-task
   (desired_count=1 due to local JSONL ledger), EFS-backed `/data` volume,
-  ALB listener rule on `finn.arrakis.community`, Cloud Map service discovery
-  as `finn.arrakis.local`
+  ALB listener rule on `finn.arrakis.community` *(infrastructure may still use legacy 'arrakis' naming)*, Cloud Map service discovery
+  as `finn.arrakis.local` *(infrastructure may still use legacy 'arrakis' naming)*
 - **Security groups**: ALB ingress on 3000, HTTPS egress (provider APIs),
   Redis egress (6379), EFS egress (2049), Tempo OTLP egress (4317)
 - **Secrets**: Anthropic API key, S2S private key, auth token, Redis URL

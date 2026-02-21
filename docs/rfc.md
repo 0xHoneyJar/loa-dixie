@@ -18,7 +18,7 @@ Not a chatbot-over-docs. The distinction:
 | **Knowledge curation** | Automatic embedding | Hand-curated sources with provenance, freshness tracking, health validation |
 | **Answer depth** | Technical only | Technical + architectural + philosophical + historical + educational |
 | **Trust model** | Inject everything | 5-gate security + anti-instruction trust boundaries |
-| **Cross-repo** | Single repo | Unified across loa, loa-finn, loa-hounfour, arrakis, mibera |
+| **Cross-repo** | Single repo | Unified across loa, loa-finn, loa-hounfour, loa-freeside, mibera |
 | **Identity** | Anonymous tool | Named agent with personality, voice, and on-chain identity |
 | **Economics** | Free / subscription | Self-sovereign via x402 micropayments + credit system |
 
@@ -52,7 +52,7 @@ The Oracle product composes existing infrastructure:
 
               Existing Infrastructure
   loa-finn:     Hounfour routing, model adapters
-  arrakis:      Billing, credits, x402, identity
+  loa-freeside:      Billing, credits, x402, identity
   loa-hounfour: Protocol types, agent identity
   loa:          Framework, ceremonies, flatline
 ```
@@ -76,7 +76,7 @@ Extension to the source taxonomy:
 ```json
 {
   "id": "billing-architecture",
-  "tags": ["billing", "arrakis", "architecture"],
+  "tags": ["billing", "loa-freeside", "architecture"],
   "level": "architecture",
   "audience": ["technical-leads", "engineers"]
 }
@@ -91,7 +91,7 @@ The Oracle as the first finnNFT — an on-chain agent with self-sovereign identi
 - `NftId` schema for on-chain identity binding
 - `ConversationSealing` for verifiable interaction history
 
-**Economic Layer (arrakis PR #63):**
+**Economic Layer (loa-freeside PR #63):**
 - Credit ledger with FIFO lot management
 - x402 micropayment middleware (pay-per-question)
 - BYOK proxy for community-funded model access
@@ -108,7 +108,7 @@ The Oracle as the first finnNFT — an on-chain agent with self-sovereign identi
 | Tier | Access | Price | Mechanism |
 |------|--------|-------|-----------|
 | **Public** | 5 questions/day, basic sources | Free | Rate-limited, no auth |
-| **Community** | Unlimited, full corpus | Hold Mibera NFT | Token-gated via arrakis |
+| **Community** | Unlimited, full corpus | Hold Mibera NFT | Token-gated via loa-freeside |
 | **Developer** | Full corpus + code-level sources | $10/month or x402 | Credit pack or micropayment |
 | **Enterprise** | Custom knowledge sources, private context | Custom | BYOK + platform fee |
 
@@ -120,8 +120,8 @@ The Oracle as the first finnNFT — an on-chain agent with self-sovereign identi
 | **1: Oracle API** | Expose enrichment pipeline as HTTP endpoints via Hounfour invoke path | loa-finn integration |
 | **2: Extended Corpus** | Add 20+ knowledge sources covering all abstraction levels | Content authoring |
 | **3: Oracle UI** | Chat interface with source attribution, abstraction level selector | Frontend development |
-| **4: dNFT Identity** | Mibera NFT minting, wallet creation, credit ledger funding | arrakis integration |
-| **5: x402 Payments** | Pay-per-question via micropayments | arrakis x402 work |
+| **4: dNFT Identity** | Mibera NFT minting, wallet creation, credit ledger funding | loa-freeside integration |
+| **5: x402 Payments** | Pay-per-question via micropayments | loa-freeside x402 work |
 | **6: Ceremony Participation** | Oracle as participant in multi-model reviews | loa#247 ceremony engine |
 
 ## 8. Ceremony Integration

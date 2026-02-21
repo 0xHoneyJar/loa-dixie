@@ -74,11 +74,11 @@ Extended Hounfour to support self-hosted models:
 - **Sprint-18**: Streaming and Redis State — real-time streaming responses and shared state across instances.
 - **Sprint-19**: GPU Deployment and Ledger Export — infrastructure for deploying models on GPU instances with cost tracking.
 
-### Cycle 8 — Hounfour Phase 4: Arrakis Distribution (Spice Gate)
+### Cycle 8 — Hounfour Phase 4: Freeside Distribution (Spice Gate)
 
 **Started**: 2026-02-09 | **Sprints**: 1 (global 20, covering 9 internal sprints) | **Tasks**: 44
 
-Executed in the arrakis repository (PR #40). The Arrakis gateway distributes agent capabilities over ECS infrastructure, handling token gating, billing settlement, and request routing. Named after the desert planet in Dune — the spice (model inference) must flow through controlled channels.
+Executed in the loa-freeside repository (PR #40). The Freeside gateway distributes agent capabilities over ECS infrastructure, handling token gating, billing settlement, and request routing. Named after the desert planet in Dune — the spice (model inference) must flow through controlled channels.
 
 This was the largest single cycle by task count (44 tasks across 9 internal sprints), consolidated as a single ledger entry because it was executed in a separate repository.
 
@@ -133,7 +133,7 @@ The largest integration cycle. Superseded Cycle 9 with a complete re-plan ground
 - **Sprint-47**: loa-hounfour Extraction and Publishing — extracted to `0xHoneyJar/loa-hounfour` repository.
 - **Sprints 48-49**: Bridgebuilder Findings — protocol hardening (loa-hounfour v1.1.0, 91 tests) and consumer updates.
 
-The extraction of `loa-hounfour` was a key architectural decision: the protocol types that define how models, pools, budgets, and billing interact became a shared package consumed by both loa-finn and arrakis.
+The extraction of `loa-hounfour` was a key architectural decision: the protocol types that define how models, pools, budgets, and billing interact became a shared package consumed by both loa-finn and loa-freeside.
 
 ---
 
@@ -157,7 +157,7 @@ The Bridgebuilder review loop flatlined (converged from 54 findings to 0 in 2 it
 
 **Started**: 2026-02-16 | **Sprints**: 2 (global 53-54) | **Tasks**: 13
 
-Server-to-server billing finalize client with loa-hounfour v5.0.0 upgrade. Key deliverables: reservation_id JWT propagation, BillingFinalizeClient with DLQ (dead letter queue), protocol handshake between loa-finn and arrakis.
+Server-to-server billing finalize client with loa-hounfour v5.0.0 upgrade. Key deliverables: reservation_id JWT propagation, BillingFinalizeClient with DLQ (dead letter queue), protocol handshake between loa-finn and loa-freeside.
 
 The Bridgebuilder review loop (PR #68) drove critical improvements: float-to-BigInt conversion for micro-USD billing (preventing floating-point arithmetic errors in financial computation), DLQ isolation, handshake state machine, and decision trail logging. Bridge converged at 0.98 (FLATLINE).
 
@@ -197,6 +197,26 @@ The Oracle is the first agent persona to use the knowledge enrichment pipeline �
 
 ---
 
+## Phase 5: Experience Layer — Dixie (Cycles 26-27)
+
+### Cycle 26 — Dixie Phase 1: Oracle Orchestration Layer
+
+**Started**: 2026-02-18 | **Sprints**: 19 (cycle-001) | **Tasks**: ~150 | **Bridge Iterations**: 3
+
+The first Dixie cycle established the experience orchestration layer — a Hono BFF gateway (loa-dixie) sitting between end users and loa-finn. 19 sprints delivered the full vertical slice: JWT authentication middleware, WebSocket proxying with ticket-based auth, soul memory injection, conviction-gated commons access (5-tier BGT staking), tool event streaming, and economic metadata enrichment. 153 tests validated the foundation.
+
+Three bridge iterations drove architectural refinement, converging on clean separation between the orchestration layer and the underlying agent runtime.
+
+### Cycle 27 — Dixie Phase 2: Experience Orchestrator with Economic Awareness
+
+**Started**: 2026-02-19 | **Sprints**: 13 (cycle-002) | **Tasks**: ~100 | **Bridge Iterations**: 3
+
+The second Dixie cycle extended the gateway into a full experience orchestrator with economic awareness. 13 sprints delivered autonomous operation mode with a 7-step permission engine, NL scheduling with cron integration, agent API surface (ERC-6551 TBA auth + x402 metering), compound learning signal aggregation, and Phase 2 E2E validation. 492 tests across 44 test files — a 3.2x increase from Phase 1.
+
+Three bridge iterations converged at 1.0, achieving full convergence across security hardening, reliability, and correctness. The compound learning pipeline closes the feedback loop between user interactions and agent improvement.
+
+---
+
 ## Key Milestones
 
 | Milestone | Cycle | Date | Significance |
@@ -204,21 +224,23 @@ The Oracle is the first agent persona to use the knowledge enrichment pipeline �
 | First agent | 1 | 2026-02-06 | loa-finn MVP — persistent agent runtime |
 | First Bridgebuilder review | 4 | 2026-02-07 | Autonomous PR review agent, hexagonal architecture |
 | Hounfour multi-model routing | 6 | 2026-02-08 | Provider abstraction, budget enforcement |
-| Arrakis distribution | 8 | 2026-02-09 | ECS infrastructure, token gating, billing |
+| Freeside distribution | 8 | 2026-02-09 | ECS infrastructure, token gating, billing |
 | loa-hounfour extraction | 18 | 2026-02-12 | Protocol types as shared package |
 | Pool claim enforcement | 20 | 2026-02-13 | Confused deputy prevention, Stripe-parallel |
 | Billing wire E2E verified | 22 | 2026-02-17 | Production billing settlement proven |
 | Production deploy | 24 | 2026-02-16 | CI/CD, health monitoring, ES256 |
 | Oracle knowledge interface | 25 | 2026-02-16 | Unified knowledge system |
+| Dixie Phase 1 — Oracle orchestration | 26 | 2026-02-18 | BFF gateway, 153 tests, 3 bridge iterations |
+| Dixie Phase 2 — Experience orchestrator | 27 | 2026-02-19 | Economic awareness, 492 tests, converged at 1.0 |
 
 ---
 
 ## Statistics
 
-- **25 cycles** spanning 12 days of development
-- **61 global sprints** (60 completed, 1 pending)
-- **~370 tasks** completed across all cycles
-- **4 repositories**: loa, loa-finn, loa-hounfour, arrakis
-- **Key test counts**: 1,097 (loa-hounfour), 152+ (loa-finn), 256 (post-migration)
+- **27 cycles** spanning 14 days of development
+- **93 global sprints** (92 completed, 1 pending)
+- **~620 tasks** completed across all cycles
+- **5 repositories**: loa, loa-finn, loa-hounfour, loa-freeside, loa-dixie
+- **Key test counts**: 1,097 (loa-hounfour), 152+ (loa-finn), 256 (post-migration), 492 (loa-dixie)
 - **BridgeBuilder review iterations**: 46+ field reports in Issue #66
 - **Flatline Protocol reviews**: Multiple GPT-5.2 approvals across PRDs, SDDs, and sprint plans

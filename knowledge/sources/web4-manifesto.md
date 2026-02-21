@@ -44,7 +44,7 @@ The HoneyJar ecosystem operationalizes this vision through programmable infrastr
 
 - **Billing settlement with conservation invariants**: The billing system treats every cost as a tracked economic event. The conservation invariant (metered cost + DLQ'd failures = total cost) is the foundation for programmable economics — you cannot build new economic models on infrastructure that loses track of value.
 
-- **Token gating** (Arrakis): Access to agent capabilities is gated by token ownership. This is the simplest form of community currency — holding a token grants access to a shared resource (AI model inference).
+- **Token gating** (Freeside): Access to agent capabilities is gated by token ownership and conviction staking. This is the simplest form of community currency — holding a token and staking conviction grants graduated access to shared resources (AI model inference), from observer through sovereign tier.
 
 ---
 
