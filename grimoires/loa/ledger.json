@@ -255,14 +255,14 @@
           "global_id": 33,
           "label": "Knowledge Conservation Infrastructure (Bridge Horizon)",
           "tasks": 6,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-15",
           "global_id": 34,
           "label": "Knowledge Product Surface & Bidirectional Freshness (Bridge Horizon)",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         }
       ]
     }
