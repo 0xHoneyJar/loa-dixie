@@ -29,6 +29,8 @@ import { PersonalityCache } from './services/personality-cache.js';
 import { ConvictionResolver } from './services/conviction-resolver.js';
 import { AutonomousEngine } from './services/autonomous-engine.js';
 import { createAutonomousRoutes } from './routes/autonomous.js';
+import { ScheduleStore } from './services/schedule-store.js';
+import { createScheduleRoutes } from './routes/schedule.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
 import { SignalEmitter } from './services/signal-emitter.js';
@@ -58,6 +60,8 @@ export interface DixieApp {
   convictionResolver: ConvictionResolver;
   /** Phase 2: Autonomous operation engine */
   autonomousEngine: AutonomousEngine;
+  /** Phase 2: NL schedule store */
+  scheduleStore: ScheduleStore;
 }
 
 /**
@@ -158,6 +162,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   const autonomousEngine = new AutonomousEngine(finnClient, autonomousProjectionCache, {
     budgetDefaultMicroUsd: config.autonomousBudgetDefaultMicroUsd,
   });
+
+  // Phase 2: NL schedule store (uses finn client for cron registration)
+  const scheduleStore = new ScheduleStore(finnClient);
 
   // DECISION: Middleware pipeline as constitutional ordering (communitarian architecture)
   // The middleware sequence is not arbitrary — it encodes governance priorities.
@@ -286,6 +293,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.route('/api/identity', createIdentityRoutes(finnClient));
   app.route('/api/personality', createPersonalityRoutes({ personalityCache }));
   app.route('/api/autonomous', createAutonomousRoutes({ autonomousEngine, convictionResolver }));
+  app.route('/api/schedule', createScheduleRoutes({ scheduleStore, convictionResolver }));
   app.route('/api/memory', createMemoryRoutes({
     memoryStore,
     resolveNftOwnership: async (wallet: string) => {
@@ -320,5 +328,6 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     personalityCache,
     convictionResolver,
     autonomousEngine,
+    scheduleStore,
   };
 }
