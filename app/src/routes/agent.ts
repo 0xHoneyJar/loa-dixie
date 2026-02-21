@@ -34,18 +34,45 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
   const app = new Hono();
 
   // Agent-specific rate limiting (per-agent identity, separate from human limits)
-  const agentRequestCounts = new Map<string, { timestamps: number[] }>();
+  // Bounded to MAX_TRACKED_AGENTS entries (Bridge medium-1)
+  const MAX_TRACKED_AGENTS = 1000;
+  const agentRequestCounts = new Map<string, { timestamps: number[]; lastAccess: number }>();
+  let lastCleanup = Date.now();
+
+  const cleanupStaleEntries = (now: number) => {
+    // Run cleanup every 60 seconds
+    if (now - lastCleanup < 60_000) return;
+    lastCleanup = now;
+    const windowStart = now - 60_000;
+    for (const [key, entry] of agentRequestCounts) {
+      entry.timestamps = entry.timestamps.filter((t) => t > windowStart);
+      if (entry.timestamps.length === 0) {
+        agentRequestCounts.delete(key);
+      }
+    }
+    // Evict LRU if still over limit
+    if (agentRequestCounts.size > MAX_TRACKED_AGENTS) {
+      const sorted = [...agentRequestCounts.entries()].sort((a, b) => a[1].lastAccess - b[1].lastAccess);
+      const evictCount = agentRequestCounts.size - MAX_TRACKED_AGENTS;
+      for (let i = 0; i < evictCount; i++) {
+        agentRequestCounts.delete(sorted[i]![0]);
+      }
+    }
+  };
 
   const agentRateLimit = async (agentTba: string): Promise<{ allowed: boolean; retryAfter?: number }> => {
     const now = Date.now();
     const windowStart = now - 60_000;
 
+    cleanupStaleEntries(now);
+
     let entry = agentRequestCounts.get(agentTba);
     if (!entry) {
-      entry = { timestamps: [] };
+      entry = { timestamps: [], lastAccess: now };
       agentRequestCounts.set(agentTba, entry);
     }
 
+    entry.lastAccess = now;
     entry.timestamps = entry.timestamps.filter((t) => t > windowStart);
 
     if (entry.timestamps.length >= limits.agentRpm) {
@@ -97,6 +124,18 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       return c.json({ error: 'invalid_request', message: 'query field required' }, 400);
     }
 
+    // Pre-flight budget check BEFORE incurring cost (Bridge medium-8)
+    if (body.maxCostMicroUsd) {
+      // Estimate based on typical query: ~200 prompt + ~400 completion tokens
+      const estimatedCost = Math.ceil((200 * 0.003 + 400 * 0.015) * 1000);
+      if (estimatedCost > body.maxCostMicroUsd) {
+        return c.json(
+          { error: 'budget_exceeded', message: `Estimated cost ${estimatedCost}μUSD exceeds max ${body.maxCostMicroUsd}μUSD` },
+          402,
+        );
+      }
+    }
+
     try {
       // Forward to loa-finn with agent context
       const finnResponse = await finnClient.request<{
@@ -121,12 +160,12 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
         (finnResponse.input_tokens * 0.003 + finnResponse.output_tokens * 0.015) * 1000,
       );
 
-      // Check budget cap if specified
+      // Post-request budget check — warn if actual exceeds max (Bridge medium-8)
+      // Pre-flight already rejected clearly over-budget requests;
+      // this catches cases where actual cost exceeded the estimate
+      let budgetWarning: string | null = null;
       if (body.maxCostMicroUsd && costMicroUsd > body.maxCostMicroUsd) {
-        return c.json(
-          { error: 'budget_exceeded', message: `Cost ${costMicroUsd}μUSD exceeds max ${body.maxCostMicroUsd}μUSD` },
-          402,
-        );
+        budgetWarning = `Actual cost ${costMicroUsd}μUSD exceeded max ${body.maxCostMicroUsd}μUSD`;
       }
 
       // Generate x402 receipt (mock — in production, settle via freeside)
@@ -156,6 +195,9 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       c.header('X-Cost-Micro-USD', String(costMicroUsd));
       c.header('X-Model-Used', finnResponse.model);
       c.header('X-Receipt-Id', receipt.receiptId);
+      if (budgetWarning) {
+        c.header('X-Budget-Warning', budgetWarning);
+      }
 
       return c.json(response);
     } catch (err) {

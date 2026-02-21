@@ -255,6 +255,23 @@ export class AutonomousEngine {
   }
 
   /**
+   * Record actual cost for a previously permitted action (Bridge medium-7).
+   * Updates the audit entry so getDailySpend() uses actual cost.
+   */
+  recordActualCost(nftId: string, timestamp: string, actualCostMicroUsd: number): boolean {
+    // Find the matching audit entry (by nftId + closest timestamp)
+    const entry = this.auditLog.find(
+      (e) => e.nftId === nftId && e.timestamp === timestamp && e.result.allowed,
+    );
+    if (entry) {
+      // TypeScript readonly — cast for in-place mutation (bounded buffer, internal)
+      (entry as { actualCostMicroUsd?: number }).actualCostMicroUsd = actualCostMicroUsd;
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Invalidate cached permissions.
    */
   async invalidatePermissions(nftId: string): Promise<void> {
@@ -272,7 +289,10 @@ export class AutonomousEngine {
           e.timestamp.startsWith(today) &&
           e.result.allowed,
       )
-      .reduce((sum, e) => sum + (e.action.estimatedCostMicroUsd ?? 0), 0);
+      .reduce((sum, e) => {
+        // Prefer actual cost over estimated (Bridge medium-7)
+        return sum + (e.actualCostMicroUsd ?? e.action.estimatedCostMicroUsd ?? 0);
+      }, 0);
   }
 
   private logAudit(

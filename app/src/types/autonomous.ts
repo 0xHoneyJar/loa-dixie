@@ -71,6 +71,8 @@ export interface AutonomousAuditEntry {
   readonly action: AutonomousAction;
   readonly result: PermissionResult;
   readonly executedBy: 'agent' | 'owner' | 'delegate';
+  /** Actual cost after execution (Bridge medium-7) */
+  actualCostMicroUsd?: number;
 }
 
 /** Daily summary of autonomous activity */

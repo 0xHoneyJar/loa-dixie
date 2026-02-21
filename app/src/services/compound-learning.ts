@@ -81,13 +81,17 @@ export interface PersonalityDrift {
  * Production deployment would use NATS JetStream consumer.
  */
 export class CompoundLearningEngine {
-  private readonly signalBuffer = new Map<string, InteractionSignal[]>();
+  private readonly signalBuffer = new Map<string, { signals: InteractionSignal[]; lastActivity: number }>();
   private readonly insights = new Map<string, LearningInsights[]>();
   private readonly lastEvolution = new Map<string, string>(); // nftId → ISO date
   private readonly batchSize: number;
+  private readonly maxNfts: number;
+  private readonly inactivityFlushMs: number;
 
-  constructor(opts?: { batchSize?: number }) {
+  constructor(opts?: { batchSize?: number; maxNfts?: number; inactivityFlushMs?: number }) {
     this.batchSize = opts?.batchSize ?? 10;
+    this.maxNfts = opts?.maxNfts ?? 10_000;
+    this.inactivityFlushMs = opts?.inactivityFlushMs ?? 3_600_000; // 1 hour
   }
 
   /**
@@ -97,16 +101,22 @@ export class CompoundLearningEngine {
   ingest(signal: InteractionSignal): LearningInsights | null {
     const { nftId } = signal;
 
-    let buffer = this.signalBuffer.get(nftId);
-    if (!buffer) {
-      buffer = [];
-      this.signalBuffer.set(nftId, buffer);
+    // Evict LRU NFTs if at capacity (Bridge medium-2)
+    if (!this.signalBuffer.has(nftId) && this.signalBuffer.size >= this.maxNfts) {
+      this.evictLruNft();
     }
-    buffer.push(signal);
+
+    let entry = this.signalBuffer.get(nftId);
+    if (!entry) {
+      entry = { signals: [], lastActivity: Date.now() };
+      this.signalBuffer.set(nftId, entry);
+    }
+    entry.signals.push(signal);
+    entry.lastActivity = Date.now();
 
     // Process batch when threshold reached
-    if (buffer.length >= this.batchSize) {
-      const batch = buffer.splice(0, this.batchSize);
+    if (entry.signals.length >= this.batchSize) {
+      const batch = entry.signals.splice(0, this.batchSize);
       return this.processBatch(nftId, batch);
     }
 
@@ -283,17 +293,52 @@ export class CompoundLearningEngine {
    * Get pending signal count for an NFT (not yet processed).
    */
   getPendingCount(nftId: string): number {
-    return this.signalBuffer.get(nftId)?.length ?? 0;
+    return this.signalBuffer.get(nftId)?.signals.length ?? 0;
   }
 
   /**
    * Force process any pending signals (for testing or shutdown).
    */
   flush(nftId: string): LearningInsights | null {
-    const buffer = this.signalBuffer.get(nftId);
-    if (!buffer || buffer.length === 0) return null;
+    const entry = this.signalBuffer.get(nftId);
+    if (!entry || entry.signals.length === 0) return null;
 
-    const batch = buffer.splice(0);
+    const batch = entry.signals.splice(0);
     return this.processBatch(nftId, batch);
+  }
+
+  /**
+   * Flush inactive signal buffers (Bridge medium-2).
+   * Call periodically to prevent unbounded memory growth from inactive NFTs.
+   */
+  flushInactive(): number {
+    const now = Date.now();
+    let flushed = 0;
+    for (const [nftId, entry] of this.signalBuffer) {
+      if (now - entry.lastActivity > this.inactivityFlushMs && entry.signals.length > 0) {
+        this.processBatch(nftId, entry.signals.splice(0));
+        flushed++;
+      }
+    }
+    return flushed;
+  }
+
+  private evictLruNft(): void {
+    let oldestNft: string | null = null;
+    let oldestTime = Infinity;
+    for (const [nftId, entry] of this.signalBuffer) {
+      if (entry.lastActivity < oldestTime) {
+        oldestTime = entry.lastActivity;
+        oldestNft = nftId;
+      }
+    }
+    if (oldestNft) {
+      // Flush before evicting to preserve data
+      const entry = this.signalBuffer.get(oldestNft);
+      if (entry && entry.signals.length > 0) {
+        this.processBatch(oldestNft, entry.signals);
+      }
+      this.signalBuffer.delete(oldestNft);
+    }
   }
 }

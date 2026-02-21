@@ -18,6 +18,7 @@ import {
 export class ScheduleStore {
   private readonly schedules = new Map<string, Schedule>();
   private readonly executions: ScheduleExecution[] = [];
+  private readonly maxExecutions = 10_000; // Bridge medium-3: bounded execution log
   private nextId = 1;
 
   constructor(
@@ -153,6 +154,12 @@ export class ScheduleStore {
     };
 
     this.executions.push(execution);
+
+    // Evict oldest half when at capacity (Bridge medium-3)
+    if (this.executions.length > this.maxExecutions) {
+      const evictCount = Math.floor(this.executions.length / 2);
+      this.executions.splice(0, evictCount);
+    }
 
     if (schedule) {
       const updated: Schedule = {
