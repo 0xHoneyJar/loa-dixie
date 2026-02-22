@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { ConvictionTier } from '../types/conviction.js';
 
 /**
@@ -7,6 +9,9 @@ import type { ConvictionTier } from '../types/conviction.js';
  * priority votes on knowledge sources. Each vote is wallet → sourceId → priority,
  * weighted by conviction tier. Implements Ostrom Principle 3: collective-choice
  * arrangements — those affected by the rules can participate in modifying them.
+ *
+ * Task 22.4 (Sprint 22, Global 41): Added debounced JSON file persistence.
+ * Votes survive process restarts when persistPath is configured.
  *
  * Score formula: sum(vote.priority * TIER_WEIGHTS[vote.tier]) per source.
  *
@@ -32,6 +37,14 @@ export interface AggregatedPriority {
   readonly voteCount: number;
 }
 
+/** Construction options */
+export interface KnowledgePriorityStoreOptions {
+  /** Path for JSON file persistence. Omit for in-memory only. */
+  persistPath?: string;
+  /** Debounce interval in ms for writes (default: 5000) */
+  persistDebounceMs?: number;
+}
+
 /** Tier weight multipliers — higher conviction = more governance weight */
 const TIER_WEIGHTS: Record<ConvictionTier, number> = {
   observer: 0, // Cannot vote (Ostrom Principle 3: must participate to govern)
@@ -43,11 +56,23 @@ const TIER_WEIGHTS: Record<ConvictionTier, number> = {
 
 export class KnowledgePriorityStore {
   private readonly votes = new Map<string, PriorityVote>();
+  private readonly persistPath: string | null;
+  private readonly persistDebounceMs: number;
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(opts?: KnowledgePriorityStoreOptions) {
+    this.persistPath = opts?.persistPath ?? null;
+    this.persistDebounceMs = opts?.persistDebounceMs ?? 5000;
+    if (this.persistPath) {
+      this.loadFromDisk();
+    }
+  }
 
   /** Cast or update a priority vote. Key: `${wallet}:${sourceId}` (latest wins). */
   vote(v: PriorityVote): void {
     const key = `${v.wallet}:${v.sourceId}`;
     this.votes.set(key, v);
+    this.schedulePersist();
   }
 
   /** Get all votes for a specific source */
@@ -92,5 +117,57 @@ export class KnowledgePriorityStore {
   /** Clear all votes (testing utility) */
   clear(): void {
     this.votes.clear();
+  }
+
+  /** Flush pending writes and clear the debounce timer. Call before shutdown. */
+  destroy(): void {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    if (this.persistPath && this.votes.size > 0) {
+      this.writeToDisk();
+    }
+  }
+
+  /** Load votes from disk on construction */
+  private loadFromDisk(): void {
+    if (!this.persistPath) return;
+    try {
+      const raw = fs.readFileSync(this.persistPath, 'utf-8');
+      const entries = JSON.parse(raw) as Array<[string, PriorityVote]>;
+      for (const [key, vote] of entries) {
+        this.votes.set(key, vote);
+      }
+    } catch {
+      // File doesn't exist or is corrupt — start fresh
+    }
+  }
+
+  /** Write votes to disk (synchronous for simplicity — debounced to limit I/O) */
+  private writeToDisk(): void {
+    if (!this.persistPath) return;
+    try {
+      const dir = path.dirname(this.persistPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const entries = [...this.votes.entries()];
+      fs.writeFileSync(this.persistPath, JSON.stringify(entries, null, 2), 'utf-8');
+    } catch {
+      // Persistence failure is non-fatal — votes remain in memory
+    }
+  }
+
+  /** Schedule a debounced write to disk */
+  private schedulePersist(): void {
+    if (!this.persistPath) return;
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+    }
+    this.persistTimer = setTimeout(() => {
+      this.writeToDisk();
+      this.persistTimer = null;
+    }, this.persistDebounceMs);
   }
 }

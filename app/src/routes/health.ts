@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { timingSafeEqual } from 'node:crypto';
 import type { FinnClient } from '../proxy/finn-client.js';
 import type { HealthResponse, ServiceHealth } from '../types.js';
 import type { DbPool } from '../db/client.js';
@@ -19,6 +20,8 @@ export interface HealthDependencies {
   dbPool?: DbPool | null;
   redisClient?: RedisClient | null;
   signalEmitter?: SignalEmitter | null;
+  /** Admin key for gated endpoints (e.g., /governance). Task 22.3 */
+  adminKey?: string;
 }
 
 export function createHealthRoutes(deps: HealthDependencies): Hono {
@@ -71,10 +74,28 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
 
   /**
    * GET /governance — unified health of all registered resource governors.
-   * System-level self-knowledge: "what resources does this system govern?"
+   * Gated behind admin auth (Task 22.3: prevents leaking internal system topology).
    * See: Deep Bridgebuilder Meditation §VII.2, Kubernetes operator pattern.
    */
   app.get('/governance', (c) => {
+    // Task 22.3: Require admin auth — governance data reveals internal topology
+    const adminKey = deps.adminKey;
+    if (adminKey) {
+      const authHeader = c.req.header('authorization');
+      if (!authHeader) {
+        return c.json({ error: 'unauthorized', message: 'Admin key required' }, 401);
+      }
+      const key = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+      const maxLen = Math.max(key.length, adminKey.length);
+      const bufA = Buffer.alloc(maxLen);
+      const bufB = Buffer.alloc(maxLen);
+      Buffer.from(key).copy(bufA);
+      Buffer.from(adminKey).copy(bufB);
+      if (!timingSafeEqual(bufA, bufB) || key.length !== adminKey.length) {
+        return c.json({ error: 'forbidden', message: 'Invalid admin key' }, 403);
+      }
+    }
+
     const snapshot = governorRegistry.getAll();
     return c.json({
       governors: snapshot,

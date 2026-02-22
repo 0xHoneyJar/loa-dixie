@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { KnowledgePriorityStore } from '../../src/services/knowledge-priority-store.js';
 import type { PriorityVote } from '../../src/services/knowledge-priority-store.js';
 
@@ -136,5 +139,75 @@ describe('KnowledgePriorityStore (Task 21.1)', () => {
 
     // 2 unique wallets: Alice and Bob
     expect(store.getVoterCount()).toBe(2);
+  });
+});
+
+describe('KnowledgePriorityStore persistence (Task 22.4)', () => {
+  let tmpDir: string;
+  let persistPath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kps-test-'));
+    persistPath = path.join(tmpDir, 'priorities.json');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('persists votes to disk via destroy()', () => {
+    const store = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
+    store.vote({
+      wallet: '0xAlice',
+      sourceId: 'glossary',
+      priority: 5,
+      tier: 'architect',
+      timestamp: '2026-02-22T12:00:00Z',
+    });
+
+    // Calling destroy() flushes pending writes
+    store.destroy();
+
+    expect(fs.existsSync(persistPath)).toBe(true);
+    const raw = fs.readFileSync(persistPath, 'utf-8');
+    const entries = JSON.parse(raw);
+    expect(entries).toHaveLength(1);
+    expect(entries[0][1].wallet).toBe('0xAlice');
+  });
+
+  it('loads votes from disk on construction', () => {
+    // Write votes, then destroy
+    const store1 = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
+    store1.vote({
+      wallet: '0xBob',
+      sourceId: 'code-reality-finn',
+      priority: 3,
+      tier: 'builder',
+      timestamp: '2026-02-22T13:00:00Z',
+    });
+    store1.destroy();
+
+    // New store loads from disk
+    const store2 = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
+    const votes = store2.getVotes('code-reality-finn');
+    expect(votes).toHaveLength(1);
+    expect(votes[0]!.wallet).toBe('0xBob');
+    expect(votes[0]!.priority).toBe(3);
+    store2.destroy();
+  });
+
+  it('works without persistence (in-memory only)', () => {
+    const store = new KnowledgePriorityStore();
+    store.vote({
+      wallet: '0xAlice',
+      sourceId: 'glossary',
+      priority: 4,
+      tier: 'participant',
+      timestamp: new Date().toISOString(),
+    });
+
+    expect(store.getVoterCount()).toBe(1);
+    store.destroy(); // No crash, no file written
+    expect(fs.existsSync(persistPath)).toBe(false);
   });
 });

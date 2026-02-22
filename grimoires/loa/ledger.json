@@ -290,20 +290,27 @@
           "global_id": 38,
           "label": "Adaptive Retrieval from Self-Knowledge (Meditation §VII.1)",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-20",
           "global_id": 39,
           "label": "Resource Governance Generalization — ResourceGovernor<T> (Meditation §VII.2)",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-21",
           "global_id": 40,
           "label": "Communitarian Knowledge Governance — Conviction Voting (Meditation §VII.3)",
           "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-22",
+          "global_id": 41,
+          "label": "Meditation Convergence — Bridge Iteration 1 Findings",
+          "tasks": 4,
           "status": "pending"
         }
       ]
@@ -311,6 +318,6 @@
   ],
   "active_cycle": "cycle-002",
   "active_bugfix": null,
-  "global_sprint_counter": 40,
+  "global_sprint_counter": 41,
   "bugfix_cycles": []
 }

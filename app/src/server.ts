@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { requestId } from './middleware/request-id.js';
@@ -180,7 +181,10 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   const learningEngine = new CompoundLearningEngine();
 
   // Phase 2: Knowledge priority store (conviction-weighted community governance, Task 21.4)
-  const priorityStore = new KnowledgePriorityStore();
+  // Task 22.4: Persist votes to disk so they survive restarts
+  const priorityStore = new KnowledgePriorityStore({
+    persistPath: path.join(process.cwd(), 'data', 'knowledge-priorities.json'),
+  });
 
   // Phase 2: TBA verification cache (uses projection cache with tba prefix when Redis available)
   let tbaProjectionCache: ProjectionCache<TBAVerification> | null = null;
@@ -306,6 +310,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     dbPool,
     redisClient,
     signalEmitter,
+    adminKey: config.adminKey,
   }));
   app.route('/api/auth', createAuthRoutes(allowlistStore, {
     jwtPrivateKey: config.jwtPrivateKey,

@@ -175,6 +175,9 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       if (selfKnowledge && selfKnowledge.confidence === 'low') {
         const staleList = selfKnowledge.freshness.staleSources.join(', ');
         systemNote = `Note: Knowledge freshness is degraded. Sources [${staleList}] may be outdated. Hedge appropriately and flag uncertainty in your response.`;
+      } else if (selfKnowledge && selfKnowledge.confidence === 'medium') {
+        const staleList = selfKnowledge.freshness.staleSources.join(', ');
+        systemNote = `Note: Some knowledge sources may be outdated [${staleList}]. Consider noting this if your response draws heavily from these domains.`;
       }
 
       // Forward to loa-finn with agent context
@@ -450,15 +453,9 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       return c.json({ error: 'invalid_request', message: 'priority must be an integer 1-5' }, 400);
     }
 
-    // Validate sourceId against known sources
-    const meta = getCorpusMeta();
-    const selfKnowledge = corpusMeta.getSelfKnowledge();
-    const knownSources = selfKnowledge
-      ? Object.keys(selfKnowledge.coverage.sources_by_tag).length > 0
-        ? [...(selfKnowledge.source_weights ?? [])].map((w) => w.sourceId)
-        : []
-      : [];
-    if (knownSources.length > 0 && !knownSources.includes(body.sourceId)) {
+    // Validate sourceId against canonical source list (Task 22.2: use primary config, not derived weights)
+    const sourceWeights = corpusMeta.getSourceWeights();
+    if (sourceWeights.size > 0 && !sourceWeights.has(body.sourceId)) {
       return c.json({ error: 'invalid_request', message: `Unknown sourceId: ${body.sourceId}` }, 400);
     }
 

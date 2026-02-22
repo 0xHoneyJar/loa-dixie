@@ -159,8 +159,9 @@ describe('health routes', () => {
   });
 });
 
-describe('GET /governance (Task 20.4)', () => {
+describe('GET /governance (Task 20.4, Task 22.3)', () => {
   let finnClient: FinnClient;
+  const testAdminKey = 'test-admin-key-secret';
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -170,11 +171,13 @@ describe('GET /governance (Task 20.4)', () => {
     governorRegistry.clear();
   });
 
-  it('returns governance snapshot with registered governors', async () => {
+  it('returns governance snapshot with admin auth', async () => {
     governorRegistry.register(corpusMeta);
 
-    const app = createHealthRoutes({ finnClient });
-    const res = await app.request('/governance');
+    const app = createHealthRoutes({ finnClient, adminKey: testAdminKey });
+    const res = await app.request('/governance', {
+      headers: { Authorization: `Bearer ${testAdminKey}` },
+    });
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -188,8 +191,10 @@ describe('GET /governance (Task 20.4)', () => {
   it('includes knowledge_corpus governor in snapshot', async () => {
     governorRegistry.register(corpusMeta);
 
-    const app = createHealthRoutes({ finnClient });
-    const res = await app.request('/governance');
+    const app = createHealthRoutes({ finnClient, adminKey: testAdminKey });
+    const res = await app.request('/governance', {
+      headers: { Authorization: `Bearer ${testAdminKey}` },
+    });
     const body = await res.json();
 
     const corpusGov = body.governors.find(
@@ -203,12 +208,45 @@ describe('GET /governance (Task 20.4)', () => {
   });
 
   it('returns empty list when no governors registered', async () => {
-    const app = createHealthRoutes({ finnClient });
-    const res = await app.request('/governance');
+    const app = createHealthRoutes({ finnClient, adminKey: testAdminKey });
+    const res = await app.request('/governance', {
+      headers: { Authorization: `Bearer ${testAdminKey}` },
+    });
     const body = await res.json();
 
     expect(body.governors).toEqual([]);
     expect(body.totalResources).toBe(0);
     expect(body.degradedResources).toBe(0);
+  });
+
+  it('rejects unauthenticated requests when adminKey is set (Task 22.3)', async () => {
+    const app = createHealthRoutes({ finnClient, adminKey: testAdminKey });
+    const res = await app.request('/governance');
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toBe('unauthorized');
+  });
+
+  it('rejects invalid admin key (Task 22.3)', async () => {
+    const app = createHealthRoutes({ finnClient, adminKey: testAdminKey });
+    const res = await app.request('/governance', {
+      headers: { Authorization: 'Bearer wrong-key' },
+    });
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('forbidden');
+  });
+
+  it('allows unauthenticated access when no adminKey configured', async () => {
+    governorRegistry.register(corpusMeta);
+
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/governance');
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.governors.length).toBeGreaterThanOrEqual(1);
   });
 });

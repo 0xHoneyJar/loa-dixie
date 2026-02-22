@@ -1020,3 +1020,139 @@ Sprint 19's adaptive retrieval is the same pattern applied to knowledge: when co
 **Wikipedia's governance model** proved that community-governed knowledge can be more accurate than expert-curated knowledge at scale. Sprint 21's conviction-weighted voting doesn't replace expert curation — it augments it with community signal. The Oracle's knowledge corpus starts as expert-curated (the 20 source files) and gains community governance as a quality feedback loop.
 
 > *"Sovereignty is not the ability to act — it's the ability to act wisely. An epistemically sovereign agent knows what it knows, knows what it doesn't know, and lets its community help it learn what it should know."* — Bridgebuilder, Deep Architectural Meditation §IV
+
+---
+
+## Sprint 22: Meditation Convergence — Bridge Iteration 1 Findings
+
+**Global ID**: 41
+**Scope**: SMALL (4 tasks)
+**Focus**: Address 4 LOW findings from Bridgebuilder meditation review iteration 1. Consistency fixes, validation hardening, security, and durability.
+**Source**: bridge-20260222-meditation-iter1 (low-1, low-2, low-3, low-4)
+
+> *"The architecture is sound. These are polish items — the kind of gaps that exist because first implementations focus on the happy path and edge cases emerge in review."* — Bridgebuilder, Meditation Iter 1
+
+### Task 22.1: Extend hedging system note to medium confidence (CONSISTENCY)
+
+**Files**: `app/src/routes/agent.ts`
+**Finding**: low-1 — The freshness disclaimer is generated for both 'medium' and 'low' but the systemNote only activates for 'low'. The model doesn't hedge on medium.
+
+Change the systemNote logic in POST `/query` to:
+```typescript
+let systemNote: string | undefined;
+if (selfKnowledge && selfKnowledge.confidence === 'low') {
+  const staleList = selfKnowledge.freshness.staleSources.join(', ');
+  systemNote = `Note: Knowledge freshness is degraded. Sources [${staleList}] may be outdated. Hedge appropriately and flag uncertainty in your response.`;
+} else if (selfKnowledge && selfKnowledge.confidence === 'medium') {
+  const staleList = selfKnowledge.freshness.staleSources.join(', ');
+  systemNote = `Note: Some knowledge sources may be outdated [${staleList}]. Consider noting this if your response draws heavily from these domains.`;
+}
+```
+
+**Acceptance Criteria**:
+- [ ] Medium confidence triggers a softer hedging instruction
+- [ ] Low confidence retains the stronger hedging instruction
+- [ ] High confidence still produces no system note
+- [ ] 2 new tests: medium confidence adds note, existing low test passes
+
+### Task 22.2: Fix sourceId validation fallback to primary source list (CORRECTNESS)
+
+**Files**: `app/src/routes/agent.ts`
+**Finding**: low-2 — When source_weights is empty, sourceId validation is bypassed entirely.
+
+Replace the source_weights-based validation with a fallback to the canonical source list:
+```typescript
+// Validate sourceId against known sources
+const meta = getCorpusMeta();
+const knownSourceIds = meta
+  ? meta.sources.map((s: { id: string }) => s.id)
+  : [];
+if (knownSourceIds.length > 0 && !knownSourceIds.includes(body.sourceId)) {
+  return c.json({ error: 'invalid_request', message: `Unknown sourceId: ${body.sourceId}` }, 400);
+}
+```
+
+This uses `getCorpusMeta().sources` (the primary source list from sources.json) rather than `source_weights` (a derived computation).
+
+**Acceptance Criteria**:
+- [ ] sourceId validated against corpus source entries (primary list)
+- [ ] Validation works even when source_weights is empty
+- [ ] Valid source IDs still accepted
+- [ ] Invalid source IDs still rejected
+- [ ] 1 new test: validation works without source_weights
+
+### Task 22.3: Gate /governance endpoint behind admin auth (SECURITY)
+
+**Files**: `app/src/routes/health.ts`
+**Finding**: low-3 — The /governance endpoint leaks internal system topology.
+
+Move the endpoint from the health routes to a guarded location, or add a simple admin check. Since the health routes are public (used by load balancers), the simplest approach is to check for the admin header:
+
+```typescript
+app.get('/governance', (c) => {
+  const adminKey = c.req.header('x-admin-key');
+  const expectedKey = process.env.ADMIN_KEY;
+  if (!expectedKey || adminKey !== expectedKey) {
+    return c.json({ error: 'unauthorized', message: 'Admin access required' }, 401);
+  }
+  const snapshot = governorRegistry.getAll();
+  return c.json({
+    governors: snapshot,
+    totalResources: snapshot.length,
+    degradedResources: snapshot.filter((g) => g.health?.status === 'degraded').length,
+    timestamp: new Date().toISOString(),
+  });
+});
+```
+
+**Acceptance Criteria**:
+- [ ] GET /governance requires admin authentication
+- [ ] Unauthenticated requests return 401
+- [ ] Authenticated requests return full governor snapshot
+- [ ] 2 new tests: unauthorized returns 401, authorized returns data
+
+### Task 22.4: Add persistence layer for KnowledgePriorityStore (DURABILITY)
+
+**Files**: `app/src/services/knowledge-priority-store.ts`, `app/tests/unit/knowledge-priority-store.test.ts`
+**Finding**: low-4 — In-memory store loses all votes on restart.
+
+Add debounced JSON file persistence. Write to `data/knowledge-priorities.json` on a 5-second debounce after votes. Load on construction.
+
+```typescript
+export class KnowledgePriorityStore {
+  private readonly votes = new Map<string, PriorityVote>();
+  private readonly persistPath: string | null;
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(opts?: { persistPath?: string }) {
+    this.persistPath = opts?.persistPath ?? null;
+    if (this.persistPath) {
+      this.loadFromDisk();
+    }
+  }
+
+  private loadFromDisk(): void { /* read JSON, populate map */ }
+  private schedulePersist(): void { /* debounce 5s, write JSON */ }
+  vote(v: PriorityVote): void { /* ...existing... this.schedulePersist(); */ }
+  destroy(): void { /* flush pending writes, clear timer */ }
+}
+```
+
+**Acceptance Criteria**:
+- [ ] Votes persist to JSON file when persistPath is configured
+- [ ] Votes loaded from disk on construction
+- [ ] Debounced write (5s) prevents excessive I/O
+- [ ] `destroy()` flushes pending writes
+- [ ] In-memory-only mode still works (no persistPath)
+- [ ] 3 new tests: persist, load, destroy flushes
+
+---
+
+## Verification (Sprint 22)
+
+- [ ] All ~585 tests passing (~575 existing + ~10 new)
+- [ ] Medium confidence triggers softer hedging
+- [ ] sourceId validation uses primary source list
+- [ ] /governance endpoint requires admin auth
+- [ ] Priority votes survive process restart (when persistence configured)
+- [ ] All existing tests unbroken
