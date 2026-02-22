@@ -4,6 +4,8 @@ import {
   resetHealthCache,
 } from '../../src/routes/health.js';
 import { FinnClient } from '../../src/proxy/finn-client.js';
+import { GovernorRegistry, governorRegistry } from '../../src/services/governor-registry.js';
+import { corpusMeta } from '../../src/services/corpus-meta.js';
 
 describe('health routes', () => {
   let finnClient: FinnClient;
@@ -111,5 +113,140 @@ describe('health routes', () => {
     const body = await res.json();
 
     expect(body.infrastructure).toBeUndefined();
+  });
+
+  it('includes knowledge_corpus metadata with corpus_version', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+    );
+
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/');
+    const body = await res.json();
+
+    expect(body.services.knowledge_corpus).toBeDefined();
+    expect(body.services.knowledge_corpus.corpus_version).toBeGreaterThanOrEqual(1);
+    expect(body.services.knowledge_corpus.sources).toBeGreaterThanOrEqual(20);
+    expect(body.services.knowledge_corpus.status).toMatch(/^(healthy|degraded)$/);
+  });
+
+  it('knowledge_corpus reports correct source count', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+    );
+
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/');
+    const body = await res.json();
+
+    expect(body.services.knowledge_corpus.sources).toBe(20);
+    expect(typeof body.services.knowledge_corpus.stale_sources).toBe('number');
+  });
+
+  it('knowledge_corpus stale count reflects freshness state', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+    );
+
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/');
+    const body = await res.json();
+
+    // After fresh corpus update, stale count should be 0 or very low
+    expect(body.services.knowledge_corpus.stale_sources).toBeLessThanOrEqual(
+      body.services.knowledge_corpus.sources,
+    );
+  });
+});
+
+describe('GET /governance (Task 20.4, Task 22.3)', () => {
+  let finnClient: FinnClient;
+  const testAdminKey = 'test-admin-key-secret';
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetHealthCache();
+    finnClient = new FinnClient('http://finn:4000');
+    // Clear and re-register for test isolation
+    governorRegistry.clear();
+  });
+
+  it('returns governance snapshot with admin auth', async () => {
+    governorRegistry.register(corpusMeta);
+
+    const app = createHealthRoutes({ finnClient, adminKey: testAdminKey });
+    const res = await app.request('/governance', {
+      headers: { Authorization: `Bearer ${testAdminKey}` },
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.governors).toBeInstanceOf(Array);
+    expect(body.governors.length).toBeGreaterThanOrEqual(1);
+    expect(body.totalResources).toBeGreaterThanOrEqual(1);
+    expect(typeof body.degradedResources).toBe('number');
+    expect(body.timestamp).toBeTruthy();
+  });
+
+  it('includes knowledge_corpus governor in snapshot', async () => {
+    governorRegistry.register(corpusMeta);
+
+    const app = createHealthRoutes({ finnClient, adminKey: testAdminKey });
+    const res = await app.request('/governance', {
+      headers: { Authorization: `Bearer ${testAdminKey}` },
+    });
+    const body = await res.json();
+
+    const corpusGov = body.governors.find(
+      (g: any) => g.resourceType === 'knowledge_corpus',
+    );
+    expect(corpusGov).toBeDefined();
+    expect(corpusGov.health).not.toBeNull();
+    expect(corpusGov.health.status).toMatch(/^(healthy|degraded)$/);
+    expect(corpusGov.health.totalItems).toBeGreaterThanOrEqual(15);
+    expect(corpusGov.health.version).toBeGreaterThanOrEqual(1);
+  });
+
+  it('returns empty list when no governors registered', async () => {
+    const app = createHealthRoutes({ finnClient, adminKey: testAdminKey });
+    const res = await app.request('/governance', {
+      headers: { Authorization: `Bearer ${testAdminKey}` },
+    });
+    const body = await res.json();
+
+    expect(body.governors).toEqual([]);
+    expect(body.totalResources).toBe(0);
+    expect(body.degradedResources).toBe(0);
+  });
+
+  it('rejects unauthenticated requests when adminKey is set (Task 22.3)', async () => {
+    const app = createHealthRoutes({ finnClient, adminKey: testAdminKey });
+    const res = await app.request('/governance');
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toBe('unauthorized');
+  });
+
+  it('rejects invalid admin key (Task 22.3)', async () => {
+    const app = createHealthRoutes({ finnClient, adminKey: testAdminKey });
+    const res = await app.request('/governance', {
+      headers: { Authorization: 'Bearer wrong-key' },
+    });
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('forbidden');
+  });
+
+  it('allows unauthenticated access when no adminKey configured', async () => {
+    governorRegistry.register(corpusMeta);
+
+    const app = createHealthRoutes({ finnClient });
+    const res = await app.request('/governance');
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.governors.length).toBeGreaterThanOrEqual(1);
   });
 });

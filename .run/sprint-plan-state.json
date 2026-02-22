@@ -1,37 +1,29 @@
 {
-  "plan_id": "plan-20260221-phase2",
+  "plan_id": "plan-20260222-deeparch",
   "branch": "feature/dixie-phase2",
-  "state": "RUNNING",
+  "state": "JACKED_OUT",
   "timestamps": {
-    "started": "2026-02-21T14:15:00Z",
-    "last_activity": "2026-02-21T16:00:00Z"
+    "started": "2026-02-22T20:00:00Z",
+    "last_activity": "2026-02-22T21:00:00Z"
   },
   "sprints": {
-    "total": 10,
+    "total": 2,
     "completed": 2,
-    "current": "sprint-3",
+    "current": null,
     "list": [
-      {"id": "sprint-1", "status": "completed", "cycles": 1, "files_changed": 20},
-      {"id": "sprint-2", "status": "completed", "cycles": 1, "files_changed": 10},
-      {"id": "sprint-3", "status": "pending", "cycles": 0},
-      {"id": "sprint-4", "status": "pending", "cycles": 0},
-      {"id": "sprint-5", "status": "pending", "cycles": 0},
-      {"id": "sprint-6", "status": "pending", "cycles": 0},
-      {"id": "sprint-7", "status": "pending", "cycles": 0},
-      {"id": "sprint-8", "status": "pending", "cycles": 0},
-      {"id": "sprint-9", "status": "pending", "cycles": 0},
-      {"id": "sprint-10", "status": "pending", "cycles": 0}
+      {"id": "sprint-16", "status": "completed", "cycles": 1, "files_changed": 10},
+      {"id": "sprint-17", "status": "completed", "cycles": 1, "files_changed": 8}
     ]
   },
   "options": {
-    "from": 1,
-    "to": 10,
+    "from": 16,
+    "to": 17,
     "max_cycles": 20,
     "timeout_hours": 8
   },
   "metrics": {
     "total_cycles": 2,
-    "total_files_changed": 30,
+    "total_files_changed": 18,
     "total_findings_fixed": 0
   }
 }

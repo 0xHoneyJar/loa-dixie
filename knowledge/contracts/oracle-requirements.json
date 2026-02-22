@@ -1,0 +1,36 @@
+{
+  "consumer": "oracle-runtime",
+  "version": 1,
+  "description": "Consumer-driven contract: what the Oracle runtime requires from the knowledge corpus. Producers (corpus authors) must satisfy these requirements. Validation: app/tests/unit/knowledge-contracts.test.ts",
+  "requirements": {
+    "minimum_sources": {
+      "total": 15,
+      "required_tags": {
+        "core": 3,
+        "technical": 5,
+        "philosophical": 2
+      }
+    },
+    "code_reality_coverage": {
+      "required_repos": ["loa-finn", "loa-freeside", "loa-hounfour", "loa-dixie"],
+      "source_id_map": {
+        "loa-finn": "code-reality-finn",
+        "loa-freeside": "code-reality-freeside",
+        "loa-hounfour": "code-reality-hounfour",
+        "loa-dixie": "dixie-architecture"
+      }
+    },
+    "glossary_requirements": {
+      "minimum_terms": 20,
+      "required_terms": ["hounfour", "freeside", "oracle", "beauvoir", "x402", "conviction", "dixie"]
+    },
+    "freshness": {
+      "max_stale_sources": 2,
+      "max_age_days_override": null
+    },
+    "token_budget": {
+      "minimum_budget": 30000,
+      "maximum_budget": 100000
+    }
+  }
+}

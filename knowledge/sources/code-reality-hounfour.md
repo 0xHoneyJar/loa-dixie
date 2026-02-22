@@ -5,12 +5,22 @@ provenance: cycle-025-sprint-61-task-2.4
 tags: ["technical"]
 ---
 
+<!-- upstream-source: 0xHoneyJar/loa-hounfour:main | generated: false | last-synced: 2026-02-22 -->
+
 # Code Reality: loa-hounfour
 
 Technical knowledge source documenting the `@0xhoneyjar/loa-hounfour` protocol
 package as observed from loa-finn's imports and usage. This is a protocol
 library -- it defines interfaces, canonical vocabularies, and validation
-functions. Implementations live in loa-finn and arrakis.
+functions. Implementations live in loa-finn and loa-freeside.
+
+**Current version**: v4.6.0 -- Level 4 "Civilizational" protocol maturity:
+
+- **State machines**: escrow (6 transitions), stake (4), credit (1)
+- **Temporal properties**: 6 safety + 3 liveness properties with property-based tests
+- **Cross-language constraints**: 11 JSON files, 31 rules
+- **Test coverage**: 1097 tests across 53 test files
+- **Permission Scape**: 10-dimensional (Provider x Model x Pool x Tier x Tool x Budget x Settlement x Permission x Geometry x GovernanceLevel)
 
 **Dependency reference**: `loa-finn/package.json` pins the package at a
 specific commit SHA:
@@ -97,10 +107,10 @@ re-exports these for local use.
 
 `loa-finn/src/hounfour/protocol-handshake.ts` uses `validateCompatibility()`
 from loa-hounfour to verify semver-based protocol compatibility between
-loa-finn and arrakis at boot time.
+loa-finn and loa-freeside at boot time.
 
 The handshake flow:
-1. Fetch `{arrakisBaseUrl}/api/internal/health`
+1. Fetch `{freesideBaseUrl}/api/internal/health`
 2. Extract `contract_version` from health response
 3. Call `validateCompatibility(remoteVersion)` from loa-hounfour
 4. Production: incompatible = fatal error (fail-fast)
@@ -126,7 +136,7 @@ const JTI_POLICY = {
 const AUDIENCE_MAP = {
   invoke: "loa-finn",
   admin:  "loa-finn-admin",
-  s2s:    "arrakis",
+  s2s:    "loa-freeside",
 }
 ```
 
@@ -134,13 +144,13 @@ const AUDIENCE_MAP = {
 
 ## 6. JWT Claims Contract
 
-The JWT claims structure is the primary protocol contract between arrakis
+The JWT claims structure is the primary protocol contract between loa-freeside
 (issuer) and loa-finn (consumer):
 
 ```typescript
 interface JWTClaims {
-  iss: string              // Issuer (arrakis)
-  aud: string              // Audience (loa-finn | loa-finn-admin | arrakis)
+  iss: string              // Issuer (loa-freeside)
+  aud: string              // Audience (loa-finn | loa-finn-admin | loa-freeside)
   sub: string              // Subject (tenant or service identity)
   tenant_id: string        // Tenant identifier
   tier: Tier               // "free" | "pro" | "enterprise"
@@ -163,9 +173,9 @@ interface JWTClaims {
 ## 7. Billing Protocol Types
 
 The following types define the billing wire contract between loa-finn and
-arrakis. They are observed in `loa-finn/src/hounfour/billing-finalize-client.ts`:
+loa-freeside. They are observed in `loa-finn/src/hounfour/billing-finalize-client.ts`:
 
-### 7.1 FinalizeRequest (loa-finn to arrakis)
+### 7.1 FinalizeRequest (loa-finn to loa-freeside)
 
 ```typescript
 interface FinalizeRequest {
@@ -176,7 +186,7 @@ interface FinalizeRequest {
 }
 ```
 
-Wire mapping at HTTP boundary (camelCase for arrakis consumption):
+Wire mapping at HTTP boundary (camelCase for loa-freeside consumption):
 - `reservation_id` maps to `reservationId`
 - `tenant_id` maps to `accountId`
 - `actual_cost_micro` maps to `actualCostMicro`
@@ -255,7 +265,7 @@ interface PersonalityRouting {
 
 ## 10. Package Role Summary
 
-loa-hounfour is the shared protocol package between loa-finn and arrakis.
+loa-hounfour is the shared protocol package between loa-finn and loa-freeside.
 It provides:
 
 - **Canonical vocabulary**: Pool IDs, tier names, task types

@@ -1,0 +1,267 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { KnowledgePriorityStore } from '../../src/services/knowledge-priority-store.js';
+import type { PriorityVote } from '../../src/services/knowledge-priority-store.js';
+
+describe('KnowledgePriorityStore (Task 21.1)', () => {
+  let store: KnowledgePriorityStore;
+
+  beforeEach(() => {
+    store = new KnowledgePriorityStore();
+  });
+
+  it('records a single vote and retrieves it', () => {
+    const vote: PriorityVote = {
+      wallet: '0xAlice',
+      sourceId: 'code-reality-finn',
+      priority: 5,
+      tier: 'architect',
+      timestamp: new Date().toISOString(),
+    };
+    store.vote(vote);
+
+    const votes = store.getVotes('code-reality-finn');
+    expect(votes).toHaveLength(1);
+    expect(votes[0]!.priority).toBe(5);
+    expect(votes[0]!.wallet).toBe('0xAlice');
+  });
+
+  it('tier weighting: sovereign vote counts 25x participant', () => {
+    store.vote({
+      wallet: '0xParticipant',
+      sourceId: 'glossary',
+      priority: 5,
+      tier: 'participant',
+      timestamp: new Date().toISOString(),
+    });
+    store.vote({
+      wallet: '0xSovereign',
+      sourceId: 'glossary',
+      priority: 5,
+      tier: 'sovereign',
+      timestamp: new Date().toISOString(),
+    });
+
+    const priorities = store.getAggregatedPriorities();
+    const glossary = priorities.find((p) => p.sourceId === 'glossary');
+    expect(glossary).toBeDefined();
+    // participant: 5 * 1 = 5, sovereign: 5 * 25 = 125, total = 130
+    expect(glossary!.score).toBe(130);
+    expect(glossary!.voteCount).toBe(2);
+  });
+
+  it('duplicate vote from same wallet+source overwrites (latest wins)', () => {
+    store.vote({
+      wallet: '0xAlice',
+      sourceId: 'glossary',
+      priority: 2,
+      tier: 'builder',
+      timestamp: '2026-02-22T10:00:00Z',
+    });
+    store.vote({
+      wallet: '0xAlice',
+      sourceId: 'glossary',
+      priority: 5,
+      tier: 'builder',
+      timestamp: '2026-02-22T11:00:00Z',
+    });
+
+    const votes = store.getVotes('glossary');
+    expect(votes).toHaveLength(1);
+    expect(votes[0]!.priority).toBe(5);
+
+    const priorities = store.getAggregatedPriorities();
+    const glossary = priorities.find((p) => p.sourceId === 'glossary');
+    // builder: 5 * 3 = 15
+    expect(glossary!.score).toBe(15);
+    expect(glossary!.voteCount).toBe(1);
+  });
+
+  it('observer votes are excluded from aggregation (Ostrom Principle 3)', () => {
+    store.vote({
+      wallet: '0xObserver',
+      sourceId: 'glossary',
+      priority: 5,
+      tier: 'observer',
+      timestamp: new Date().toISOString(),
+    });
+
+    const priorities = store.getAggregatedPriorities();
+    expect(priorities).toHaveLength(0);
+    expect(store.getVoterCount()).toBe(0);
+  });
+
+  it('aggregation sorts by score descending', () => {
+    store.vote({
+      wallet: '0xAlice',
+      sourceId: 'low-priority',
+      priority: 1,
+      tier: 'participant',
+      timestamp: new Date().toISOString(),
+    });
+    store.vote({
+      wallet: '0xAlice',
+      sourceId: 'high-priority',
+      priority: 5,
+      tier: 'participant',
+      timestamp: new Date().toISOString(),
+    });
+
+    const priorities = store.getAggregatedPriorities();
+    expect(priorities[0]!.sourceId).toBe('high-priority');
+    expect(priorities[1]!.sourceId).toBe('low-priority');
+  });
+
+  it('getVoterCount counts unique wallets', () => {
+    store.vote({
+      wallet: '0xAlice',
+      sourceId: 'glossary',
+      priority: 3,
+      tier: 'participant',
+      timestamp: new Date().toISOString(),
+    });
+    store.vote({
+      wallet: '0xAlice',
+      sourceId: 'code-reality-finn',
+      priority: 4,
+      tier: 'participant',
+      timestamp: new Date().toISOString(),
+    });
+    store.vote({
+      wallet: '0xBob',
+      sourceId: 'glossary',
+      priority: 5,
+      tier: 'builder',
+      timestamp: new Date().toISOString(),
+    });
+
+    // 2 unique wallets: Alice and Bob
+    expect(store.getVoterCount()).toBe(2);
+  });
+});
+
+describe('KnowledgePriorityStore persistence (Task 22.4)', () => {
+  let tmpDir: string;
+  let persistPath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kps-test-'));
+    persistPath = path.join(tmpDir, 'priorities.json');
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('persists votes to disk via destroy() with versioned format', () => {
+    const store = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
+    store.vote({
+      wallet: '0xAlice',
+      sourceId: 'glossary',
+      priority: 5,
+      tier: 'architect',
+      timestamp: '2026-02-22T12:00:00Z',
+    });
+
+    // Calling destroy() flushes pending writes
+    store.destroy();
+
+    expect(fs.existsSync(persistPath)).toBe(true);
+    const raw = fs.readFileSync(persistPath, 'utf-8');
+    const data = JSON.parse(raw);
+    // Task 23.2: Versioned format
+    expect(data.version).toBe(1);
+    expect(data.entries).toHaveLength(1);
+    expect(data.entries[0][1].wallet).toBe('0xAlice');
+  });
+
+  it('loads votes from disk on construction', () => {
+    // Write votes, then destroy
+    const store1 = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
+    store1.vote({
+      wallet: '0xBob',
+      sourceId: 'code-reality-finn',
+      priority: 3,
+      tier: 'builder',
+      timestamp: '2026-02-22T13:00:00Z',
+    });
+    store1.destroy();
+
+    // New store loads from disk
+    const store2 = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
+    const votes = store2.getVotes('code-reality-finn');
+    expect(votes).toHaveLength(1);
+    expect(votes[0]!.wallet).toBe('0xBob');
+    expect(votes[0]!.priority).toBe(3);
+    store2.destroy();
+  });
+
+  it('loads legacy raw-array format and auto-migrates (Task 23.2)', () => {
+    // Write legacy v0 format: raw array of [key, PriorityVote] tuples
+    const legacyData = [
+      ['0xAlice:glossary', {
+        wallet: '0xAlice',
+        sourceId: 'glossary',
+        priority: 4,
+        tier: 'builder',
+        timestamp: '2026-02-22T14:00:00Z',
+      }],
+    ];
+    fs.writeFileSync(persistPath, JSON.stringify(legacyData, null, 2), 'utf-8');
+
+    // New store should load the legacy format
+    const store = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
+    const votes = store.getVotes('glossary');
+    expect(votes).toHaveLength(1);
+    expect(votes[0]!.wallet).toBe('0xAlice');
+    expect(votes[0]!.priority).toBe(4);
+
+    // Destroy re-writes in versioned format
+    store.destroy();
+    const raw = fs.readFileSync(persistPath, 'utf-8');
+    const data = JSON.parse(raw);
+    expect(data.version).toBe(1);
+    expect(data.entries).toHaveLength(1);
+  });
+
+  it('versioned format round-trips correctly (Task 23.2)', () => {
+    // Write v1 format directly
+    const v1Data = {
+      version: 1,
+      entries: [
+        ['0xBob:rfcs', {
+          wallet: '0xBob',
+          sourceId: 'rfcs',
+          priority: 5,
+          tier: 'sovereign',
+          timestamp: '2026-02-22T15:00:00Z',
+        }],
+      ],
+    };
+    fs.writeFileSync(persistPath, JSON.stringify(v1Data, null, 2), 'utf-8');
+
+    const store = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
+    const votes = store.getVotes('rfcs');
+    expect(votes).toHaveLength(1);
+    expect(votes[0]!.wallet).toBe('0xBob');
+    expect(votes[0]!.tier).toBe('sovereign');
+    store.destroy();
+  });
+
+  it('works without persistence (in-memory only)', () => {
+    const store = new KnowledgePriorityStore();
+    store.vote({
+      wallet: '0xAlice',
+      sourceId: 'glossary',
+      priority: 4,
+      tier: 'participant',
+      timestamp: new Date().toISOString(),
+    });
+
+    expect(store.getVoterCount()).toBe(1);
+    store.destroy(); // No crash, no file written
+    expect(fs.existsSync(persistPath)).toBe(false);
+  });
+});

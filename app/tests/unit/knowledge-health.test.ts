@@ -12,41 +12,45 @@ interface SourceEntry {
   id: string;
   type: string;
   path: string;
+  source_file: string;
   format: string;
   tags: string[];
   priority: number;
   maxTokens: number;
   required?: boolean;
   max_age_days: number;
+  last_updated: string;
 }
 
 interface SourcesConfig {
   version: number;
+  corpus_version: number;
   default_budget_tokens: number;
   glossary_terms: Record<string, string[]>;
   sources: SourceEntry[];
 }
 
-describe('knowledge corpus health', () => {
-  let config: SourcesConfig;
+function loadConfig(): SourcesConfig {
+  const raw = fs.readFileSync(SOURCES_JSON_PATH, 'utf-8');
+  return JSON.parse(raw);
+}
 
-  it('sources.json exists and is valid JSON', () => {
+describe('knowledge corpus health', () => {
+  it('sources.json exists and is valid JSON with schema v2', () => {
     expect(fs.existsSync(SOURCES_JSON_PATH)).toBe(true);
-    const raw = fs.readFileSync(SOURCES_JSON_PATH, 'utf-8');
-    config = JSON.parse(raw);
-    expect(config.version).toBe(1);
+    const config = loadConfig();
+    expect(config.version).toBe(2);
+    expect(config.corpus_version).toBeGreaterThanOrEqual(1);
     expect(config.default_budget_tokens).toBeGreaterThan(0);
   });
 
   it('has at least 20 sources', () => {
-    const raw = fs.readFileSync(SOURCES_JSON_PATH, 'utf-8');
-    config = JSON.parse(raw);
+    const config = loadConfig();
     expect(config.sources.length).toBeGreaterThanOrEqual(20);
   });
 
   it('all source files exist on disk', () => {
-    const raw = fs.readFileSync(SOURCES_JSON_PATH, 'utf-8');
-    config = JSON.parse(raw);
+    const config = loadConfig();
 
     for (const source of config.sources) {
       // The path in sources.json uses grimoires/oracle/ but files are in knowledge/sources/
@@ -60,8 +64,7 @@ describe('knowledge corpus health', () => {
   });
 
   it('all source files have valid YAML frontmatter', () => {
-    const raw = fs.readFileSync(SOURCES_JSON_PATH, 'utf-8');
-    config = JSON.parse(raw);
+    const config = loadConfig();
 
     for (const source of config.sources) {
       const filename = path.basename(source.path);
@@ -82,9 +85,8 @@ describe('knowledge corpus health', () => {
     }
   });
 
-  it('each source has required schema fields', () => {
-    const raw = fs.readFileSync(SOURCES_JSON_PATH, 'utf-8');
-    config = JSON.parse(raw);
+  it('each source has required schema fields including v2 additions', () => {
+    const config = loadConfig();
 
     for (const source of config.sources) {
       expect(source.id, 'missing id').toBeTruthy();
@@ -105,20 +107,27 @@ describe('knowledge corpus health', () => {
         source.max_age_days,
         `${source.id}: missing max_age_days`,
       ).toBeGreaterThan(0);
+      // Schema v2 fields
+      expect(
+        source.last_updated,
+        `${source.id}: missing last_updated`,
+      ).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(
+        source.source_file,
+        `${source.id}: missing source_file`,
+      ).toBeTruthy();
     }
   });
 
   it('has at least 3 required sources', () => {
-    const raw = fs.readFileSync(SOURCES_JSON_PATH, 'utf-8');
-    config = JSON.parse(raw);
+    const config = loadConfig();
 
     const required = config.sources.filter((s) => s.required);
     expect(required.length).toBeGreaterThanOrEqual(3);
   });
 
   it('total estimated tokens exceed 5000', () => {
-    const raw = fs.readFileSync(SOURCES_JSON_PATH, 'utf-8');
-    config = JSON.parse(raw);
+    const config = loadConfig();
 
     // Rough estimate: 4 chars per token
     let totalEstimatedTokens = 0;
@@ -133,9 +142,12 @@ describe('knowledge corpus health', () => {
   });
 
   it('glossary_terms has entries', () => {
-    const raw = fs.readFileSync(SOURCES_JSON_PATH, 'utf-8');
-    config = JSON.parse(raw);
+    const config = loadConfig();
     const termCount = Object.keys(config.glossary_terms).length;
     expect(termCount).toBeGreaterThan(10);
   });
 });
+
+// Freshness, terminology, and conservation tests moved to knowledge-contracts.test.ts (Sprint 16.5)
+// This file retains structural/infrastructure tests only.
+// See: knowledge-contracts.test.ts for producer and consumer contract tests.

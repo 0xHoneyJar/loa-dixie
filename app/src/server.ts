@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { requestId } from './middleware/request-id.js';
@@ -35,6 +36,9 @@ import { createTBAAuthMiddleware } from './middleware/tba-auth.js';
 import { createAgentRoutes } from './routes/agent.js';
 import { CompoundLearningEngine } from './services/compound-learning.js';
 import { createLearningRoutes } from './routes/learning.js';
+import { governorRegistry } from './services/governor-registry.js';
+import { corpusMeta } from './services/corpus-meta.js';
+import { KnowledgePriorityStore } from './services/knowledge-priority-store.js';
 import type { TBAVerification } from './types/agent-api.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
@@ -176,6 +180,12 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Phase 2: Compound learning engine (batch processing every 10 interactions)
   const learningEngine = new CompoundLearningEngine();
 
+  // Phase 2: Knowledge priority store (conviction-weighted community governance, Task 21.4)
+  // Task 22.4: Persist votes to disk so they survive restarts
+  const priorityStore = new KnowledgePriorityStore({
+    persistPath: path.join(process.cwd(), 'data', 'knowledge-priorities.json'),
+  });
+
   // Phase 2: TBA verification cache (uses projection cache with tba prefix when Redis available)
   let tbaProjectionCache: ProjectionCache<TBAVerification> | null = null;
   if (redisClient) {
@@ -300,6 +310,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     dbPool,
     redisClient,
     signalEmitter,
+    adminKey: config.adminKey,
   }));
   app.route('/api/auth', createAuthRoutes(allowlistStore, {
     jwtPrivateKey: config.jwtPrivateKey,
@@ -355,6 +366,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     finnClient,
     convictionResolver,
     memoryStore,
+    priorityStore,
   }));
   app.route('/api/learning', createLearningRoutes({
     learningEngine,
@@ -391,6 +403,14 @@ export function createDixieApp(config: DixieConfig): DixieApp {
       }
     },
   }));
+
+  // --- Resource governance registration (Task 20.5) ---
+  // Register all resource governors for unified observability via GET /health/governance.
+  // Additional governors (model pools, memory quotas, etc.) will register here as built.
+  // Idempotent: skip if already registered (e.g., multiple createDixieApp calls in tests).
+  if (!governorRegistry.get(corpusMeta.resourceType)) {
+    governorRegistry.register(corpusMeta);
+  }
 
   // --- SPA fallback (placeholder — web build integrated later) ---
   app.get('/', (c) =>

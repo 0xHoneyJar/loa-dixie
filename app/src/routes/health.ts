@@ -4,6 +4,9 @@ import type { HealthResponse, ServiceHealth } from '../types.js';
 import type { DbPool } from '../db/client.js';
 import type { RedisClient } from '../services/redis-client.js';
 import type { SignalEmitter } from '../services/signal-emitter.js';
+import { getCorpusMeta, resetCorpusMetaCache } from '../services/corpus-meta.js';
+import { governorRegistry } from '../services/governor-registry.js';
+import { safeEqual } from '../utils/crypto.js';
 
 const VERSION = '2.0.0';
 const startedAt = Date.now();
@@ -17,6 +20,8 @@ export interface HealthDependencies {
   dbPool?: DbPool | null;
   redisClient?: RedisClient | null;
   signalEmitter?: SignalEmitter | null;
+  /** Admin key for gated endpoints (e.g., /governance). Task 22.3 */
+  adminKey?: string;
 }
 
 export function createHealthRoutes(deps: HealthDependencies): Hono {
@@ -41,9 +46,12 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
       overallStatus = 'degraded';
     }
 
+    const corpusMeta = getCorpusMeta();
+
     const services: HealthResponse['services'] = {
       dixie: { status: 'healthy' },
       loa_finn: finnHealth,
+      knowledge_corpus: corpusMeta ?? undefined,
     };
 
     // Phase 2 infrastructure services (only included when configured)
@@ -62,6 +70,35 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     };
 
     return c.json(response);
+  });
+
+  /**
+   * GET /governance — unified health of all registered resource governors.
+   * Gated behind admin auth (Task 22.3: prevents leaking internal system topology).
+   * See: Deep Bridgebuilder Meditation §VII.2, Kubernetes operator pattern.
+   */
+  app.get('/governance', (c) => {
+    // Task 22.3: Require admin auth — governance data reveals internal topology
+    // Task 23.1: Uses shared safeEqual utility (no more inline crypto)
+    const adminKey = deps.adminKey;
+    if (adminKey) {
+      const authHeader = c.req.header('authorization');
+      if (!authHeader) {
+        return c.json({ error: 'unauthorized', message: 'Admin key required' }, 401);
+      }
+      const key = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+      if (!safeEqual(key, adminKey)) {
+        return c.json({ error: 'forbidden', message: 'Invalid admin key' }, 403);
+      }
+    }
+
+    const snapshot = governorRegistry.getAll();
+    return c.json({
+      governors: snapshot,
+      totalResources: snapshot.length,
+      degradedResources: snapshot.filter((g) => g.health?.status === 'degraded').length,
+      timestamp: new Date().toISOString(),
+    });
   });
 
   return app;
@@ -141,7 +178,11 @@ function getNatsHealth(emitter: SignalEmitter): ServiceHealth {
   return { status: 'unreachable', error: 'NATS not connected' };
 }
 
+// Re-export getCorpusMeta for backward compatibility (consumers should migrate to corpus-meta service)
+export { getCorpusMeta } from '../services/corpus-meta.js';
+
 /** Reset cache — useful for testing */
 export function resetHealthCache(): void {
   cachedFinnHealth = null;
+  resetCorpusMetaCache();
 }

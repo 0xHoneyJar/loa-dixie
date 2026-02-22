@@ -9,18 +9,18 @@ max_age_days: 60
 
 # Ecosystem Architecture
 
-Architectural overview of the 0xHoneyJar ecosystem spanning four repositories. This document describes the repository map, data flows, key architectural patterns, and component relationships.
+Architectural overview of the 0xHoneyJar ecosystem spanning five repositories. This document describes the repository map, data flows, key architectural patterns, and component relationships.
 
 ---
 
 ## 1. Repository Map
 
-The ecosystem comprises four interconnected repositories, each with a distinct responsibility boundary.
+The ecosystem comprises five interconnected repositories, each with a distinct responsibility boundary.
 
 ### loa (0xHoneyJar/loa)
 **Purpose**: Meta-framework for agent-driven development.
 **Contains**: Skills (30 specialized slash commands), protocols, Sprint Ledger, development methodology, hooks, scripts, guardrails, Bridgebuilder persona, Flatline Protocol orchestration.
-**Role**: Provides the development process and tooling that builds and maintains the other three repositories. Every PRD, SDD, sprint plan, and code review flows through Loa's skill system.
+**Role**: Provides the development process and tooling that builds and maintains the other four repositories. Every PRD, SDD, sprint plan, and code review flows through Loa's skill system.
 **Key artifacts**: `.claude/skills/`, `.claude/protocols/`, `grimoires/loa/ledger.json` (24 cycles, 59 sprints).
 
 ### loa-finn (0xHoneyJar/loa-finn)
@@ -35,10 +35,16 @@ The ecosystem comprises four interconnected repositories, each with a distinct r
 **Role**: The shared type boundary between loa-finn (consumer) and model providers (implementors). Defines the adapter interface that each provider must implement, the pool allocation types, and the billing event schema.
 **Key exports**: Adapter interfaces, PoolConfig types, BillingEvent types, ProviderHealth types.
 
-### arrakis (0xHoneyJar/arrakis)
+### loa-dixie (0xHoneyJar/loa-dixie)
+**Purpose**: Experience orchestration layer (BFF gateway) for the Oracle dNFT agent.
+**Contains**: Hono BFF gateway, 15-position middleware pipeline (constitutional ordering), soul memory service, conviction resolver, autonomous engine with 7-step permission model, compound learning pipeline, agent API routes, NL scheduler, WebSocket proxy with ticket-based auth.
+**Role**: The experience orchestration layer — sits between end users and loa-finn, handling authentication, governance enforcement (5-tier BGT conviction gating), memory injection, economic metadata enrichment, autonomous operation delegation, agent-to-agent communication (ERC-6551 TBA + x402 metering), and compound learning signal aggregation.
+**Key modules**: `app/src/` (middleware, routes, services, websocket), 492 tests across 44 test files.
+
+### loa-freeside (0xHoneyJar/loa-freeside)
 **Purpose**: Billing settlement and token-gating infrastructure.
 **Contains**: ECS deployment on AWS, Terraform infrastructure, billing finalization endpoint, usage tracking, NFT-based access control (planned), DLQ consumer.
-**Role**: Receives billing settlement requests from loa-finn via the Spice Gate protocol. Persists usage records, enforces tenant budgets at the platform level, and provides the infrastructure for token-gated access.
+**Role**: Receives billing settlement requests from loa-finn via the Settlement Protocol. Persists usage records, enforces tenant budgets at the platform level, and provides the infrastructure for token-gated access.
 **Key endpoints**: Billing finalization (S2S JWT + ES256), usage query, health check.
 
 ### Repository Dependency Graph
@@ -48,17 +54,23 @@ loa (framework)
  |
  |-- develops/maintains --> loa-finn
  |-- develops/maintains --> loa-hounfour
- |-- develops/maintains --> arrakis
+ |-- develops/maintains --> loa-freeside
+ |-- develops/maintains --> loa-dixie
  |
 loa-finn (runtime)
  |-- imports types from --> loa-hounfour
- |-- settles billing via --> arrakis (Spice Gate)
+ |-- settles billing via --> loa-freeside (Settlement Protocol)
+ |-- proxied by --> loa-dixie (BFF gateway)
  |
 loa-hounfour (types)
  |-- consumed by --> loa-finn
- |-- consumed by --> arrakis (billing event types)
+ |-- consumed by --> loa-freeside (billing event types)
  |
-arrakis (infrastructure)
+loa-dixie (experience layer)
+ |-- proxies requests to --> loa-finn
+ |-- resolves billing via --> loa-freeside
+ |
+loa-freeside (infrastructure)
  |-- receives settlements from --> loa-finn
 ```
 
@@ -134,7 +146,7 @@ Response to Client
 
 ## 3. Data Flow: Billing Settlement
 
-The flow from cost computation in loa-finn to settlement persistence in Arrakis.
+The flow from cost computation in loa-finn to settlement persistence in Freeside.
 
 ```
 HounfourRouter (post-invoke)
@@ -150,11 +162,11 @@ BillingFinalizeClient (src/hounfour/billing/)
   |
   | 3. Sign S2S JWT with ES256 (private key)
   |
-  | 4. POST to Arrakis billing endpoint
+  | 4. POST to Freeside billing endpoint
   |    Authorization: Bearer <S2S-JWT>
   |
   v
-Arrakis Billing Endpoint
+Freeside Billing Endpoint
   |
   | 5. Verify S2S JWT (ES256 public key)
   | 6. Validate conservation invariant
@@ -187,8 +199,8 @@ Result Metadata
 
 At every state transition in the billing pipeline, the invariant `total_cost = sum(line_items)` must hold. This is verified:
 - At cost computation time (loa-finn)
-- At settlement reception (Arrakis)
-- At DLQ replay (Arrakis consumer)
+- At settlement reception (Freeside)
+- At DLQ replay (Freeside consumer)
 
 BigInt micro-USD arithmetic ensures no floating-point drift across these boundaries.
 
@@ -226,7 +238,7 @@ Per-Request Enrichment
   | 6. Classify prompt into tags
   |    - Keyword matching (technical, architectural, philosophical)
   |    - Glossary-driven term expansion (Hounfour -> technical, etc.)
-  |    - Repo/module name heuristics (arrakis -> code-reality-arrakis)
+  |    - Repo/module name heuristics (loa-freeside -> code-reality-loa-freeside)
   |    - Default fallback: core tag
   |
   | 7. Select and rank sources
@@ -298,7 +310,7 @@ Injection detection for curated content (under `grimoires/oracle/`) operates in 
 
 ### Dead Letter Queue (Graduated Sanctions)
 
-Failed billing settlements follow Ostrom Principle 7 — graduated sanctions rather than immediate rejection. The DLQ persists failed requests with retry metadata and a consumer process retries with exponential backoff. This ensures that transient failures (network issues, Arrakis maintenance) do not result in lost billing data.
+Failed billing settlements follow Ostrom Principle 7 — graduated sanctions rather than immediate rejection. The DLQ persists failed requests with retry metadata and a consumer process retries with exponential backoff. This ensures that transient failures (network issues, Freeside maintenance) do not result in lost billing data.
 
 ### Trust Boundary (Data/Instruction Separation)
 

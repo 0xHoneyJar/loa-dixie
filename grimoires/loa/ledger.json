@@ -249,12 +249,82 @@
           "label": "Pre-Launch Polish (Bridge Iter 2 LOWs + Cross-Repo)",
           "tasks": 9,
           "status": "completed"
+        },
+        {
+          "id": "sprint-14",
+          "global_id": 33,
+          "label": "Knowledge Conservation Infrastructure (Bridge Horizon)",
+          "tasks": 6,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-15",
+          "global_id": 34,
+          "label": "Knowledge Product Surface & Bidirectional Freshness (Bridge Horizon)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-16",
+          "global_id": 35,
+          "label": "Corpus Service Architecture + Oracle Self-Knowledge (Deep Review)",
+          "tasks": 6,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-17",
+          "global_id": 36,
+          "label": "Knowledge Drift Detection + Consumer Contracts (Deep Review)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-18",
+          "global_id": 37,
+          "label": "Bridge Convergence — LOW Findings + Determinism (Bridge Iter 2)",
+          "tasks": 3,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-19",
+          "global_id": 38,
+          "label": "Adaptive Retrieval from Self-Knowledge (Meditation §VII.1)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-20",
+          "global_id": 39,
+          "label": "Resource Governance Generalization — ResourceGovernor<T> (Meditation §VII.2)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-21",
+          "global_id": 40,
+          "label": "Communitarian Knowledge Governance — Conviction Voting (Meditation §VII.3)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-22",
+          "global_id": 41,
+          "label": "Meditation Convergence — Bridge Iteration 1 Findings",
+          "tasks": 4,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-23",
+          "global_id": 42,
+          "label": "Pre-Merge Polish — Shared Crypto Utility + Persistence Versioning",
+          "tasks": 2,
+          "status": "planned"
         }
       ]
     }
   ],
   "active_cycle": "cycle-002",
   "active_bugfix": null,
-  "global_sprint_counter": 32,
+  "global_sprint_counter": 42,
   "bugfix_cycles": []
 }

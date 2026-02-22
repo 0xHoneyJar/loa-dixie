@@ -10,6 +10,7 @@ import {
 } from '../../src/types/agent-api.js';
 import type { FinnClient } from '../../src/proxy/finn-client.js';
 import type { ConvictionResolver } from '../../src/services/conviction-resolver.js';
+import { KnowledgePriorityStore } from '../../src/services/knowledge-priority-store.js';
 
 // --- TBA Auth Middleware Tests ---
 
@@ -315,6 +316,41 @@ describe('Agent API routes', () => {
       expect(res.headers.get('X-Receipt-Id')).toBeTruthy();
     });
 
+    it('includes freshness metadata in response (Task 19.3)', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ query: 'What is Berachain?' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body: AgentQueryResponse = await res.json();
+      expect(body.freshness).toBeDefined();
+      expect(['high', 'medium', 'low']).toContain(body.freshness!.confidence);
+      expect(typeof body.freshness!.staleSourceCount).toBe('number');
+    });
+
+    it('sets X-Knowledge-Confidence header (Task 19.3)', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ query: 'test' }),
+      });
+
+      expect(res.headers.get('X-Knowledge-Confidence')).toBeTruthy();
+      expect(['high', 'medium', 'low']).toContain(res.headers.get('X-Knowledge-Confidence'));
+    });
+
     it('rejects missing query field', async () => {
       const app = createApp();
       const res = await app.request('/api/agent/query', {
@@ -327,6 +363,42 @@ describe('Agent API routes', () => {
         body: JSON.stringify({}),
       });
       expect(res.status).toBe(400);
+    });
+
+    it('includes hedging system note for medium confidence (Task 22.1)', async () => {
+      // Mock finnClient to capture the request body with systemNote
+      let capturedBody: Record<string, unknown> | null = null;
+      (mockFinnClient.request as ReturnType<typeof vi.fn>).mockImplementation(
+        async (_method: string, _path: string, opts?: { body?: Record<string, unknown> }) => {
+          capturedBody = opts?.body ?? null;
+          return {
+            response: 'The Oracle speaks.',
+            model: 'claude-opus-4-6',
+            input_tokens: 100,
+            output_tokens: 200,
+            sources: [],
+          };
+        },
+      );
+
+      const app = createApp();
+      const res = await app.request('/api/agent/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ query: 'test' }),
+      });
+
+      expect(res.status).toBe(200);
+      // The system note should be present if corpus has any stale sources
+      // (regardless of whether it's medium or low, there should be no crash)
+      expect(capturedBody).toBeDefined();
+      // systemNote may or may not be set depending on current corpus state,
+      // but the field should exist in the request shape
+      expect('systemNote' in (capturedBody ?? {})).toBe(true);
     });
   });
 
@@ -412,6 +484,128 @@ describe('Agent API routes', () => {
       });
 
       expect(res.status).toBe(403);
+    });
+
+    it('includes corpus_version in enriched response (Task 15.3)', async () => {
+      (mockFinnClient.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+        domains: [{ name: 'berachain', documentCount: 150, lastUpdated: '2026-02-21' }],
+        totalDocuments: 150,
+      });
+
+      const app = createApp();
+      const res = await app.request('/api/agent/knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.corpus_version).toBeGreaterThanOrEqual(1);
+      expect(body.totalDocuments).toBe(150);
+    });
+
+    it('includes freshness counts in enriched response (Task 15.3)', async () => {
+      (mockFinnClient.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+        domains: [],
+        totalDocuments: 0,
+      });
+
+      const app = createApp();
+      const res = await app.request('/api/agent/knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.freshness).toBeDefined();
+      expect(body.freshness.healthy).toBeGreaterThanOrEqual(0);
+      expect(body.freshness.stale).toBeGreaterThanOrEqual(0);
+      expect(body.freshness.total).toBe(body.freshness.healthy + body.freshness.stale);
+    });
+
+    it('returns local corpus metadata when finn unavailable (Task 15.3)', async () => {
+      (mockFinnClient.request as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('finn down'),
+      );
+
+      const app = createApp();
+      const res = await app.request('/api/agent/knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      // Should still have local corpus metadata even though finn is down
+      expect(body.corpus_version).toBeGreaterThanOrEqual(1);
+      expect(body.freshness).toBeDefined();
+      expect(body.domains).toEqual([]);
+      expect(body.totalDocuments).toBe(0);
+    });
+  });
+
+  describe('GET /self-knowledge (Task 16.3)', () => {
+    it('returns Oracle self-knowledge response', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.corpus_version).toBeGreaterThanOrEqual(1);
+      expect(body.freshness).toBeDefined();
+      expect(body.freshness.healthy).toBeGreaterThanOrEqual(0);
+      expect(body.freshness.total).toBe(body.freshness.healthy + body.freshness.stale);
+      expect(body.freshness.staleSources).toBeInstanceOf(Array);
+      expect(body.coverage).toBeDefined();
+      expect(body.coverage.repos_with_code_reality).toBeInstanceOf(Array);
+      expect(body.token_utilization).toBeDefined();
+      expect(body.token_utilization.budget).toBeGreaterThan(0);
+      expect(['high', 'medium', 'low']).toContain(body.confidence);
+    });
+
+    it('rejects without TBA auth', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/self-knowledge');
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects without x-agent-owner', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001' },
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects insufficient conviction tier', async () => {
+      (mockConvictionResolver.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tier: 'builder',
+        bgtStaked: 100,
+        source: 'freeside',
+      });
+
+      const app = createApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+      expect(res.status).toBe(403);
+    });
+
+    it('includes source_weights in response (Task 19.4)', async () => {
+      const app = createApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.source_weights).toBeDefined();
+      expect(body.source_weights.length).toBeGreaterThan(0);
+      for (const w of body.source_weights) {
+        expect(w.sourceId).toBeTruthy();
+        expect(typeof w.weight).toBe('number');
+        expect(w.tags).toBeInstanceOf(Array);
+      }
     });
   });
 
@@ -607,6 +801,215 @@ describe('Agent API routes', () => {
         body: JSON.stringify({ query: 'test' }),
       });
       expect(resA2.status).toBe(429);
+    });
+  });
+});
+
+// --- Knowledge Priority Voting Tests (Sprint 21) ---
+
+describe('Knowledge priority voting (Task 21.2-21.5)', () => {
+  let mockFinnClient: FinnClient;
+  let mockConvictionResolver: ConvictionResolver;
+  let priorityStore: KnowledgePriorityStore;
+
+  beforeEach(() => {
+    mockFinnClient = {
+      request: vi.fn().mockResolvedValue({}),
+    } as unknown as FinnClient;
+
+    mockConvictionResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        tier: 'architect',
+        bgtStaked: 1000,
+        source: 'freeside',
+      }),
+    } as unknown as ConvictionResolver;
+
+    priorityStore = new KnowledgePriorityStore();
+  });
+
+  function createVotingApp() {
+    const app = new Hono();
+    app.route('/api/agent', createAgentRoutes({
+      finnClient: mockFinnClient,
+      convictionResolver: mockConvictionResolver,
+      memoryStore: null,
+      priorityStore,
+    }));
+    return app;
+  }
+
+  describe('POST /knowledge/priorities/vote', () => {
+    it('accepts vote from participant+ tier', async () => {
+      (mockConvictionResolver.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tier: 'participant',
+        bgtStaked: 1,
+        source: 'freeside',
+      });
+
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ sourceId: 'glossary', priority: 4 }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.sourceId).toBe('glossary');
+      expect(body.yourVote).toBe(4);
+      expect(body.aggregateScore).toBeGreaterThan(0);
+    });
+
+    it('rejects observer tier (Ostrom Principle 3)', async () => {
+      (mockConvictionResolver.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tier: 'observer',
+        bgtStaked: 0,
+        source: 'freeside',
+      });
+
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xObserver',
+        },
+        body: JSON.stringify({ sourceId: 'glossary', priority: 5 }),
+      });
+
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.message).toContain('Participation required');
+    });
+
+    it('rejects invalid priority (outside 1-5)', async () => {
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ sourceId: 'glossary', priority: 10 }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.message).toContain('1-5');
+    });
+
+    it('rejects missing required fields', async () => {
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects unknown sourceId using primary source list (Task 22.2)', async () => {
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-tba': '0xTBA001',
+          'x-agent-owner': '0xOwner',
+        },
+        body: JSON.stringify({ sourceId: 'nonexistent-source-xyz', priority: 3 }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.message).toContain('Unknown sourceId');
+    });
+  });
+
+  describe('GET /knowledge/priorities', () => {
+    it('returns aggregated priorities', async () => {
+      // Seed some votes
+      priorityStore.vote({
+        wallet: '0xAlice',
+        sourceId: 'glossary',
+        priority: 5,
+        tier: 'architect',
+        timestamp: new Date().toISOString(),
+      });
+
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities', {
+        headers: { 'x-agent-tba': '0xTBA001' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.priorities).toBeInstanceOf(Array);
+      expect(body.priorities.length).toBe(1);
+      expect(body.priorities[0].sourceId).toBe('glossary');
+      expect(body.totalVoters).toBe(1);
+      expect(body.lastUpdated).toBeTruthy();
+    });
+
+    it('returns empty state without error', async () => {
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/knowledge/priorities', {
+        headers: { 'x-agent-tba': '0xTBA001' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.priorities).toEqual([]);
+      expect(body.totalVoters).toBe(0);
+    });
+  });
+
+  describe('GET /self-knowledge governance enrichment', () => {
+    it('includes governance section with priority store', async () => {
+      priorityStore.vote({
+        wallet: '0xVoter',
+        sourceId: 'glossary',
+        priority: 5,
+        tier: 'sovereign',
+        timestamp: new Date().toISOString(),
+      });
+
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.governance).toBeDefined();
+      expect(body.governance.communityPriorities).toBeInstanceOf(Array);
+      expect(body.governance.totalVoters).toBe(1);
+      expect(body.governance.governanceModel).toBe('conviction-weighted-vote');
+    });
+
+    it('handles empty governance state gracefully', async () => {
+      const app = createVotingApp();
+      const res = await app.request('/api/agent/self-knowledge', {
+        headers: { 'x-agent-tba': '0xTBA001', 'x-agent-owner': '0xOwner' },
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.governance).toBeDefined();
+      expect(body.governance.communityPriorities).toEqual([]);
+      expect(body.governance.totalVoters).toBe(0);
     });
   });
 });

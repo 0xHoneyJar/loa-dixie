@@ -47,6 +47,12 @@ export interface AgentQueryResponse {
   readonly receipt?: X402Receipt;
   /** Session ID for multi-turn */
   readonly sessionId?: string;
+  /** Knowledge freshness metadata (Task 19.3: Adaptive Retrieval) */
+  readonly freshness?: {
+    readonly confidence: 'high' | 'medium' | 'low';
+    readonly disclaimer: string | null;
+    readonly staleSourceCount: number;
+  };
 }
 
 /** Agent capabilities discovery (GET /api/agent/capabilities) */

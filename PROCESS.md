@@ -118,7 +118,7 @@ Trust level gates pool access in Hounfour: L1 repos get `cheap` and `fast_code` 
 
 #### Permission Scape
 
-The Permission Scape is the cross-repo flow where BUTTERFREEZONE declares needs, Hounfour provides trust-verified pools, and arrakis maps pool usage to costs:
+The Permission Scape is the cross-repo flow where BUTTERFREEZONE declares needs, Hounfour provides trust-verified pools, and loa-freeside maps pool usage to costs:
 
 ```
 BUTTERFREEZONE.md (any Loa repo)
@@ -133,7 +133,7 @@ BUTTERFREEZONE.md (any Loa repo)
   │     Maps L2 → hounfour_trust: "verified"
   │     Applies trust-appropriate safety constraints
   │
-  └─→ arrakis (billing)
+  └─→ loa-freeside (billing)
         Reads capabilities → sums billing_weight per capability
         Maps to cost tiers: 0 (free), 1 (metered), 3 (premium)
 ```

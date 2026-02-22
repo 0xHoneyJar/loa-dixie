@@ -4,7 +4,7 @@
 
 > *"A construct is a ROM personality — a recorded consciousness that can be consulted for expertise. The Dixie Flatline remembered everything."* — William Gibson, Neuromancer
 
-loa-dixie is the educational and knowledge interface for the HoneyJar ecosystem. Named after McCoy Pauley's ROM construct personality in Neuromancer, it carries the institutional memory of everything built across four interconnected repositories — and makes that knowledge queryable by anyone, at any level of abstraction.
+loa-dixie is the educational and knowledge interface for the HoneyJar ecosystem. Named after McCoy Pauley's ROM construct personality in Neuromancer, it carries the institutional memory of everything built across five interconnected repositories — and makes that knowledge queryable by anyone, at any level of abstraction.
 
 ## What This Is
 
@@ -66,17 +66,18 @@ Spirits (loa) ride horses (cheval) in the temple (hounfour). Models are spirits,
 **Neuromancer (finn, flatline, dixie, simstim, ICE)**
 The Finn knows the street. The Dixie Flatline is a ROM construct — a recorded consciousness that can be consulted. Simstim lets you experience another's sensorium. ICE protects boundaries.
 
-**Dune (loa-freeside, spice gate, mentat)**
-loa-freeside is where the spice flows. The billing system controls the flow of value — the spice must flow, but through metered gates.
+**Neuromancer (freeside, ICE, wintermute)**
+Freeside is the orbital habitat with its own economy. The billing and settlement layer controls the flow of value.
 
 loa-dixie is the Dixie Flatline of the ecosystem: institutional memory in queryable form.
 
 ## Status
 
-**Phase 0: Foundation** (current)
-- Knowledge corpus extracted from loa-finn (10 curated sources)
-- Oracle persona defined
-- RFC and architecture documented
+**Phase 2: Experience Orchestrator** (complete)
+- 13 sprints, 492 tests across 44 test files
+- Soul memory, conviction-gated access, autonomous operation, agent API, compound learning
+- Bridge-converged at 1.0 (3 iterations, 19/19 findings addressed)
+- See [PR #3](https://github.com/0xHoneyJar/loa-dixie/pull/3) for full Phase 2 scope
 
 See [docs/rfc.md](docs/rfc.md) for the full product vision and phased implementation plan.
 
@@ -89,15 +90,6 @@ See [docs/rfc.md](docs/rfc.md) for the full product vision and phased implementa
 | [loa-hounfour](https://github.com/0xHoneyJar/loa-hounfour) | Protocol types | PR #1 (Types), PR #2 (Agent Economy) |
 | [loa](https://github.com/0xHoneyJar/loa) | Framework & ceremonies | Issue #247 (Meeting Geometries) |
 
-## Maintainer
-
-[@janitooor](https://github.com/janitooor)
-
 ## License
 
-[AGPL-3.0](LICENSE.md) — Use, modify, distribute freely. Network service deployments must release source code.
-
-Commercial licenses are available for organizations that wish to use loa-dixie without AGPL obligations.
-
-
-Ridden with [Loa](https://github.com/0xHoneyJar/loa)
+See [LICENSE](LICENSE) for details.

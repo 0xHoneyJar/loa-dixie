@@ -28,7 +28,7 @@ On the surface, this looks like an accounting rule. The Bridgebuilder's observat
 
 This parallels the double-entry bookkeeping principle that has governed financial systems since the 13th century. Luca Pacioli's insight was not just about arithmetic — it was about establishing trust between parties who cannot directly verify each other's ledgers. The conservation invariant serves the same purpose: it establishes trust between tenants and the infrastructure they depend on.
 
-In the context of the web4 vision — where multiple currencies and economic models coexist — conservation invariants become the foundational guarantee that makes programmable economics possible. Without the guarantee that every cost is tracked, the entire billing settlement chain (from loa-finn metering through arrakis settlement) becomes unreliable.
+In the context of the web4 vision — where multiple currencies and economic models coexist — conservation invariants become the foundational guarantee that makes programmable economics possible. Without the guarantee that every cost is tracked, the entire billing settlement chain (from loa-finn metering through loa-freeside settlement) becomes unreliable.
 
 ### Architectural Lesson
 

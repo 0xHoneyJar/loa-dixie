@@ -70,7 +70,7 @@ Hounfour is the backbone of loa-finn. Every agent invocation flows through the H
 | Phase 1: Flatline + Budget | 6 | Multi-model adversarial review, budget enforcement |
 | Phase 2: Portability + Health | 6 | Provider abstraction, health probing |
 | Phase 3: Server Integration | 7 | Sidecar, streaming, Redis state, GPU deployment |
-| Phase 4: Arrakis Distribution | 8 | ECS gateway, token gating, billing settlement |
+| Phase 4: Freeside Distribution | 8 | ECS gateway, token gating, billing settlement |
 | Phase 5: Integration | 18 | Protocol extraction, NativeRuntime, ensemble, finnNFT routing |
 | Pool Claim Enforcement | 20 | Confused deputy prevention, composed auth middleware |
 
