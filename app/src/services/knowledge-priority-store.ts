@@ -13,6 +13,10 @@ import type { ConvictionTier } from '../types/conviction.js';
  * Task 22.4 (Sprint 22, Global 41): Added debounced JSON file persistence.
  * Votes survive process restarts when persistPath is configured.
  *
+ * Task 23.2 (Sprint 23, Global 42): Added schema versioning to persistence
+ * format. Writes `{ version: 1, entries: [...] }`, reads both versioned and
+ * legacy raw-array formats for backward compatibility.
+ *
  * Score formula: sum(vote.priority * TIER_WEIGHTS[vote.tier]) per source.
  *
  * Pattern: Conviction-weighted quadratic governance. Higher stake = more weight,
@@ -43,6 +47,12 @@ export interface KnowledgePriorityStoreOptions {
   persistPath?: string;
   /** Debounce interval in ms for writes (default: 5000) */
   persistDebounceMs?: number;
+}
+
+/** Versioned persistence format (Task 23.2) */
+interface PersistedPriorityData {
+  readonly version: 1;
+  readonly entries: Array<[string, PriorityVote]>;
 }
 
 /** Tier weight multipliers — higher conviction = more governance weight */
@@ -130,12 +140,30 @@ export class KnowledgePriorityStore {
     }
   }
 
-  /** Load votes from disk on construction */
+  /**
+   * Load votes from disk on construction.
+   * Handles both versioned format ({ version: 1, entries: [...] }) and
+   * legacy raw-array format (Array<[string, PriorityVote]>).
+   * Task 23.2: Schema versioning for forward-compatible migrations.
+   */
   private loadFromDisk(): void {
     if (!this.persistPath) return;
     try {
       const raw = fs.readFileSync(this.persistPath, 'utf-8');
-      const entries = JSON.parse(raw) as Array<[string, PriorityVote]>;
+      const parsed = JSON.parse(raw) as PersistedPriorityData | Array<[string, PriorityVote]>;
+
+      let entries: Array<[string, PriorityVote]>;
+      if (Array.isArray(parsed)) {
+        // Legacy v0 format: raw array of [key, vote] tuples
+        entries = parsed;
+      } else if (parsed && typeof parsed === 'object' && 'version' in parsed) {
+        // Versioned format (v1+)
+        entries = parsed.entries;
+      } else {
+        // Unrecognized format — start fresh
+        return;
+      }
+
       for (const [key, vote] of entries) {
         this.votes.set(key, vote);
       }
@@ -144,7 +172,11 @@ export class KnowledgePriorityStore {
     }
   }
 
-  /** Write votes to disk (synchronous for simplicity — debounced to limit I/O) */
+  /**
+   * Write votes to disk with schema versioning.
+   * Synchronous for simplicity — debounced to limit I/O.
+   * Task 23.2: Wraps entries in { version: 1, entries: [...] }.
+   */
   private writeToDisk(): void {
     if (!this.persistPath) return;
     try {
@@ -152,8 +184,11 @@ export class KnowledgePriorityStore {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-      const entries = [...this.votes.entries()];
-      fs.writeFileSync(this.persistPath, JSON.stringify(entries, null, 2), 'utf-8');
+      const data: PersistedPriorityData = {
+        version: 1,
+        entries: [...this.votes.entries()],
+      };
+      fs.writeFileSync(this.persistPath, JSON.stringify(data, null, 2), 'utf-8');
     } catch {
       // Persistence failure is non-fatal — votes remain in memory
     }

@@ -155,7 +155,7 @@ describe('KnowledgePriorityStore persistence (Task 22.4)', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('persists votes to disk via destroy()', () => {
+  it('persists votes to disk via destroy() with versioned format', () => {
     const store = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
     store.vote({
       wallet: '0xAlice',
@@ -170,9 +170,11 @@ describe('KnowledgePriorityStore persistence (Task 22.4)', () => {
 
     expect(fs.existsSync(persistPath)).toBe(true);
     const raw = fs.readFileSync(persistPath, 'utf-8');
-    const entries = JSON.parse(raw);
-    expect(entries).toHaveLength(1);
-    expect(entries[0][1].wallet).toBe('0xAlice');
+    const data = JSON.parse(raw);
+    // Task 23.2: Versioned format
+    expect(data.version).toBe(1);
+    expect(data.entries).toHaveLength(1);
+    expect(data.entries[0][1].wallet).toBe('0xAlice');
   });
 
   it('loads votes from disk on construction', () => {
@@ -194,6 +196,58 @@ describe('KnowledgePriorityStore persistence (Task 22.4)', () => {
     expect(votes[0]!.wallet).toBe('0xBob');
     expect(votes[0]!.priority).toBe(3);
     store2.destroy();
+  });
+
+  it('loads legacy raw-array format and auto-migrates (Task 23.2)', () => {
+    // Write legacy v0 format: raw array of [key, PriorityVote] tuples
+    const legacyData = [
+      ['0xAlice:glossary', {
+        wallet: '0xAlice',
+        sourceId: 'glossary',
+        priority: 4,
+        tier: 'builder',
+        timestamp: '2026-02-22T14:00:00Z',
+      }],
+    ];
+    fs.writeFileSync(persistPath, JSON.stringify(legacyData, null, 2), 'utf-8');
+
+    // New store should load the legacy format
+    const store = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
+    const votes = store.getVotes('glossary');
+    expect(votes).toHaveLength(1);
+    expect(votes[0]!.wallet).toBe('0xAlice');
+    expect(votes[0]!.priority).toBe(4);
+
+    // Destroy re-writes in versioned format
+    store.destroy();
+    const raw = fs.readFileSync(persistPath, 'utf-8');
+    const data = JSON.parse(raw);
+    expect(data.version).toBe(1);
+    expect(data.entries).toHaveLength(1);
+  });
+
+  it('versioned format round-trips correctly (Task 23.2)', () => {
+    // Write v1 format directly
+    const v1Data = {
+      version: 1,
+      entries: [
+        ['0xBob:rfcs', {
+          wallet: '0xBob',
+          sourceId: 'rfcs',
+          priority: 5,
+          tier: 'sovereign',
+          timestamp: '2026-02-22T15:00:00Z',
+        }],
+      ],
+    };
+    fs.writeFileSync(persistPath, JSON.stringify(v1Data, null, 2), 'utf-8');
+
+    const store = new KnowledgePriorityStore({ persistPath, persistDebounceMs: 60000 });
+    const votes = store.getVotes('rfcs');
+    expect(votes).toHaveLength(1);
+    expect(votes[0]!.wallet).toBe('0xBob');
+    expect(votes[0]!.tier).toBe('sovereign');
+    store.destroy();
   });
 
   it('works without persistence (in-memory only)', () => {

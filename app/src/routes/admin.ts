@@ -1,21 +1,7 @@
 import { Hono } from 'hono';
-import { timingSafeEqual } from 'node:crypto';
 import { getAddress } from 'viem';
 import type { AllowlistStore } from '../middleware/allowlist.js';
-
-/**
- * Constant-time string comparison to prevent timing attacks on admin key.
- * Both inputs are padded to equal length before comparison so that the
- * length check itself does not leak timing information about the key.
- */
-function safeEqual(a: string, b: string): boolean {
-  const maxLen = Math.max(a.length, b.length);
-  const bufA = Buffer.alloc(maxLen);
-  const bufB = Buffer.alloc(maxLen);
-  Buffer.from(a).copy(bufA);
-  Buffer.from(b).copy(bufB);
-  return timingSafeEqual(bufA, bufB) && a.length === b.length;
-}
+import { safeEqual } from '../utils/crypto.js';
 
 /**
  * Admin routes for allowlist management. Gated by admin API key.

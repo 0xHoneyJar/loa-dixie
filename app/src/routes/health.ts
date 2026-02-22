@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { timingSafeEqual } from 'node:crypto';
 import type { FinnClient } from '../proxy/finn-client.js';
 import type { HealthResponse, ServiceHealth } from '../types.js';
 import type { DbPool } from '../db/client.js';
@@ -7,6 +6,7 @@ import type { RedisClient } from '../services/redis-client.js';
 import type { SignalEmitter } from '../services/signal-emitter.js';
 import { getCorpusMeta, resetCorpusMetaCache } from '../services/corpus-meta.js';
 import { governorRegistry } from '../services/governor-registry.js';
+import { safeEqual } from '../utils/crypto.js';
 
 const VERSION = '2.0.0';
 const startedAt = Date.now();
@@ -79,6 +79,7 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
    */
   app.get('/governance', (c) => {
     // Task 22.3: Require admin auth — governance data reveals internal topology
+    // Task 23.1: Uses shared safeEqual utility (no more inline crypto)
     const adminKey = deps.adminKey;
     if (adminKey) {
       const authHeader = c.req.header('authorization');
@@ -86,12 +87,7 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
         return c.json({ error: 'unauthorized', message: 'Admin key required' }, 401);
       }
       const key = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
-      const maxLen = Math.max(key.length, adminKey.length);
-      const bufA = Buffer.alloc(maxLen);
-      const bufB = Buffer.alloc(maxLen);
-      Buffer.from(key).copy(bufA);
-      Buffer.from(adminKey).copy(bufB);
-      if (!timingSafeEqual(bufA, bufB) || key.length !== adminKey.length) {
+      if (!safeEqual(key, adminKey)) {
         return c.json({ error: 'forbidden', message: 'Invalid admin key' }, 403);
       }
     }

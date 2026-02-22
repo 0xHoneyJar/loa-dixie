@@ -311,13 +311,20 @@
           "global_id": 41,
           "label": "Meditation Convergence — Bridge Iteration 1 Findings",
           "tasks": 4,
-          "status": "pending"
+          "status": "completed"
+        },
+        {
+          "id": "sprint-23",
+          "global_id": 42,
+          "label": "Pre-Merge Polish — Shared Crypto Utility + Persistence Versioning",
+          "tasks": 2,
+          "status": "planned"
         }
       ]
     }
   ],
   "active_cycle": "cycle-002",
   "active_bugfix": null,
-  "global_sprint_counter": 41,
+  "global_sprint_counter": 42,
   "bugfix_cycles": []
 }

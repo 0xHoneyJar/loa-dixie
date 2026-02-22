@@ -1150,9 +1150,94 @@ export class KnowledgePriorityStore {
 
 ## Verification (Sprint 22)
 
-- [ ] All ~585 tests passing (~575 existing + ~10 new)
-- [ ] Medium confidence triggers softer hedging
-- [ ] sourceId validation uses primary source list
-- [ ] /governance endpoint requires admin auth
-- [ ] Priority votes survive process restart (when persistence configured)
+- [x] All ~586 tests passing (~576 existing + ~10 new)
+- [x] Medium confidence triggers softer hedging
+- [x] sourceId validation uses primary source list
+- [x] /governance endpoint requires admin auth
+- [x] Priority votes survive process restart (when persistence configured)
+- [x] All existing tests unbroken
+
+---
+
+## Sprint 23: Pre-Merge Polish — Shared Crypto Utility + Persistence Versioning
+
+**Global ID**: 42
+**Scope**: SMALL (2 tasks)
+**Focus**: Address 2 INFO findings from Bridgebuilder meditation review iteration 2. Extract duplicated security code, add schema versioning to priority store persistence.
+**Source**: bridge-20260222-meditation-iter2 (info-1, info-2)
+
+> *"When you find yourself writing the same security-critical code twice, extract it immediately. Security code that diverges across copies is a class of bug that's hard to catch in review."* — Bridgebuilder, Meditation Iter 2
+
+### Task 23.1: Extract safeEqual to shared crypto utility (MAINTAINABILITY)
+
+**Files**: `app/src/utils/crypto.ts` (new), `app/src/routes/admin.ts`, `app/src/routes/health.ts`, `app/tests/unit/crypto.test.ts` (new)
+**Finding**: info-1 — The timing-safe comparison logic is duplicated between `admin.ts` (extracted `safeEqual` function) and `health.ts` (inlined). If the comparison logic needs to change (e.g., a crypto library upgrade), both must be updated.
+
+Create `app/src/utils/crypto.ts` with the shared `safeEqual` function:
+```typescript
+import { timingSafeEqual } from 'node:crypto';
+
+/**
+ * Constant-time string comparison to prevent timing attacks.
+ * Both inputs are padded to equal length before comparison so that the
+ * length check itself does not leak timing information.
+ */
+export function safeEqual(a: string, b: string): boolean {
+  const maxLen = Math.max(a.length, b.length);
+  const bufA = Buffer.alloc(maxLen);
+  const bufB = Buffer.alloc(maxLen);
+  Buffer.from(a).copy(bufA);
+  Buffer.from(b).copy(bufB);
+  return timingSafeEqual(bufA, bufB) && a.length === b.length;
+}
+```
+
+Then update both consumers:
+- `admin.ts`: Remove local `safeEqual` function and `timingSafeEqual` import, import from `../utils/crypto.js`
+- `health.ts`: Remove inlined `timingSafeEqual` logic and `timingSafeEqual` import, import `safeEqual` from `../utils/crypto.js`
+
+**Acceptance Criteria**:
+- [ ] `app/src/utils/crypto.ts` exists with `safeEqual` exported
+- [ ] `admin.ts` imports `safeEqual` from `../utils/crypto.js` — local function removed
+- [ ] `health.ts` imports `safeEqual` from `../utils/crypto.js` — inline logic removed
+- [ ] Neither `admin.ts` nor `health.ts` imports `timingSafeEqual` directly
+- [ ] All existing admin and health tests pass without modification
+- [ ] 3 new tests: equal strings → true, unequal strings → false, different lengths → false (timing-safe)
+
+### Task 23.2: Add schema versioning to priority store persistence (RESILIENCE)
+
+**Files**: `app/src/services/knowledge-priority-store.ts`, `app/tests/unit/knowledge-priority-store.test.ts`
+**Finding**: info-2 — The JSON persistence format is a raw Map serialization (`Array<[string, PriorityVote]>`). If `PriorityVote` gains or loses fields, old persisted data may not deserialize correctly. A version field enables forward-compatible migrations.
+
+Wrap the serialized format:
+```typescript
+interface PersistedPriorityData {
+  version: 1;
+  entries: Array<[string, PriorityVote]>;
+}
+```
+
+Update `writeToDisk()` to write the versioned wrapper. Update `loadFromDisk()` to:
+1. Parse JSON
+2. If it has a `version` field → use `entries` array
+3. If it's a raw array (legacy format) → treat as v0, migrate in-place
+4. If corrupt → start fresh (existing behavior)
+
+**Acceptance Criteria**:
+- [ ] Persisted format is `{ version: 1, entries: [...] }` — not raw array
+- [ ] `loadFromDisk()` handles versioned format
+- [ ] `loadFromDisk()` handles legacy raw array format (backward compatible)
+- [ ] `loadFromDisk()` handles corrupt/missing files gracefully
+- [ ] 2 new tests: versioned format round-trips, legacy format auto-migrates
+- [ ] Existing persistence tests continue to pass
+
+---
+
+## Verification (Sprint 23)
+
+- [ ] All ~592 tests passing (~586 existing + ~6 new)
+- [ ] `safeEqual` is a single shared function — no duplication
+- [ ] Admin auth and governance auth both use the shared utility
+- [ ] Priority store persistence uses versioned schema
+- [ ] Legacy persistence files are auto-migrated on load
 - [ ] All existing tests unbroken
