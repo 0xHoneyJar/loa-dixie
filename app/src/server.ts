@@ -40,6 +40,8 @@ import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
 import { KnowledgePriorityStore } from './services/knowledge-priority-store.js';
 import { ReputationService, InMemoryReputationStore } from './services/reputation-service.js';
+import { EnrichmentService } from './services/enrichment-service.js';
+import { createEnrichmentRoutes } from './routes/enrich.js';
 import type { TBAVerification } from './types/agent-api.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
@@ -76,6 +78,8 @@ export interface DixieApp {
   learningEngine: CompoundLearningEngine;
   /** Phase 2: Reputation service (Sprint 6) */
   reputationService: ReputationService;
+  /** Phase 2: Enrichment service for autopoietic loop (Sprint 11) */
+  enrichmentService: EnrichmentService;
 }
 
 /**
@@ -186,6 +190,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Phase 2: Reputation service with in-memory store (Sprint 6, Task 6.2)
   // TODO: Replace InMemoryReputationStore with PostgreSQL adapter when available
   const reputationService = new ReputationService(new InMemoryReputationStore());
+
+  // Phase 2: Enrichment service for autopoietic loop (Sprint 11, Task 11.1)
+  // Assembles governance context from in-memory caches for review prompt enrichment.
+  // All data sourced from in-memory caches — no database calls in the hot path.
+  const enrichmentService = new EnrichmentService({ reputationService });
 
   // Phase 2: Knowledge priority store (conviction-weighted community governance, Task 21.4)
   // Task 22.4: Persist votes to disk so they survive restarts
@@ -352,6 +361,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     },
   }));
 
+  // --- Phase 2: Enrichment API — autopoietic loop activation (Sprint 11) ---
+  // Assembles governance context for review prompt enrichment.
+  // Conviction-gated: builder+ tier required. 50ms latency budget enforced.
+  app.route('/api/enrich', createEnrichmentRoutes({ enrichmentService }));
+
   // --- Phase 2: Agent API with TBA authentication ---
   // TBA auth middleware applies only to /api/agent/* routes
   app.use('/api/agent/*', createTBAAuthMiddleware({
@@ -441,5 +455,6 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     scheduleStore,
     learningEngine,
     reputationService,
+    enrichmentService,
   };
 }
