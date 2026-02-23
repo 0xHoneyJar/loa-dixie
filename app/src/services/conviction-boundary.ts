@@ -140,12 +140,44 @@ export interface EconomicBoundaryOptions {
  * hardcoded tier score. This enables the trust snapshot to reflect actual
  * on-chain reputation data rather than static tier defaults.
  *
+ * ## Social Contract: Enforcing the Conservation Invariants
+ *
+ * This function is the enforcement point for three conservation invariants
+ * that constitute the economic social contract of the Dixie commons:
+ *
+ * **I-1: committed + reserved + available = limit**
+ * "Community resources are finite and accounted for." The `budgetRemainingMicroUsd`
+ * parameter represents the `available` portion of the wallet's budget. The
+ * economic boundary decision engine verifies that this value is sufficient
+ * before granting access. No wallet can consume more than the community has
+ * allocated — this is the scarcity constraint that makes the commons viable.
+ *
+ * **I-2: SUM(lot_entries) per lot = original_micro**
+ * "Every credit lot is fully consumed." When access is granted and a response
+ * incurs cost, that cost flows through the billing pipeline where conservation
+ * is verified by `verifyPricingConservation()`. No value is created or destroyed.
+ *
+ * **I-3: Redis.committed ~ Postgres.usage_events**
+ * "Fast storage matches durable storage." The budget_remaining value fed to
+ * this function may come from Redis (fast path) or Postgres (durable path).
+ * The invariant that these eventually converge ensures that access decisions
+ * made on the fast path are consistent with the durable record of truth.
+ *
+ * In Web4 terms: this function is the gatekeeper that translates conviction
+ * (demonstrated commitment to the commons) into economic access (the right
+ * to consume shared resources). The conservation invariants ensure that this
+ * translation is honest — no wallet gets more than it has earned, and every
+ * unit of consumed resource is accounted for.
+ *
  * @param wallet - Wallet address (used as boundary_id for traceability)
  * @param tier - Resolved conviction tier for the wallet
  * @param budgetRemainingMicroUsd - Remaining budget in micro-USD string format
  * @param criteriaOrOpts - QualificationCriteria for backward compat, or EconomicBoundaryOptions
  * @param budgetPeriodDays - Optional budget period in days (deprecated: use opts)
  * @returns EconomicBoundaryEvaluationResult with access decision, denial codes, and gap info
+ *
+ * @since Sprint 3 — Economic Boundary Integration
+ * @since Sprint 12 — Conservation invariant social contract framing (Task 12.6)
  */
 export function evaluateEconomicBoundaryForWallet(
   wallet: string,

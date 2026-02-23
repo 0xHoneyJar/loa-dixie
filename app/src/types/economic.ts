@@ -21,6 +21,27 @@ import { computeCostMicro, verifyPricingConservation } from '@0xhoneyjar/loa-hou
  * EconomicMetadata — attached to every response for cost transparency.
  *
  * Computed after stream completes from the usage event + model pricing table.
+ *
+ * ## Conservation Invariant I-2 (Social Contract Framing)
+ *
+ * "Every credit lot is fully consumed" — when a response incurs a cost, that
+ * cost must be fully accounted for in the billing pipeline. The `cost_micro_usd`
+ * field computed here feeds into `BillingEntry.total_cost_micro`, which in turn
+ * is verified by `verifyPricingConservation()`. The chain:
+ *
+ *   EconomicMetadata.cost_micro_usd → BillingEntry.total_cost_micro → recipients[].amount_micro
+ *
+ * Conservation invariant: SUM(recipients[].amount_micro) === total_cost_micro.
+ * This is the social contract: "every credit lot is fully consumed" means no value
+ * is created or destroyed in the billing pipeline — it is only distributed.
+ *
+ * In Web4 terms: the economic metadata makes the cost of each interaction transparent
+ * to the wallet holder, enabling informed consent for resource consumption. The
+ * conservation invariant ensures that the community's resources are accounted for
+ * with mathematical precision, not just good intentions.
+ *
+ * @see verifyBilling() — Conservation verification wrapper
+ * @see grimoires/loa/context/adr-conviction-currency-path.md — Economic transparency
  */
 export interface EconomicMetadata {
   readonly cost_micro_usd: number;
@@ -100,6 +121,18 @@ export function computeCost(model: string, promptTokens: number, completionToken
  *
  * Wraps hounfour's verifyPricingConservation. Conservation holds when
  * billed cost exactly matches computed cost for the given usage.
+ *
+ * ## Conservation Invariant I-2: "Every credit lot is fully consumed"
+ *
+ * This function enforces the second conservation invariant as a social contract:
+ * the community's economic resources flow through a transparent pipeline where
+ * every micro-USD is accounted for. When conservation fails, it means the
+ * billing system has created or destroyed value — a violation of the community's
+ * trust that costs are computed honestly.
+ *
+ * The Ostrom parallel: in a well-governed commons, monitoring of resource usage
+ * is not optional (Principle 4 — Monitoring). `verifyBilling` is the monitor
+ * that ensures the economic commons operates with integrity.
  */
 export function verifyBilling(
   billing: { cost_micro: string; pricing_snapshot?: PricingInput },
