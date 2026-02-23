@@ -1,22 +1,44 @@
 /**
  * Dixie BFF Type Definitions
  *
- * DECISION: Hounfour Protocol Alignment (v7.9.2, Level 2+)
+ * DECISION: Hounfour Protocol Alignment (v7.9.2, Level 4 — Civilizational)
  * See: grimoires/loa/context/adr-hounfour-alignment.md
  *
  * Type Audit — Dixie types vs @0xhoneyjar/loa-hounfour v7.9.2 protocol types:
  *
- * | Dixie Type        | Hounfour Equivalent           | Status                  |
- * |-------------------|-------------------------------|-------------------------|
- * | CircuitState      | CircuitState (core)           | Naming divergence¹      |
- * | ServiceHealth     | —                             | Dixie-specific (BFF)    |
- * | HealthResponse    | —                             | Dixie-specific (BFF)    |
- * | FinnHealthResponse| —                             | Dixie-specific (proxy)  |
- * | ErrorResponse     | —                             | Dixie-specific (BFF)    |
- * | AllowlistData     | AccessPolicy (core)           | Replaced — Sprint 1    |
- * | AuditEntry        | AuditTrailEntry (economy)     | Subset                  |
- * | OracleIdentity    | AgentIdentity (core)          | Subset                  |
- * | —                 | AgentDescriptor (core)         | Imported — Sprint 1    |
+ * | Dixie Type           | Hounfour Equivalent              | Status                    |
+ * |----------------------|----------------------------------|---------------------------|
+ * | CircuitState         | CircuitState (core)              | Naming divergence¹        |
+ * | ServiceHealth        | —                                | Dixie-specific (BFF)      |
+ * | HealthResponse       | —                                | Dixie-specific (BFF)      |
+ * | FinnHealthResponse   | —                                | Dixie-specific (proxy)    |
+ * | ErrorResponse        | —                                | Dixie-specific (BFF)      |
+ * | AllowlistData        | AccessPolicy (core)              | Replaced — Sprint 1       |
+ * | AuditEntry           | AuditTrailEntry (economy)        | Subset                    |
+ * | OracleIdentity       | AgentIdentity (core)             | Subset                    |
+ * | —                    | AgentDescriptor (core)           | Imported — Sprint 1       |
+ *
+ * Hounfour imports across the codebase (v7.9.2):
+ *
+ * | File                            | Import                                    | Barrel   |
+ * |---------------------------------|-------------------------------------------|----------|
+ * | types.ts                        | AccessPolicy, AgentIdentity,              | core     |
+ * |                                 | AgentDescriptor, CircuitState             |          |
+ * | services/access-policy-validator | validators, validateAccessPolicy          | root     |
+ * | services/state-machine          | CircuitState, isValidTransition           | core     |
+ * | services/conviction-boundary    | evaluateEconomicBoundary                  | root     |
+ * |                                 | TrustLayerSnapshot, CapitalLayerSnapshot, | economy  |
+ * |                                 | QualificationCriteria, EBEResult          |          |
+ * | services/reputation-service     | isReliableReputation,                     | govern.  |
+ * |                                 | computeBlendedScore, etc.                 |          |
+ * | services/conformance-suite      | validate, validators                      | root     |
+ * |                                 | AccessPolicySchema,                       | core     |
+ * |                                 | ConversationSealingPolicySchema           |          |
+ * | types/economic                  | computeCostMicro,                         | economy  |
+ * |                                 | verifyPricingConservation, PricingInput   |          |
+ * | types/stream-events             | StreamStartSchema, StreamChunkSchema,     | core     |
+ * |                                 | etc. (type re-exports)                    |          |
+ * | proxy/finn-client               | computeReqHash, deriveIdempotencyKey      | integr.  |
  *
  * ¹ Dixie uses 'half-open' (kebab), Hounfour uses 'half_open' (snake).
  *   Both are valid circuit breaker naming. Dixie retains its own type
@@ -31,10 +53,11 @@
  * - CircuitState as HounfourCircuitState (for protocol mapping)
  */
 
-// DECISION: Progressive Hounfour protocol adoption (Level 1 → Level 4)
-// Currently at Level 2 (Structural): validators + state machines aligned.
-// Level 3 (Behavioral) requires runtime invariant checking.
-// Level 4 (Civilizational) requires passing Freeside PR #63's E2E validator.
+// DECISION: Hounfour protocol adoption — Level 4 (Civilizational) ACHIEVED.
+// Level 1 (Interface): Types imported — Sprint 13
+// Level 2 (Structural): Validators + state machines aligned — Sprint 1
+// Level 3 (Behavioral): Runtime invariants, BigInt economics, integrity — Sprints 2-3
+// Level 4 (Civilizational): E2E conformance suite passes all schemas — Sprint 4
 // See: grimoires/loa/context/adr-hounfour-alignment.md
 
 // Core protocol types — Hounfour v7.9.2 Level 2+
