@@ -323,6 +323,7 @@ describe('conformance fixture auto-generation', () => {
     expect(typeof parsed.total_schemas).toBe('number');
     expect(typeof parsed.generated_count).toBe('number');
     expect(typeof parsed.skipped_count).toBe('number');
+    expect(typeof parsed.manual_count).toBe('number');
     expect(Array.isArray(parsed.samples)).toBe(true);
   });
 

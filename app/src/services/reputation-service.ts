@@ -62,11 +62,11 @@ export interface BlendedScoreInput {
  * @since Sprint 6 — Task 6.1
  */
 export interface ReputationStore {
-  get(nftId: string): ReputationAggregate | undefined;
-  put(nftId: string, aggregate: ReputationAggregate): void;
-  listCold(): Array<{ nftId: string; aggregate: ReputationAggregate }>;
+  get(nftId: string): Promise<ReputationAggregate | undefined>;
+  put(nftId: string, aggregate: ReputationAggregate): Promise<void>;
+  listCold(): Promise<Array<{ nftId: string; aggregate: ReputationAggregate }>>;
   /** Return the total number of stored aggregates. */
-  count(): number;
+  count(): Promise<number>;
 }
 
 /**
@@ -80,15 +80,15 @@ export interface ReputationStore {
 export class InMemoryReputationStore implements ReputationStore {
   private readonly store = new Map<string, ReputationAggregate>();
 
-  get(nftId: string): ReputationAggregate | undefined {
+  async get(nftId: string): Promise<ReputationAggregate | undefined> {
     return this.store.get(nftId);
   }
 
-  put(nftId: string, aggregate: ReputationAggregate): void {
+  async put(nftId: string, aggregate: ReputationAggregate): Promise<void> {
     this.store.set(nftId, aggregate);
   }
 
-  listCold(): Array<{ nftId: string; aggregate: ReputationAggregate }> {
+  async listCold(): Promise<Array<{ nftId: string; aggregate: ReputationAggregate }>> {
     const results: Array<{ nftId: string; aggregate: ReputationAggregate }> = [];
     for (const [nftId, aggregate] of this.store) {
       if (aggregate.state === 'cold') {
@@ -98,7 +98,7 @@ export class InMemoryReputationStore implements ReputationStore {
     return results;
   }
 
-  count(): number {
+  async count(): Promise<number> {
     return this.store.size;
   }
 

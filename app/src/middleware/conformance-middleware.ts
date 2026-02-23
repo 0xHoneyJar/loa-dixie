@@ -21,16 +21,42 @@
 import { createMiddleware } from 'hono/factory';
 import { validators } from '@0xhoneyjar/loa-hounfour';
 
-/** A single conformance violation event for structured logging / signaling. */
-export interface ConformanceViolationEvent {
-  readonly event: 'conformance_violation';
+/**
+ * Base fields shared between ConformanceViolationEvent and
+ * ConformanceViolationSignal. Extracted to reduce duplication:
+ * the Event uses `path`/`error` while the Signal renames them to
+ * `error_path`/`error_message` for NATS consumer clarity.
+ *
+ * @since Sprint 7 — Bridge iter1 LOW-2
+ */
+export interface ConformanceViolationBase {
+  /** Schema that was violated. */
   readonly schema: string;
-  readonly path: string;
-  readonly error: string;
+
+  /** Request endpoint that produced the violating response. */
   readonly endpoint: string;
+
+  /** HTTP status code of the response. */
   readonly response_status: number;
+
+  /** Sample rate at which this validation was performed. */
   readonly sample_rate: number;
+
+  /** ISO 8601 timestamp of the violation. */
   readonly timestamp: string;
+}
+
+/**
+ * A single conformance violation event for structured logging / signaling.
+ * Extends the shared base type to reduce field duplication with
+ * ConformanceViolationSignal (Bridge iter1 LOW-2).
+ */
+export interface ConformanceViolationEvent extends ConformanceViolationBase {
+  readonly event: 'conformance_violation';
+  /** JSON path to the violating field. */
+  readonly path: string;
+  /** Human-readable error message. */
+  readonly error: string;
 }
 
 /** Schema definition for the conformance middleware. */

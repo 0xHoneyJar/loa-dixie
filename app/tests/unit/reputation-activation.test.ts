@@ -76,57 +76,57 @@ describe('Task 6.1: InMemoryReputationStore', () => {
     store = new InMemoryReputationStore();
   });
 
-  it('starts empty', () => {
-    expect(store.count()).toBe(0);
-    expect(store.get('nft-1')).toBeUndefined();
+  it('starts empty', async () => {
+    expect(await store.count()).toBe(0);
+    expect(await store.get('nft-1')).toBeUndefined();
   });
 
-  it('put + get round-trips an aggregate', () => {
+  it('put + get round-trips an aggregate', async () => {
     const agg = makeAggregate();
-    store.put('nft-1', agg);
-    expect(store.get('nft-1')).toBe(agg);
-    expect(store.count()).toBe(1);
+    await store.put('nft-1', agg);
+    expect(await store.get('nft-1')).toBe(agg);
+    expect(await store.count()).toBe(1);
   });
 
-  it('put overwrites existing aggregate', () => {
+  it('put overwrites existing aggregate', async () => {
     const agg1 = makeAggregate({ personal_score: 0.5 });
     const agg2 = makeAggregate({ personal_score: 0.9 });
-    store.put('nft-1', agg1);
-    store.put('nft-1', agg2);
-    expect(store.get('nft-1')!.personal_score).toBe(0.9);
-    expect(store.count()).toBe(1);
+    await store.put('nft-1', agg1);
+    await store.put('nft-1', agg2);
+    expect((await store.get('nft-1'))!.personal_score).toBe(0.9);
+    expect(await store.count()).toBe(1);
   });
 
-  it('stores multiple aggregates independently', () => {
-    store.put('nft-1', makeAggregate({ personality_id: 'p1' }));
-    store.put('nft-2', makeAggregate({ personality_id: 'p2' }));
-    expect(store.count()).toBe(2);
-    expect(store.get('nft-1')!.personality_id).toBe('p1');
-    expect(store.get('nft-2')!.personality_id).toBe('p2');
+  it('stores multiple aggregates independently', async () => {
+    await store.put('nft-1', makeAggregate({ personality_id: 'p1' }));
+    await store.put('nft-2', makeAggregate({ personality_id: 'p2' }));
+    expect(await store.count()).toBe(2);
+    expect((await store.get('nft-1'))!.personality_id).toBe('p1');
+    expect((await store.get('nft-2'))!.personality_id).toBe('p2');
   });
 
-  it('listCold returns only cold aggregates', () => {
-    store.put('nft-warm', makeAggregate({ state: 'warming' }));
-    store.put('nft-cold-1', makeColdAggregate());
-    store.put('nft-established', makeAggregate({ state: 'established' }));
-    store.put('nft-cold-2', makeColdAggregate());
+  it('listCold returns only cold aggregates', async () => {
+    await store.put('nft-warm', makeAggregate({ state: 'warming' }));
+    await store.put('nft-cold-1', makeColdAggregate());
+    await store.put('nft-established', makeAggregate({ state: 'established' }));
+    await store.put('nft-cold-2', makeColdAggregate());
 
-    const cold = store.listCold();
+    const cold = await store.listCold();
     expect(cold).toHaveLength(2);
     expect(cold.map(c => c.nftId).sort()).toEqual(['nft-cold-1', 'nft-cold-2']);
   });
 
-  it('listCold returns empty array when no cold aggregates', () => {
-    store.put('nft-1', makeAggregate({ state: 'established' }));
-    expect(store.listCold()).toHaveLength(0);
+  it('listCold returns empty array when no cold aggregates', async () => {
+    await store.put('nft-1', makeAggregate({ state: 'established' }));
+    expect(await store.listCold()).toHaveLength(0);
   });
 
-  it('clear removes all aggregates', () => {
-    store.put('nft-1', makeAggregate());
-    store.put('nft-2', makeAggregate());
+  it('clear removes all aggregates', async () => {
+    await store.put('nft-1', makeAggregate());
+    await store.put('nft-2', makeAggregate());
     store.clear();
-    expect(store.count()).toBe(0);
-    expect(store.get('nft-1')).toBeUndefined();
+    expect(await store.count()).toBe(0);
+    expect(await store.get('nft-1')).toBeUndefined();
   });
 });
 
@@ -137,10 +137,10 @@ describe('Task 6.1: ReputationService with store', () => {
     expect(service.store).toBe(store);
   });
 
-  it('defaults to InMemoryReputationStore when no store provided', () => {
+  it('defaults to InMemoryReputationStore when no store provided', async () => {
     const service = new ReputationService();
     expect(service.store).toBeInstanceOf(InMemoryReputationStore);
-    expect(service.store.count()).toBe(0);
+    expect(await service.store.count()).toBe(0);
   });
 
   it('preserves all existing computation methods', () => {
@@ -187,8 +187,8 @@ describe('Task 6.2: Health endpoint reputation_service status', () => {
     );
 
     const repService = new ReputationService();
-    repService.store.put('nft-1', makeAggregate());
-    repService.store.put('nft-2', makeAggregate());
+    await repService.store.put('nft-1', makeAggregate());
+    await repService.store.put('nft-2', makeAggregate());
 
     const app = createHealthRoutes({ finnClient, reputationService: repService });
     const res = await app.request('/');
@@ -469,7 +469,7 @@ describe('Task 6.5: Reputation-gated access policy end-to-end', () => {
   });
 
   describe('transition scenario (cold -> warming -> established)', () => {
-    it('tracks progression through reputation states', () => {
+    it('tracks progression through reputation states', async () => {
       const store = new InMemoryReputationStore();
       const service = new ReputationService(store);
 
@@ -484,10 +484,10 @@ describe('Task 6.5: Reputation-gated access policy end-to-end', () => {
         sample_count: 8,
         pseudo_count: 10,
       });
-      store.put('nft-trans', warmingAgg);
+      await store.put('nft-trans', warmingAgg);
 
       const opts2: EconomicBoundaryOptions = {
-        reputationAggregate: store.get('nft-trans')!,
+        reputationAggregate: (await store.get('nft-trans'))!,
       };
       const r2 = evaluateEconomicBoundaryForWallet('0xtrans', 'participant', 100, opts2);
       // blended = (10*0.2 + 8*0.4) / 18 = (2 + 3.2) / 18 = 5.2/18 ~ 0.289
@@ -502,10 +502,10 @@ describe('Task 6.5: Reputation-gated access policy end-to-end', () => {
         sample_count: 30,
         pseudo_count: 10,
       });
-      store.put('nft-trans', establishedAgg);
+      await store.put('nft-trans', establishedAgg);
 
       const opts3: EconomicBoundaryOptions = {
-        reputationAggregate: store.get('nft-trans')!,
+        reputationAggregate: (await store.get('nft-trans'))!,
       };
       const r3 = evaluateEconomicBoundaryForWallet('0xtrans', 'participant', 100, opts3);
       // blended = (10*0.2 + 30*0.8) / 40 = (2 + 24) / 40 = 26/40 = 0.65
@@ -515,8 +515,8 @@ describe('Task 6.5: Reputation-gated access policy end-to-end', () => {
       expect(r3.trust_evaluation.actual_score).toBeCloseTo(0.65, 2);
 
       // Verify store tracked the progression
-      expect(store.count()).toBe(1);
-      expect(store.get('nft-trans')!.state).toBe('established');
+      expect(await store.count()).toBe(1);
+      expect((await store.get('nft-trans'))!.state).toBe('established');
     });
   });
 });

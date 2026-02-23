@@ -54,7 +54,7 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     // Sprint 6 — Task 6.2: Reputation service health reporting
     const reputationStatus = deps.reputationService ? {
       initialized: true,
-      aggregate_count: deps.reputationService.store.count(),
+      aggregate_count: await deps.reputationService.store.count(),
     } : undefined;
 
     const services: HealthResponse['services'] = {

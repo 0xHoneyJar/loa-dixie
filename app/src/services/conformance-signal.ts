@@ -17,41 +17,31 @@
  */
 
 import type { SignalEmitter } from './signal-emitter.js';
-import type { ConformanceViolationEvent } from '../middleware/conformance-middleware.js';
+import type { ConformanceViolationBase, ConformanceViolationEvent } from '../middleware/conformance-middleware.js';
 
 /** NATS subject for conformance violation signals. */
 export const CONFORMANCE_SIGNAL_SUBJECT = 'dixie.signal.conformance' as const;
 
 /**
- * Conformance violation signal extending the InteractionSignal pattern.
- *
- * Includes all fields from `ConformanceViolationEvent` plus signal-level
+ * Conformance violation signal extending the shared base with signal-level
  * metadata for NATS routing and telemetry.
+ *
+ * Extends ConformanceViolationBase (defined in conformance-middleware.ts)
+ * to reduce field duplication. Renames `path` -> `error_path` and
+ * `error` -> `error_message` for clarity in downstream NATS consumers
+ * and CloudWatch metric filters.
+ *
+ * @since Sprint 7 — Bridge iter1 LOW-2
  */
-export interface ConformanceViolationSignal {
+export interface ConformanceViolationSignal extends ConformanceViolationBase {
   /** Signal type identifier for NATS consumers / CloudWatch filters. */
   readonly signal_type: 'conformance_violation';
-
-  /** Schema that was violated. */
-  readonly schema: string;
 
   /** JSON path to the violating field. */
   readonly error_path: string;
 
   /** Human-readable error message. */
   readonly error_message: string;
-
-  /** Request endpoint that produced the violating response. */
-  readonly endpoint: string;
-
-  /** HTTP status code of the response. */
-  readonly response_status: number;
-
-  /** Sample rate at which this validation was performed. */
-  readonly sample_rate: number;
-
-  /** ISO 8601 timestamp of the violation. */
-  readonly timestamp: string;
 }
 
 /**
