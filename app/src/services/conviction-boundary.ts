@@ -289,29 +289,166 @@ export function buildConvictionDenialResponse(
  * the economic boundary (resource access). This is intentional — governance
  * participation should be more accessible than economic resource consumption.
  *
+ * ## Three-Dimensional Permission Model
+ *
+ * Each conviction tier maps to three independent permission dimensions:
+ *
+ * 1. **Participation** (`can_vote`): Whether the tier holder may participate
+ *    in governance at all. Currently universal — all tiers can vote. This
+ *    dimension answers: "Can you be heard?"
+ *
+ * 2. **Influence** (`vote_weight`): How much weight the tier holder's
+ *    governance voice carries. Ranges from 0 (observer — present but not
+ *    influential) to 25 (sovereign — authoritative voice). This dimension
+ *    answers: "How loud is your voice?"
+ *
+ * 3. **Access** (`passes_economic_boundary`): Whether the tier holder
+ *    qualifies for economic resource consumption (model pools, billing
+ *    tiers, budget allocation). This dimension answers: "Can you use
+ *    the commons' resources?"
+ *
+ * The three dimensions are deliberately independent: an observer participates
+ * (can_vote=true) with zero influence (vote_weight=0) and no access
+ * (passes_economic_boundary=false). This is not a limitation — it is the
+ * architecture of graduated inclusion.
+ *
+ * ## Ostrom's Principles in the Matrix
+ *
+ * **Principle 3 — Collective-Choice Arrangements**: "Most individuals
+ * affected by the operational rules can participate in modifying the
+ * operational rules." (Ostrom, *Governing the Commons*, 1990, p. 93)
+ *
+ * Implementation: `can_vote: true` for ALL tiers, including observer.
+ * Even zero-weight participants are included in collective choice because
+ * their participation signals emerging community interest, provides
+ * transparency into governance activity, and creates a progression path
+ * that incentivizes deeper commitment. Excluding observers from voting
+ * would violate Principle 3 by denying affected individuals the right
+ * to participate in rule modification.
+ *
+ * **Principle 5 — Graduated Sanctions**: "Appropriators who violate
+ * operational rules are likely to be assessed graduated sanctions."
+ * (Ostrom, *Governing the Commons*, 1990, p. 94)
+ *
+ * Implementation: The tier progression IS the graduated sanction/reward
+ * system. Lower conviction (less BGT staked, lower reputation) results
+ * in reduced influence and access — not binary exclusion. An observer
+ * is not banned; they are graduated to minimal influence. A participant
+ * who increases their stake graduates to builder-level access. The
+ * sanctions are proportional, not punitive — mirroring Ostrom's finding
+ * that successful commons governance uses graduated responses rather
+ * than all-or-nothing enforcement.
+ *
+ * ## Hirschman's Exit, Voice, and Loyalty Mapping
+ *
+ * Albert O. Hirschman's *Exit, Voice, and Loyalty* (1970) describes
+ * three responses to organizational decline:
+ *
+ * - **Exit**: Leave the organization (unstake BGT, abandon dNFT)
+ * - **Voice**: Express dissatisfaction to change the organization (governance voting)
+ * - **Loyalty**: Endure decline due to attachment (continued staking despite issues)
+ *
+ * The ConvictionAccessMatrix maps these concepts:
+ *
+ * | Hirschman Concept | Matrix Dimension | Implementation |
+ * |-------------------|-----------------|----------------|
+ * | Exit              | (external)      | Unstake BGT → tier drops → access reduced |
+ * | Voice             | can_vote + vote_weight | Universal participation, graduated influence |
+ * | Loyalty           | trust_score + reputation_state | Demonstrated commitment over time |
+ *
+ * The key design insight: **Voice is universal but graduated, not gated.**
+ * Hirschman warned that organizations that suppress Voice force Exit.
+ * By granting all tiers the right to vote (even at weight 0), the system
+ * preserves Voice as an alternative to Exit, encouraging Loyalty through
+ * the progression path from observer → sovereign.
+ *
+ * ## The Observer's Zero-Weight Vote
+ *
+ * Why does an observer (zero BGT stake, cold reputation) have `can_vote: true`
+ * with `vote_weight: 0`? Three reasons:
+ *
+ * 1. **Transparency**: The observer can see governance activity and understand
+ *    the system before committing resources. Voting at weight 0 is read access
+ *    to governance — participating without influencing.
+ *
+ * 2. **Progression incentive**: The act of voting (even at zero weight) creates
+ *    a behavioral record that can feed into reputation aggregation (Stage 2 of
+ *    the conviction-to-currency path). Today's observer who votes consistently
+ *    builds a track record for tomorrow's participant tier.
+ *
+ * 3. **Emergent signal detection**: Aggregate zero-weight votes reveal community
+ *    interest patterns that weighted votes miss. If 100 observers all vote for
+ *    the same knowledge source, the collective signal is meaningful even though
+ *    each individual vote carries zero weight. This is the "wisdom of the
+ *    periphery" — newcomers see things incumbents cannot.
+ *
+ * See also: `grimoires/loa/context/adr-conviction-currency-path.md` (Stage 2)
+ *
  * @since Sprint 5 — Bridgebuilder Q4 (conviction voting x economic boundary reconciliation)
+ * @since Sprint 9 — PRAISE-1 formalization (Ostrom annotation, Hirschman mapping, three-dimensional model)
  */
 export interface ConvictionAccessCapabilities {
-  /** Whether the tier can submit governance votes (all tiers can, but weight may be 0). */
+  /**
+   * Whether the tier can submit governance votes.
+   * All tiers can vote (Ostrom Principle 3: collective-choice arrangements),
+   * but weight may be 0 for observer tier.
+   * Dimension: Participation — "Can you be heard?"
+   */
   readonly can_vote: boolean;
-  /** Governance vote weight multiplier (from TIER_WEIGHTS in knowledge-priority-store). */
+  /**
+   * Governance vote weight multiplier (from TIER_WEIGHTS in knowledge-priority-store).
+   * Graduated from 0 (observer) to 25 (sovereign) — Ostrom Principle 5.
+   * Dimension: Influence — "How loud is your voice?"
+   */
   readonly vote_weight: number;
-  /** Whether the tier passes the default economic boundary criteria. */
+  /**
+   * Whether the tier passes the default economic boundary criteria.
+   * Requires min_trust_score=0.3 and min_reputation_state='warming'.
+   * Dimension: Access — "Can you use the commons' resources?"
+   */
   readonly passes_economic_boundary: boolean;
-  /** Trust score mapped from the tier. */
+  /** Trust score mapped from the tier (feeds Hounfour's TrustLayerSnapshot). */
   readonly trust_score: number;
-  /** Reputation state mapped from the tier. */
+  /** Reputation state mapped from the tier (feeds Hounfour's TrustLayerSnapshot). */
   readonly reputation_state: 'cold' | 'warming' | 'established' | 'authoritative';
 }
 
 /**
  * The matrix: conviction tier → capabilities across governance and economics.
  *
+ * ## Constitutional Annotation
+ *
+ * This constant is the governance policy of the Dixie commons encoded in code.
+ * Each row defines a social contract between the community and a class of
+ * participants: "If you demonstrate THIS level of conviction, the community
+ * grants you THESE capabilities."
+ *
+ * The matrix embodies two of Elinor Ostrom's design principles for governing
+ * the commons (*Governing the Commons*, Cambridge University Press, 1990):
+ *
+ * - **Principle 3** (Collective-Choice Arrangements): All tiers can vote,
+ *   ensuring that those affected by governance rules can participate in
+ *   modifying them — even observers with zero weight.
+ *
+ * - **Principle 5** (Graduated Sanctions): The progression from observer
+ *   (weight 0, no access) through sovereign (weight 25, full access)
+ *   implements graduated, proportional consequences for different levels
+ *   of demonstrated commitment.
+ *
+ * The three permission dimensions (participation × influence × access) map
+ * to Hirschman's Voice mechanism: participation IS Voice, influence IS the
+ * volume of Voice, and access IS what Loyalty earns. Exit (unstaking) is
+ * the external fourth dimension that the matrix does not encode but implicitly
+ * enables — the community cannot prevent Exit, only incentivize Loyalty.
+ *
  * Key insight: `can_vote: true` but `passes_economic_boundary: false` for
  * observer and participant is by design. Governance voice != economic access.
  *
  * Vote weights sourced from knowledge-priority-store.ts TIER_WEIGHTS.
  * Economic boundary pass/fail derived from TIER_TRUST_PROFILES vs DEFAULT_CRITERIA.
+ *
+ * @since Sprint 5 — Bridgebuilder Q4 (conviction voting x economic boundary reconciliation)
+ * @since Sprint 9 — PRAISE-1 formalization (constitutional annotation)
  */
 export const CONVICTION_ACCESS_MATRIX: Record<ConvictionTier, ConvictionAccessCapabilities> = {
   observer: {
