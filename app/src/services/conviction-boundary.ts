@@ -54,6 +54,35 @@ const DEFAULT_CRITERIA: QualificationCriteria = {
 } as const;
 
 /**
+ * Default budget period in days — matches monthly billing cycle.
+ *
+ * This determines the `budget_period_end` timestamp in the CapitalLayerSnapshot
+ * passed to Hounfour's evaluateEconomicBoundary. A 30-day period aligns with
+ * the standard monthly billing cycle used by most cloud/SaaS providers.
+ *
+ * Override via:
+ * - `budgetPeriodDays` parameter on `evaluateEconomicBoundaryForWallet()`
+ * - `DIXIE_BUDGET_PERIOD_DAYS` environment variable (global default)
+ *
+ * @since Sprint 5 — LOW-4 (Bridge iter1 deferred finding)
+ */
+export const DEFAULT_BUDGET_PERIOD_DAYS = 30;
+
+/**
+ * Resolve the effective budget period in days.
+ * Priority: explicit parameter > env var > constant default.
+ */
+function resolveBudgetPeriodDays(override?: number): number {
+  if (override !== undefined && override > 0) return override;
+  const envVal = process.env.DIXIE_BUDGET_PERIOD_DAYS;
+  if (envVal) {
+    const parsed = parseInt(envVal, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return DEFAULT_BUDGET_PERIOD_DAYS;
+}
+
+/**
  * Evaluate economic boundary for a wallet based on their conviction tier.
  *
  * Translates Dixie's conviction tier into Hounfour's trust/capital snapshot
@@ -63,6 +92,8 @@ const DEFAULT_CRITERIA: QualificationCriteria = {
  * @param tier - Resolved conviction tier for the wallet
  * @param budgetRemainingMicroUsd - Remaining budget in micro-USD string format
  * @param criteria - Optional override for qualification criteria
+ * @param budgetPeriodDays - Optional budget period in days (default: 30, matches monthly billing cycle).
+ *   Override globally via DIXIE_BUDGET_PERIOD_DAYS env var.
  * @returns EconomicBoundaryEvaluationResult with access decision, denial codes, and gap info
  */
 export function evaluateEconomicBoundaryForWallet(
@@ -70,8 +101,10 @@ export function evaluateEconomicBoundaryForWallet(
   tier: ConvictionTier,
   budgetRemainingMicroUsd: number | string = '0',
   criteria: QualificationCriteria = DEFAULT_CRITERIA,
+  budgetPeriodDays?: number,
 ): EconomicBoundaryEvaluationResult {
   const profile = TIER_TRUST_PROFILES[tier];
+  const periodDays = resolveBudgetPeriodDays(budgetPeriodDays);
 
   // Compute timestamp once to avoid multiple Date constructions in hot path (Bridge iter2-medium-6)
   const now = new Date();
@@ -86,7 +119,7 @@ export function evaluateEconomicBoundaryForWallet(
   const capitalSnapshot: CapitalLayerSnapshot = {
     budget_remaining: String(budgetRemainingMicroUsd),
     billing_tier: tier,
-    budget_period_end: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    budget_period_end: new Date(now.getTime() + periodDays * 24 * 60 * 60 * 1000).toISOString(),
   };
 
   return evaluateEconomicBoundary(
@@ -158,6 +191,95 @@ export function buildConvictionDenialResponse(
     evaluation_gap: evaluationGap,
   };
 }
+
+/**
+ * ConvictionAccessMatrix — explicit mapping of which tiers can do what
+ * across both the knowledge governance (voting) and economic boundary systems.
+ *
+ * ## Separation of Concerns
+ *
+ * Conviction tiers are a **shared input** used by two **independent systems**:
+ *
+ * 1. **Knowledge Governance (Voting)**: Determines a wallet's governance
+ *    voice weight when prioritizing knowledge sources. Implemented in
+ *    `knowledge-priority-store.ts` via TIER_WEIGHTS. Even 'observer' tier
+ *    can submit a vote — it simply has weight 0, meaning it's recorded
+ *    but doesn't influence aggregate scores. This is by design: participation
+ *    in governance is universal (Ostrom Principle 3), but influence scales
+ *    with conviction.
+ *
+ * 2. **Economic Boundary**: Determines whether a wallet qualifies for
+ *    economic access (budgets, billing tiers). Implemented here via
+ *    `evaluateEconomicBoundaryForWallet()`. Uses trust scores and reputation
+ *    states that map from tiers. Default criteria require min_trust_score=0.3
+ *    and min_reputation_state='warming', so only 'builder' and above pass.
+ *
+ * These produce **different outputs** from the **same input**: a wallet may
+ * have enough conviction to vote (governance voice) but not enough to pass
+ * the economic boundary (resource access). This is intentional — governance
+ * participation should be more accessible than economic resource consumption.
+ *
+ * @since Sprint 5 — Bridgebuilder Q4 (conviction voting x economic boundary reconciliation)
+ */
+export interface ConvictionAccessCapabilities {
+  /** Whether the tier can submit governance votes (all tiers can, but weight may be 0). */
+  readonly can_vote: boolean;
+  /** Governance vote weight multiplier (from TIER_WEIGHTS in knowledge-priority-store). */
+  readonly vote_weight: number;
+  /** Whether the tier passes the default economic boundary criteria. */
+  readonly passes_economic_boundary: boolean;
+  /** Trust score mapped from the tier. */
+  readonly trust_score: number;
+  /** Reputation state mapped from the tier. */
+  readonly reputation_state: 'cold' | 'warming' | 'established' | 'authoritative';
+}
+
+/**
+ * The matrix: conviction tier → capabilities across governance and economics.
+ *
+ * Key insight: `can_vote: true` but `passes_economic_boundary: false` for
+ * observer and participant is by design. Governance voice != economic access.
+ *
+ * Vote weights sourced from knowledge-priority-store.ts TIER_WEIGHTS.
+ * Economic boundary pass/fail derived from TIER_TRUST_PROFILES vs DEFAULT_CRITERIA.
+ */
+export const CONVICTION_ACCESS_MATRIX: Record<ConvictionTier, ConvictionAccessCapabilities> = {
+  observer: {
+    can_vote: true,
+    vote_weight: 0,
+    passes_economic_boundary: false,
+    trust_score: 0.0,
+    reputation_state: 'cold',
+  },
+  participant: {
+    can_vote: true,
+    vote_weight: 1,
+    passes_economic_boundary: false,
+    trust_score: 0.2,
+    reputation_state: 'warming',
+  },
+  builder: {
+    can_vote: true,
+    vote_weight: 3,
+    passes_economic_boundary: true,
+    trust_score: 0.5,
+    reputation_state: 'established',
+  },
+  architect: {
+    can_vote: true,
+    vote_weight: 10,
+    passes_economic_boundary: true,
+    trust_score: 0.8,
+    reputation_state: 'established',
+  },
+  sovereign: {
+    can_vote: true,
+    vote_weight: 25,
+    passes_economic_boundary: true,
+    trust_score: 1.0,
+    reputation_state: 'authoritative',
+  },
+} as const;
 
 export { TIER_TRUST_PROFILES, DEFAULT_CRITERIA };
 export type { TierTrustProfile };

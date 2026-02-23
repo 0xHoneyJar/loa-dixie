@@ -61,12 +61,13 @@
 // See: grimoires/loa/context/adr-hounfour-alignment.md
 
 // Core protocol types — Hounfour v7.9.2 Level 2+
+import type { CircuitState as _HounfourCircuitState } from '@0xhoneyjar/loa-hounfour/core';
 export type {
   AccessPolicy,
   AgentIdentity,
   AgentDescriptor,
-  CircuitState as HounfourCircuitState,
 } from '@0xhoneyjar/loa-hounfour/core';
+export type HounfourCircuitState = _HounfourCircuitState;
 
 /** Health status for an individual service */
 export interface ServiceHealth {
@@ -115,6 +116,35 @@ export interface ErrorResponse {
  *
  * Note: Hounfour uses 'half_open' (snake_case), Dixie uses 'half-open' (kebab).
  * This is an internal BFF concern — when reporting to protocol-level consumers,
- * map via: dixieState === 'half-open' ? 'half_open' : dixieState
+ * use `toProtocolCircuitState()` / `fromProtocolCircuitState()` for mapping.
  */
 export type CircuitState = 'closed' | 'open' | 'half-open';
+
+/**
+ * Map a Dixie-internal CircuitState to the Hounfour protocol CircuitState.
+ *
+ * Dixie uses kebab-case ('half-open'), Hounfour uses snake_case ('half_open').
+ * 'closed' and 'open' pass through unchanged.
+ *
+ * Use this when reporting circuit state to protocol-level consumers
+ * (e.g., health responses consumed by Hounfour-aware services).
+ *
+ * @since Sprint 5 — LOW-1 (Bridge iter1 deferred finding)
+ */
+export function toProtocolCircuitState(state: CircuitState): _HounfourCircuitState {
+  return state === 'half-open' ? 'half_open' : state;
+}
+
+/**
+ * Map a Hounfour protocol CircuitState to a Dixie-internal CircuitState.
+ *
+ * Reverse of `toProtocolCircuitState()` — converts snake_case 'half_open'
+ * back to Dixie's kebab-case 'half-open'.
+ *
+ * Use this when ingesting circuit state from protocol-level sources.
+ *
+ * @since Sprint 5 — LOW-1 (Bridge iter1 deferred finding)
+ */
+export function fromProtocolCircuitState(state: _HounfourCircuitState): CircuitState {
+  return state === 'half_open' ? 'half-open' : state;
+}

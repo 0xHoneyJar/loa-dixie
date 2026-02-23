@@ -3,6 +3,7 @@ import {
   validateAccessPolicy as hounfourValidateAccessPolicy,
 } from '@0xhoneyjar/loa-hounfour/core';
 import type { AccessPolicy } from '@0xhoneyjar/loa-hounfour/core';
+import { BffError } from '../errors.js';
 
 /**
  * AccessPolicy runtime validator — Hounfour v7.9.2 schema-backed.
@@ -50,19 +51,19 @@ export function validateAccessPolicy(policy: AccessPolicy): PolicyValidationResu
 }
 
 /**
- * Assert a valid AccessPolicy — throws 400 if invalid.
+ * Assert a valid AccessPolicy — throws BffError(400) if invalid.
  * For use at API boundaries.
+ *
+ * @throws {BffError} with status 400 and violation details
+ * @since Sprint 5 — LOW-3: migrated from plain object to BffError
  */
 export function assertValidAccessPolicy(policy: AccessPolicy): void {
   const result = validateAccessPolicy(policy);
   if (!result.valid) {
-    throw {
-      status: 400,
-      body: {
-        error: 'invalid_policy',
-        message: result.errors.join('; '),
-        violations: result.errors,
-      },
-    };
+    throw new BffError(400, {
+      error: 'invalid_policy',
+      message: result.errors.join('; '),
+      violations: result.errors,
+    });
   }
 }

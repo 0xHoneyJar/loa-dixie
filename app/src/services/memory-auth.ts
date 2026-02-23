@@ -24,10 +24,38 @@ function toAction(op: MemoryOperation): 'read' | 'write' | 'delete' {
 }
 
 /**
+ * Metric counter for translateReason fallback hits.
+ *
+ * Tracks how often the substring-matching translation falls through to the
+ * catch-all 'unknown_access_policy_type'. Useful for alerting when a
+ * hounfour upgrade changes reason string wording.
+ *
+ * @since Sprint 5 — MEDIUM-1 partial (observability)
+ */
+let translateReasonFallbackCount = 0;
+
+/** Get the current fallback counter value (for testing/metrics). */
+export function getTranslateReasonFallbackCount(): number {
+  return translateReasonFallbackCount;
+}
+
+/** Reset the fallback counter (for testing). */
+export function resetTranslateReasonFallbackCount(): void {
+  translateReasonFallbackCount = 0;
+}
+
+/**
  * Translate hounfour's AccessPolicyResult reason into Dixie's legacy reason codes.
  *
  * This preserves backward-compatible reason strings that tests and consumers
  * depend on, while delegating the access decision to hounfour.
+ *
+ * When the substring-matching logic falls through (no recognized pattern),
+ * a structured warning is emitted to stdout for observability, and the
+ * fallback counter increments. This aids detection of hounfour upgrades
+ * that change reason string wording.
+ *
+ * @since Sprint 5 — MEDIUM-1 partial: added fallback logging and metrics
  */
 function translateReason(
   hounfourReason: string,
@@ -42,6 +70,20 @@ function translateReason(
     if (hounfourReason.includes('expired')) return 'access_policy_expired';
     if (hounfourReason.includes('No role provided')) return 'role_based_no_roles_provided';
     if (hounfourReason.includes('not in permitted roles')) return 'role_based_insufficient_role';
+
+    // Fallback path — no substring matched. Log for observability.
+    translateReasonFallbackCount++;
+    const logEntry = {
+      level: 'warn',
+      timestamp: new Date().toISOString(),
+      service: 'dixie-bff',
+      event: 'translate_reason_fallback',
+      hounfour_reason: hounfourReason,
+      policy_type: policyType,
+      operation,
+      fallback_count: translateReasonFallbackCount,
+    };
+    process.stdout.write(JSON.stringify(logEntry) + '\n');
     return 'unknown_access_policy_type';
   }
 
