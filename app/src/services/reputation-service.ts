@@ -2,12 +2,17 @@
  * Reputation Service — Foundation wiring for Hounfour governance types.
  *
  * Wraps Hounfour v7.9.2 governance functions with typed Dixie service methods.
- * This is foundation wiring — not yet called from routes. Provides a typed
- * API surface for future sprint integration with the reputation aggregate
- * lifecycle (quality events, state transitions, cross-model scoring).
+ * Provides a typed API surface for the reputation aggregate lifecycle
+ * (quality events, state transitions, cross-model scoring).
+ *
+ * Sprint 6 adds a persistence layer via ReputationStore interface with
+ * constructor injection. The default InMemoryReputationStore is Map-backed
+ * for development and testing. A PostgreSQL adapter is planned for
+ * production (interface ready, implementation deferred).
  *
  * See: Hounfour governance sub-package, SDD §2.3 (ReputationAggregate FR-3)
  * @since Sprint 3 — Reputation Service Foundation
+ * @since Sprint 6 — ReputationStore persistence layer
  */
 import type {
   ReputationScore,
@@ -43,13 +48,85 @@ export interface BlendedScoreInput {
 }
 
 /**
- * ReputationService — typed wrapper around Hounfour governance functions.
+ * ReputationStore — persistence interface for reputation aggregates.
  *
- * All methods are synchronous and pure (no side effects, no I/O).
- * State persistence is deferred to a future sprint that integrates
- * with the PostgreSQL reputation aggregate store.
+ * Decouples ReputationService from storage implementation.
+ * - `get(nftId)` — retrieve a single aggregate by dNFT ID
+ * - `put(nftId, aggregate)` — upsert an aggregate
+ * - `listCold()` — list all aggregates in the 'cold' reputation state
+ *
+ * Implementations:
+ * - InMemoryReputationStore (Map-backed, for dev/test)
+ * - TODO: PostgreSQLReputationStore (for production — see ADR)
+ *
+ * @since Sprint 6 — Task 6.1
+ */
+export interface ReputationStore {
+  get(nftId: string): ReputationAggregate | undefined;
+  put(nftId: string, aggregate: ReputationAggregate): void;
+  listCold(): Array<{ nftId: string; aggregate: ReputationAggregate }>;
+  /** Return the total number of stored aggregates. */
+  count(): number;
+}
+
+/**
+ * InMemoryReputationStore — Map-backed implementation for dev/test.
+ *
+ * Not suitable for production (data lost on restart). Use the
+ * PostgreSQL adapter when it's implemented.
+ *
+ * @since Sprint 6 — Task 6.1
+ */
+export class InMemoryReputationStore implements ReputationStore {
+  private readonly store = new Map<string, ReputationAggregate>();
+
+  get(nftId: string): ReputationAggregate | undefined {
+    return this.store.get(nftId);
+  }
+
+  put(nftId: string, aggregate: ReputationAggregate): void {
+    this.store.set(nftId, aggregate);
+  }
+
+  listCold(): Array<{ nftId: string; aggregate: ReputationAggregate }> {
+    const results: Array<{ nftId: string; aggregate: ReputationAggregate }> = [];
+    for (const [nftId, aggregate] of this.store) {
+      if (aggregate.state === 'cold') {
+        results.push({ nftId, aggregate });
+      }
+    }
+    return results;
+  }
+
+  count(): number {
+    return this.store.size;
+  }
+
+  /** Clear all stored aggregates (for testing). */
+  clear(): void {
+    this.store.clear();
+  }
+}
+
+/**
+ * ReputationService — typed wrapper around Hounfour governance functions
+ * with pluggable persistence via ReputationStore.
+ *
+ * Computation methods remain synchronous and pure.
+ * The store provides CRUD access to reputation aggregates.
+ *
+ * @since Sprint 3 — Reputation Service Foundation
+ * @since Sprint 6 — Constructor injection of ReputationStore
  */
 export class ReputationService {
+  readonly store: ReputationStore;
+
+  /**
+   * @param store - Optional persistence layer. Defaults to InMemoryReputationStore.
+   */
+  constructor(store?: ReputationStore) {
+    this.store = store ?? new InMemoryReputationStore();
+  }
   /**
    * Check if a reputation score is reliable enough to make decisions on.
    *

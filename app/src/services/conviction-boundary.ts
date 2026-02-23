@@ -5,19 +5,27 @@
  * engine. Each conviction tier implies a trust profile (blended_score +
  * reputation_state) that feeds into the economic boundary decision.
  *
+ * Sprint 6 adds reputation blending: when a ReputationAggregate exists for a
+ * wallet, the personal score is blended with the tier-based collection prior
+ * using Bayesian inference. When no aggregate exists (cold start), falls back
+ * to the existing tier-based score.
+ *
  * Tier → Trust mapping follows Ostrom's graduated sanctions: higher conviction
  * tiers imply greater demonstrated commitment to the commons.
  *
  * See: SDD §4.3 (Conviction Tier Resolver), Hounfour v7.9.0 FR-1
  * @since Sprint 3 — Economic Boundary Integration
+ * @since Sprint 6 — Reputation blending in conviction boundary evaluation
  */
 import { evaluateEconomicBoundary } from '@0xhoneyjar/loa-hounfour';
+import { computeBlendedScore } from '@0xhoneyjar/loa-hounfour/governance';
 import type {
   TrustLayerSnapshot,
   CapitalLayerSnapshot,
   QualificationCriteria,
   EconomicBoundaryEvaluationResult,
 } from '@0xhoneyjar/loa-hounfour/economy';
+import type { ReputationAggregate } from '@0xhoneyjar/loa-hounfour/governance';
 import type { ConvictionTier } from '../types/conviction.js';
 
 /**
@@ -83,36 +91,93 @@ function resolveBudgetPeriodDays(override?: number): number {
 }
 
 /**
+ * Options for evaluateEconomicBoundaryForWallet.
+ * @since Sprint 6 — Task 6.2
+ */
+export interface EconomicBoundaryOptions {
+  /** Override qualification criteria. */
+  criteria?: QualificationCriteria;
+  /** Override budget period in days (default: 30). */
+  budgetPeriodDays?: number;
+  /**
+   * When a ReputationAggregate exists for the wallet, the personal score
+   * is Bayesian-blended with the tier-based collection prior. When absent
+   * (cold start), falls back to the hardcoded tier score.
+   *
+   * @since Sprint 6 — Task 6.2
+   */
+  reputationAggregate?: ReputationAggregate | null;
+}
+
+/**
  * Evaluate economic boundary for a wallet based on their conviction tier.
  *
  * Translates Dixie's conviction tier into Hounfour's trust/capital snapshot
  * model and runs the economic boundary evaluation engine.
  *
+ * When `opts.reputationAggregate` is provided and has a non-null personal_score,
+ * the blended score is computed via Bayesian inference instead of using the
+ * hardcoded tier score. This enables the trust snapshot to reflect actual
+ * on-chain reputation data rather than static tier defaults.
+ *
  * @param wallet - Wallet address (used as boundary_id for traceability)
  * @param tier - Resolved conviction tier for the wallet
  * @param budgetRemainingMicroUsd - Remaining budget in micro-USD string format
- * @param criteria - Optional override for qualification criteria
- * @param budgetPeriodDays - Optional budget period in days (default: 30, matches monthly billing cycle).
- *   Override globally via DIXIE_BUDGET_PERIOD_DAYS env var.
+ * @param criteriaOrOpts - QualificationCriteria for backward compat, or EconomicBoundaryOptions
+ * @param budgetPeriodDays - Optional budget period in days (deprecated: use opts)
  * @returns EconomicBoundaryEvaluationResult with access decision, denial codes, and gap info
  */
 export function evaluateEconomicBoundaryForWallet(
   wallet: string,
   tier: ConvictionTier,
   budgetRemainingMicroUsd: number | string = '0',
-  criteria: QualificationCriteria = DEFAULT_CRITERIA,
+  criteriaOrOpts?: QualificationCriteria | EconomicBoundaryOptions,
   budgetPeriodDays?: number,
 ): EconomicBoundaryEvaluationResult {
+  // Resolve overloaded parameter: if it has 'reputationAggregate' or 'criteria', it's opts
+  let criteria: QualificationCriteria = DEFAULT_CRITERIA;
+  let periodDaysOverride: number | undefined = budgetPeriodDays;
+  let reputationAggregate: ReputationAggregate | null | undefined;
+
+  if (criteriaOrOpts) {
+    if ('min_trust_score' in criteriaOrOpts) {
+      // Legacy: direct QualificationCriteria
+      criteria = criteriaOrOpts as QualificationCriteria;
+    } else {
+      // New: EconomicBoundaryOptions
+      const opts = criteriaOrOpts as EconomicBoundaryOptions;
+      criteria = opts.criteria ?? DEFAULT_CRITERIA;
+      periodDaysOverride = opts.budgetPeriodDays ?? budgetPeriodDays;
+      reputationAggregate = opts.reputationAggregate;
+    }
+  }
+
   const profile = TIER_TRUST_PROFILES[tier];
-  const periodDays = resolveBudgetPeriodDays(budgetPeriodDays);
+  const periodDays = resolveBudgetPeriodDays(periodDaysOverride);
 
   // Compute timestamp once to avoid multiple Date constructions in hot path (Bridge iter2-medium-6)
   const now = new Date();
   const nowIso = now.toISOString();
 
+  // Sprint 6 — Task 6.2: Blend personal reputation with tier-based collection prior
+  // when a reputation aggregate is available. Fall back to tier score otherwise.
+  let blendedScore = profile.blended_score;
+  let reputationState = profile.reputation_state;
+
+  if (reputationAggregate && reputationAggregate.personal_score !== null) {
+    blendedScore = computeBlendedScore(
+      reputationAggregate.personal_score,
+      profile.blended_score, // collection prior = tier-based score
+      reputationAggregate.sample_count,
+      reputationAggregate.pseudo_count,
+    );
+    // Use the aggregate's reputation state when available
+    reputationState = reputationAggregate.state;
+  }
+
   const trustSnapshot: TrustLayerSnapshot = {
-    reputation_state: profile.reputation_state,
-    blended_score: profile.blended_score,
+    reputation_state: reputationState,
+    blended_score: blendedScore,
     snapshot_at: nowIso,
   };
 
@@ -282,4 +347,4 @@ export const CONVICTION_ACCESS_MATRIX: Record<ConvictionTier, ConvictionAccessCa
 } as const;
 
 export { TIER_TRUST_PROFILES, DEFAULT_CRITERIA };
-export type { TierTrustProfile };
+export type { TierTrustProfile, EconomicBoundaryOptions };

@@ -39,6 +39,7 @@ import { createLearningRoutes } from './routes/learning.js';
 import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
 import { KnowledgePriorityStore } from './services/knowledge-priority-store.js';
+import { ReputationService, InMemoryReputationStore } from './services/reputation-service.js';
 import type { TBAVerification } from './types/agent-api.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
@@ -73,6 +74,8 @@ export interface DixieApp {
   scheduleStore: ScheduleStore;
   /** Phase 2: Compound learning engine */
   learningEngine: CompoundLearningEngine;
+  /** Phase 2: Reputation service (Sprint 6) */
+  reputationService: ReputationService;
 }
 
 /**
@@ -179,6 +182,10 @@ export function createDixieApp(config: DixieConfig): DixieApp {
 
   // Phase 2: Compound learning engine (batch processing every 10 interactions)
   const learningEngine = new CompoundLearningEngine();
+
+  // Phase 2: Reputation service with in-memory store (Sprint 6, Task 6.2)
+  // TODO: Replace InMemoryReputationStore with PostgreSQL adapter when available
+  const reputationService = new ReputationService(new InMemoryReputationStore());
 
   // Phase 2: Knowledge priority store (conviction-weighted community governance, Task 21.4)
   // Task 22.4: Persist votes to disk so they survive restarts
@@ -311,6 +318,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     redisClient,
     signalEmitter,
     adminKey: config.adminKey,
+    reputationService,
   }));
   app.route('/api/auth', createAuthRoutes(allowlistStore, {
     jwtPrivateKey: config.jwtPrivateKey,
@@ -432,5 +440,6 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     autonomousEngine,
     scheduleStore,
     learningEngine,
+    reputationService,
   };
 }
