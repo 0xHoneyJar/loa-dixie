@@ -90,6 +90,16 @@ See [docs/rfc.md](docs/rfc.md) for the full product vision and phased implementa
 | [loa-hounfour](https://github.com/0xHoneyJar/loa-hounfour) | Protocol types | PR #1 (Types), PR #2 (Agent Economy) |
 | [loa](https://github.com/0xHoneyJar/loa) | Framework & ceremonies | Issue #247 (Meeting Geometries) |
 
+
+## Maintainer
+
+[@janitooor](https://github.com/janitooor)
+
 ## License
 
-See [LICENSE](LICENSE) for details.
+[AGPL-3.0](LICENSE.md) — Use, modify, distribute freely. Network service deployments must release source code.
+
+Commercial licenses are available for organizations that wish to use Loa without AGPL obligations.
+
+
+Ridden with [Loa](https://github.com/0xHoneyJar/loa)
