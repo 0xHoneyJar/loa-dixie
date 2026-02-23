@@ -27,6 +27,8 @@ import type {
 } from '@0xhoneyjar/loa-hounfour/economy';
 import type { ReputationAggregate } from '@0xhoneyjar/loa-hounfour/governance';
 import type { ConvictionTier } from '../types/conviction.js';
+import type { TaskType, ScoringPathLog } from '../types/reputation-evolution.js';
+import type { DixieReputationAggregate } from '../types/reputation-evolution.js';
 
 /**
  * Trust profile derived from a conviction tier.
@@ -104,9 +106,27 @@ export interface EconomicBoundaryOptions {
    * is Bayesian-blended with the tier-based collection prior. When absent
    * (cold start), falls back to the hardcoded tier score.
    *
+   * Accepts both standard ReputationAggregate and DixieReputationAggregate
+   * (which may include task_cohorts).
+   *
    * @since Sprint 6 — Task 6.2
+   * @since Sprint 10 — Task 10.4 (DixieReputationAggregate support)
    */
-  reputationAggregate?: ReputationAggregate | null;
+  reputationAggregate?: ReputationAggregate | DixieReputationAggregate | null;
+  /**
+   * When provided along with a DixieReputationAggregate that has task_cohorts,
+   * the economic boundary evaluation will prefer task-specific reputation data
+   * for the given task type. This enables more precise access decisions when
+   * the request context includes a known task type.
+   *
+   * Scoring path priority:
+   * 1. task_cohort — Task-specific cohort exists for this model + task type
+   * 2. aggregate — Fall back to overall aggregate personal score
+   * 3. tier_default — Fall back to static tier-based score (cold start)
+   *
+   * @since Sprint 10 — Task 10.4
+   */
+  taskType?: TaskType;
 }
 
 /**
@@ -145,7 +165,7 @@ export function evaluateEconomicBoundaryForWallet(
     // EconomicBoundaryOptions ever gained 'min_trust_score', the old
     // check would misclassify it as QualificationCriteria. These fields
     // are structurally unique to each type.
-    if ('criteria' in criteriaOrOpts || 'reputationAggregate' in criteriaOrOpts || 'budgetPeriodDays' in criteriaOrOpts) {
+    if ('criteria' in criteriaOrOpts || 'reputationAggregate' in criteriaOrOpts || 'budgetPeriodDays' in criteriaOrOpts || 'taskType' in criteriaOrOpts) {
       // New: EconomicBoundaryOptions
       const opts = criteriaOrOpts as EconomicBoundaryOptions;
       criteria = opts.criteria ?? DEFAULT_CRITERIA;
@@ -166,19 +186,68 @@ export function evaluateEconomicBoundaryForWallet(
 
   // Sprint 6 — Task 6.2: Blend personal reputation with tier-based collection prior
   // when a reputation aggregate is available. Fall back to tier score otherwise.
+  //
+  // Sprint 10 — Task 10.4: When a taskType is provided and the aggregate has
+  // task_cohorts matching that task type, use the task-specific score instead
+  // of the aggregate score. This provides more precise access decisions when
+  // the request context includes a known task type.
   let blendedScore = profile.blended_score;
   let reputationState = profile.reputation_state;
+  let scoringPath: ScoringPathLog = { path: 'tier_default' };
 
-  if (reputationAggregate && reputationAggregate.personal_score !== null) {
-    blendedScore = computeBlendedScore(
-      reputationAggregate.personal_score,
-      profile.blended_score, // collection prior = tier-based score
-      reputationAggregate.sample_count,
-      reputationAggregate.pseudo_count,
-    );
-    // Use the aggregate's reputation state when available
-    reputationState = reputationAggregate.state;
+  // Resolve taskType from options (may be undefined even when opts is provided)
+  const taskType = (criteriaOrOpts && 'taskType' in criteriaOrOpts)
+    ? (criteriaOrOpts as EconomicBoundaryOptions).taskType
+    : undefined;
+
+  if (reputationAggregate) {
+    // Sprint 10 — Task 10.4: Try task-specific cohort first
+    const dixieAggregate = reputationAggregate as DixieReputationAggregate;
+    const taskCohorts = dixieAggregate.task_cohorts;
+    let usedTaskCohort = false;
+
+    if (taskType && taskCohorts && taskCohorts.length > 0) {
+      // Find cohorts matching the requested task type
+      const matchingCohorts = taskCohorts.filter(c => c.task_type === taskType);
+      if (matchingCohorts.length > 0) {
+        // Use the first matching cohort with a non-null personal score.
+        // When multiple models have task cohorts, the first match is used.
+        // Future: could blend across models using computeTaskAwareCrossModelScore.
+        const activeCohort = matchingCohorts.find(c => c.personal_score !== null);
+        if (activeCohort && activeCohort.personal_score !== null) {
+          blendedScore = computeBlendedScore(
+            activeCohort.personal_score,
+            profile.blended_score, // collection prior = tier-based score
+            activeCohort.sample_count,
+            reputationAggregate.pseudo_count,
+          );
+          reputationState = reputationAggregate.state;
+          scoringPath = {
+            path: 'task_cohort',
+            model: activeCohort.model_id,
+            task_type: taskType,
+          };
+          usedTaskCohort = true;
+        }
+      }
+    }
+
+    // Fall back to aggregate personal score if no task cohort was used
+    if (!usedTaskCohort && reputationAggregate.personal_score !== null) {
+      blendedScore = computeBlendedScore(
+        reputationAggregate.personal_score,
+        profile.blended_score, // collection prior = tier-based score
+        reputationAggregate.sample_count,
+        reputationAggregate.pseudo_count,
+      );
+      reputationState = reputationAggregate.state;
+      scoringPath = { path: 'aggregate' };
+    }
   }
+
+  // Log the scoring path for observability (Sprint 10 — Task 10.4)
+  // Using console.debug for minimal overhead; structured logging in production.
+  console.debug('[conviction-boundary] scoring_path:', JSON.stringify(scoringPath));
 
   const trustSnapshot: TrustLayerSnapshot = {
     reputation_state: reputationState,
@@ -489,4 +558,4 @@ export const CONVICTION_ACCESS_MATRIX: Record<ConvictionTier, ConvictionAccessCa
 } as const;
 
 export { TIER_TRUST_PROFILES, DEFAULT_CRITERIA };
-export type { TierTrustProfile, EconomicBoundaryOptions };
+export type { TierTrustProfile, EconomicBoundaryOptions, ScoringPathLog };
