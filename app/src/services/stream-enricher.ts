@@ -23,7 +23,7 @@ import type {
   TokenBreakdown,
 } from '../types/stream-events.js';
 import type { InteractionSignal } from '../types/economic.js';
-import { computeCost } from '../types/economic.js';
+import { computeCostBigInt } from '../types/economic.js';
 import type { SignalEmitter } from './signal-emitter.js';
 import type { InjectionContext } from '../types/memory.js';
 
@@ -130,7 +130,9 @@ export function enrichStream(
       total: promptTokens + completionTokens,
     };
 
-    const costMicroUsd = computeCost(model, promptTokens, completionTokens);
+    // Use BigInt-safe computation internally, convert to number for the WebSocket event
+    const costBigInt = computeCostBigInt(model, promptTokens, completionTokens);
+    const costMicroUsd = Number(costBigInt);
 
     enriched.push({
       type: 'economic',

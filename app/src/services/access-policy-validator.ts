@@ -1,12 +1,24 @@
 import { validators } from '@0xhoneyjar/loa-hounfour';
+import {
+  validateAccessPolicy as hounfourValidateAccessPolicy,
+} from '@0xhoneyjar/loa-hounfour/core';
 import type { AccessPolicy } from '@0xhoneyjar/loa-hounfour/core';
 
 /**
  * AccessPolicy runtime validator — Hounfour v7.9.2 schema-backed.
  *
- * Replaces hand-rolled validation with hounfour's compiled TypeBox validators.
- * Schema validation catches structural issues; cross-field invariants are
- * enforced by hounfour's registered cross-field validators.
+ * Runs both TypeBox schema validation (structural) and hounfour's
+ * cross-field validator (semantic invariants) in sequence.
+ *
+ * Note: `Type.Recursive` schemas lose their `$id` at the wrapper level,
+ * so `validate()` cannot discover the cross-field validator via registry.
+ * We call the cross-field validator explicitly instead.
+ *
+ * Cross-field invariants enforced:
+ * - `time_limited` requires `duration_hours`
+ * - `role_based` requires non-empty `roles` array
+ * - `reputation_gated` requires `min_reputation_score` or `min_reputation_state`
+ * - `compound` requires `operator` and non-empty `policies` array
  *
  * See: SDD §12.2, §13 (Hounfour Level 2)
  */
@@ -17,16 +29,23 @@ export interface PolicyValidationResult {
 }
 
 /**
- * Validate an AccessPolicy at runtime using hounfour's compiled schema.
+ * Validate an AccessPolicy at runtime using hounfour's schema + cross-field validators.
  * Returns all violations (not just the first).
  */
 export function validateAccessPolicy(policy: AccessPolicy): PolicyValidationResult {
+  // 1. Schema-level validation (TypeBox)
   const compiled = validators.accessPolicy();
-  const schemaResult = compiled.Check(policy);
-  if (!schemaResult) {
+  if (!compiled.Check(policy)) {
     const errors = [...compiled.Errors(policy)].map(e => `${e.path}: ${e.message}`);
     return { valid: false, errors };
   }
+
+  // 2. Cross-field invariant validation (hounfour's validateAccessPolicy)
+  const crossField = hounfourValidateAccessPolicy(policy);
+  if (!crossField.valid) {
+    return { valid: false, errors: crossField.errors };
+  }
+
   return { valid: true, errors: [] };
 }
 

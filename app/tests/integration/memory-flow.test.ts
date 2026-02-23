@@ -118,9 +118,10 @@ describe('integration/memory-flow', () => {
   let signalEmitter: ReturnType<typeof createMockSignalEmitter>;
   let memoryStore: MemoryStore;
 
-  const OWNER_A = '0xOwnerAlice';
-  const OWNER_B = '0xOwnerBob';
-  const DELEGATE = '0xDelegateCam';
+  // Valid 42-char hex Ethereum addresses (checksumAddress-safe)
+  const OWNER_A = '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B';
+  const OWNER_B = '0x1234567890abcdef1234567890abcdef12345678';
+  const DELEGATE = '0xdead000000000000000000000000000000000789';
   const NFT_ID = 'nft-oracle-42';
 
   beforeEach(() => {
@@ -220,7 +221,9 @@ describe('integration/memory-flow', () => {
     const sealPolicy = {
       encryption_scheme: 'aes-256-gcm',
       key_derivation: 'hkdf-sha256',
-      access_policy: { type: 'read_only' },
+      key_reference: 'kms://test-key-001',
+      access_audit: true,
+      access_policy: { type: 'read_only', audit_required: true, revocable: false },
     };
     const validation = validateSealingPolicy(sealPolicy);
     expect(validation.valid).toBe(true);
@@ -338,7 +341,7 @@ describe('integration/memory-flow', () => {
 
     // Active — should allow read
     const activeResult = authorizeMemoryAccess({
-      wallet: '0xrandom',
+      wallet: '0xaaaa000000000000000000000000000000000001',
       ownerWallet: OWNER_A,
       delegatedWallets: [],
       accessPolicy: { type: 'time_limited', expires_at: futureTime } as AccessPolicy,
@@ -348,7 +351,7 @@ describe('integration/memory-flow', () => {
 
     // Expired — should deny
     const expiredResult = authorizeMemoryAccess({
-      wallet: '0xrandom',
+      wallet: '0xaaaa000000000000000000000000000000000001',
       ownerWallet: OWNER_A,
       delegatedWallets: [],
       accessPolicy: { type: 'time_limited', expires_at: pastTime } as AccessPolicy,
