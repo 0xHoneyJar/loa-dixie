@@ -1,12 +1,12 @@
-import type { AccessPolicy } from '../types.js';
+import { validators } from '@0xhoneyjar/loa-hounfour';
+import type { AccessPolicy } from '@0xhoneyjar/loa-hounfour/core';
 
 /**
- * AccessPolicy runtime validator — Hounfour Level 2 cross-field invariants.
+ * AccessPolicy runtime validator — Hounfour v7.9.2 schema-backed.
  *
- * Enforces invariants at API boundaries (not just test-time):
- * - time_limited requires duration_hours > 0
- * - role_based requires non-empty roles array
- * - All policies must have audit_required as boolean
+ * Replaces hand-rolled validation with hounfour's compiled TypeBox validators.
+ * Schema validation catches structural issues; cross-field invariants are
+ * enforced by hounfour's registered cross-field validators.
  *
  * See: SDD §12.2, §13 (Hounfour Level 2)
  */
@@ -17,50 +17,17 @@ export interface PolicyValidationResult {
 }
 
 /**
- * Validate an AccessPolicy at runtime.
+ * Validate an AccessPolicy at runtime using hounfour's compiled schema.
  * Returns all violations (not just the first).
  */
 export function validateAccessPolicy(policy: AccessPolicy): PolicyValidationResult {
-  const errors: string[] = [];
-
-  if (!policy.type) {
-    errors.push('AccessPolicy requires a type field');
+  const compiled = validators.accessPolicy();
+  const schemaResult = compiled.Check(policy);
+  if (!schemaResult) {
+    const errors = [...compiled.Errors(policy)].map(e => `${e.path}: ${e.message}`);
+    return { valid: false, errors };
   }
-
-  if (typeof policy.audit_required !== 'boolean') {
-    errors.push('AccessPolicy.audit_required must be a boolean');
-  }
-
-  // Cross-field invariants per policy type
-  switch (policy.type) {
-    case 'time_limited': {
-      const p = policy as AccessPolicy & { duration_hours?: number };
-      if (!p.duration_hours || p.duration_hours <= 0) {
-        errors.push('time_limited policy requires duration_hours > 0');
-      }
-      break;
-    }
-
-    case 'role_based': {
-      if (!policy.roles || !Array.isArray(policy.roles) || policy.roles.length === 0) {
-        errors.push('role_based policy requires non-empty roles array');
-      }
-      break;
-    }
-
-    case 'owner_only':
-    case 'public':
-      // No additional invariants
-      break;
-
-    default:
-      errors.push(`Unknown AccessPolicy type: ${policy.type}`);
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
+  return { valid: true, errors: [] };
 }
 
 /**

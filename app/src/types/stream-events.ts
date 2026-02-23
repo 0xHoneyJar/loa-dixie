@@ -11,6 +11,18 @@
  * See: SDD §4.4, §6.3
  */
 
+// Protocol stream types — Hounfour v7.9.2
+// Dixie's BFF-specific stream events supplement these protocol types.
+// See: SDD v3.0.0 §3.6
+export type {
+  StreamStartSchema as HfStreamStartSchema,
+  StreamChunkSchema as HfStreamChunkSchema,
+  StreamToolCallSchema as HfStreamToolCallSchema,
+  StreamUsageSchema as HfStreamUsageSchema,
+  StreamEndSchema as HfStreamEndSchema,
+  StreamErrorSchema as HfStreamErrorSchema,
+} from '@0xhoneyjar/loa-hounfour/core';
+
 // ─── Source Selection ─────────────────────────────────────────
 
 export interface SourceSelection {

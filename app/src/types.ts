@@ -1,10 +1,10 @@
 /**
  * Dixie BFF Type Definitions
  *
- * DECISION: Hounfour Protocol Alignment (Sprint 13, S-1)
+ * DECISION: Hounfour Protocol Alignment (v7.9.2, Level 2+)
  * See: grimoires/loa/context/adr-hounfour-alignment.md
  *
- * Type Audit — Dixie types vs @0xhoneyjar/loa-hounfour protocol types:
+ * Type Audit — Dixie types vs @0xhoneyjar/loa-hounfour v7.9.2 protocol types:
  *
  * | Dixie Type        | Hounfour Equivalent           | Status                  |
  * |-------------------|-------------------------------|-------------------------|
@@ -13,9 +13,10 @@
  * | HealthResponse    | —                             | Dixie-specific (BFF)    |
  * | FinnHealthResponse| —                             | Dixie-specific (proxy)  |
  * | ErrorResponse     | —                             | Dixie-specific (BFF)    |
- * | AllowlistData     | AccessPolicy (core)           | Partial — see 13.3      |
+ * | AllowlistData     | AccessPolicy (core)           | Replaced — Sprint 1    |
  * | AuditEntry        | AuditTrailEntry (economy)     | Subset                  |
  * | OracleIdentity    | AgentIdentity (core)          | Subset                  |
+ * | —                 | AgentDescriptor (core)         | Imported — Sprint 1    |
  *
  * ¹ Dixie uses 'half-open' (kebab), Hounfour uses 'half_open' (snake).
  *   Both are valid circuit breaker naming. Dixie retains its own type
@@ -23,25 +24,26 @@
  *   cross-system protocol boundary. When Dixie reports health to
  *   Hounfour-consuming services, it should map to the protocol type.
  *
- * Types imported from Hounfour (protocol-aligned):
- * - AccessPolicy (used in allowlist architecture — Task 13.3)
+ * Types imported from Hounfour v7.9.2 (protocol-aligned):
+ * - AccessPolicy (used in allowlist architecture, validated via hounfour validators)
  * - AgentIdentity (used in identity route response)
+ * - AgentDescriptor (agent metadata for protocol-level agent descriptions)
  * - CircuitState as HounfourCircuitState (for protocol mapping)
  */
 
 // DECISION: Progressive Hounfour protocol adoption (Level 1 → Level 4)
-// Currently at Level 1 (Interface): types imported for API shape alignment.
-// Level 2 (Structural) requires state machine validation against protocol transitions.
+// Currently at Level 2 (Structural): validators + state machines aligned.
 // Level 3 (Behavioral) requires runtime invariant checking.
 // Level 4 (Civilizational) requires passing Freeside PR #63's E2E validator.
 // See: grimoires/loa/context/adr-hounfour-alignment.md
 
-// Aligned: loa-hounfour protocol types for cross-system contracts
+// Core protocol types — Hounfour v7.9.2 Level 2+
 export type {
   AccessPolicy,
   AgentIdentity,
+  AgentDescriptor,
   CircuitState as HounfourCircuitState,
-} from '@0xhoneyjar/loa-hounfour';
+} from '@0xhoneyjar/loa-hounfour/core';
 
 /** Health status for an individual service */
 export interface ServiceHealth {

@@ -1,4 +1,6 @@
-import type { AccessPolicy } from '@0xhoneyjar/loa-hounfour';
+import type { AccessPolicy } from '@0xhoneyjar/loa-hounfour/core';
+import { validators } from '@0xhoneyjar/loa-hounfour';
+import { checksumAddress } from '@0xhoneyjar/loa-hounfour/economy';
 
 export type MemoryOperation = 'read' | 'seal' | 'delete' | 'history';
 
@@ -26,13 +28,14 @@ export function authorizeMemoryAccess(params: {
 }): AuthorizationResult {
   const { wallet, ownerWallet, delegatedWallets, accessPolicy, operation } = params;
 
-  // 1. Owner has full access
-  if (wallet.toLowerCase() === ownerWallet.toLowerCase()) {
+  // 1. Owner has full access (EIP-55 checksummed comparison via hounfour)
+  if (checksumAddress(wallet) === checksumAddress(ownerWallet)) {
     return { allowed: true, reason: 'owner' };
   }
 
   // 2. Delegated wallets can read and view history
-  if (delegatedWallets.some(d => d.toLowerCase() === wallet.toLowerCase())) {
+  const normalizedWallet = checksumAddress(wallet);
+  if (delegatedWallets.some(d => checksumAddress(d) === normalizedWallet)) {
     if (operation === 'read' || operation === 'history') {
       return { allowed: true, reason: 'delegated' };
     }
@@ -95,42 +98,15 @@ function checkAccessPolicy(
 }
 
 /**
- * Validate a ConversationSealingPolicy for cross-field invariants.
+ * Validate a ConversationSealingPolicy using hounfour's compiled schema.
  * See: ADR-soul-memory-api.md, SDD §6.1.1 Validation
  */
 export function validateSealingPolicy(policy: Record<string, unknown>): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-
-  if (!policy.encryption_scheme) {
-    errors.push('encryption_scheme is required');
-  } else if (policy.encryption_scheme !== 'aes-256-gcm') {
-    errors.push('encryption_scheme must be aes-256-gcm');
+  const compiled = validators.conversationSealingPolicy();
+  const schemaResult = compiled.Check(policy);
+  if (!schemaResult) {
+    const errors = [...compiled.Errors(policy)].map(e => `${e.path}: ${e.message}`);
+    return { valid: false, errors };
   }
-
-  if (!policy.key_derivation) {
-    errors.push('key_derivation is required');
-  } else if (policy.key_derivation !== 'hkdf-sha256') {
-    errors.push('key_derivation must be hkdf-sha256');
-  }
-
-  const accessPolicy = policy.access_policy as Record<string, unknown> | undefined;
-  if (!accessPolicy) {
-    errors.push('access_policy is required');
-  } else {
-    const apType = accessPolicy.type as string;
-    if (apType === 'time_limited') {
-      const durationHours = accessPolicy.duration_hours as number | undefined;
-      if (!durationHours || durationHours <= 0) {
-        errors.push('time_limited access_policy requires duration_hours > 0');
-      }
-    }
-    if (apType === 'role_based') {
-      const policyRoles = accessPolicy.roles as string[] | undefined;
-      if (!policyRoles?.length) {
-        errors.push('role_based access_policy requires non-empty roles array');
-      }
-    }
-  }
-
-  return { valid: errors.length === 0, errors };
+  return { valid: true, errors: [] };
 }
