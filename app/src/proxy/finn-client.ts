@@ -1,4 +1,5 @@
 import type { CircuitState, FinnHealthResponse, ErrorResponse } from '../types.js';
+import { computeReqHash, deriveIdempotencyKey } from '@0xhoneyjar/loa-hounfour/integrity';
 
 /** Mapped BFF error from a loa-finn upstream error */
 export interface BffError {
@@ -69,6 +70,8 @@ export class FinnClient {
       body?: unknown;
       headers?: Record<string, string>;
       timeoutMs?: number;
+      /** Tenant identifier for idempotency key derivation (e.g. nftId) */
+      nftId?: string;
     },
   ): Promise<T> {
     this.checkCircuit();
@@ -80,11 +83,28 @@ export class FinnClient {
       opts?.timeoutMs ?? this.timeoutMs,
     );
 
+    // Compute integrity headers for mutation methods (POST/PUT/PATCH)
+    const isMutation = ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase());
+    const integrityHeaders: Record<string, string> = {};
+
+    if (isMutation && opts?.body) {
+      const bodyString = JSON.stringify(opts.body);
+      const bodyBuffer = Buffer.from(bodyString, 'utf-8');
+      const reqHash = computeReqHash(bodyBuffer);
+      integrityHeaders['X-Req-Hash'] = reqHash;
+
+      // Derive idempotency key: tenant + reqHash + provider + model
+      const tenant = opts.nftId ?? 'anonymous';
+      const idempotencyKey = deriveIdempotencyKey(tenant, reqHash, 'loa-finn', path);
+      integrityHeaders['X-Idempotency-Key'] = idempotencyKey;
+    }
+
     try {
       const res = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
+          ...integrityHeaders,
           ...opts?.headers,
         },
         body: opts?.body ? JSON.stringify(opts.body) : undefined,

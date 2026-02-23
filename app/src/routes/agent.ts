@@ -6,6 +6,7 @@ import { getRequestContext } from '../validation.js';
 import { getCorpusMeta, corpusMeta } from '../services/corpus-meta.js';
 import { generateDisclaimer } from '../services/freshness-disclaimer.js';
 import { tierMeetsRequirement } from '../types/conviction.js';
+import { buildConvictionDenialResponse } from '../services/conviction-boundary.js';
 import type {
   AgentQueryRequest,
   AgentQueryResponse,
@@ -145,7 +146,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     const conviction = await convictionResolver.resolve(ownerWallet);
     if (!tierMeetsRequirement(conviction.tier, 'architect')) {
       return c.json(
-        { error: 'forbidden', message: 'Architect conviction tier or higher required for agent API' },
+        buildConvictionDenialResponse(conviction.tier, 'architect', 'Architect conviction tier or higher required for agent API'),
         403,
       );
     }
@@ -282,7 +283,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     const conviction = await convictionResolver.resolve(ownerWallet);
     if (!tierMeetsRequirement(conviction.tier, 'architect')) {
       return c.json(
-        { error: 'forbidden', message: 'Architect conviction tier or higher required' },
+        buildConvictionDenialResponse(conviction.tier, 'architect', 'Architect conviction tier or higher required'),
         403,
       );
     }
@@ -335,7 +336,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     const conviction = await convictionResolver.resolve(ownerWallet);
     if (!tierMeetsRequirement(conviction.tier, 'architect')) {
       return c.json(
-        { error: 'forbidden', message: 'Architect conviction tier or higher required' },
+        buildConvictionDenialResponse(conviction.tier, 'architect', 'Architect conviction tier or higher required'),
         403,
       );
     }
@@ -393,7 +394,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     const conviction = await convictionResolver.resolve(ownerWallet);
     if (!tierMeetsRequirement(conviction.tier, 'architect')) {
       return c.json(
-        { error: 'forbidden', message: 'Architect conviction tier or higher required' },
+        buildConvictionDenialResponse(conviction.tier, 'architect', 'Architect conviction tier or higher required'),
         403,
       );
     }
@@ -434,7 +435,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     const conviction = await convictionResolver.resolve(ownerWallet);
     if (!tierMeetsRequirement(conviction.tier, 'participant')) {
       return c.json(
-        { error: 'forbidden', message: 'Participation required to vote on knowledge priorities' },
+        buildConvictionDenialResponse(conviction.tier, 'participant', 'Participation required to vote on knowledge priorities'),
         403,
       );
     }
@@ -534,7 +535,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     const conviction = await convictionResolver.resolve(ownerWallet);
     if (!tierMeetsRequirement(conviction.tier, 'architect')) {
       return c.json(
-        { error: 'forbidden', message: 'Architect conviction tier or higher required' },
+        buildConvictionDenialResponse(conviction.tier, 'architect', 'Architect conviction tier or higher required'),
         403,
       );
     }

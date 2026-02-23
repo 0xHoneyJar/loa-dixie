@@ -3,6 +3,7 @@ import type { AutonomousEngine } from '../services/autonomous-engine.js';
 import type { ConvictionResolver } from '../services/conviction-resolver.js';
 import { isValidPathParam, getRequestContext } from '../validation.js';
 import { tierMeetsRequirement } from '../types/conviction.js';
+import { buildConvictionDenialResponse } from '../services/conviction-boundary.js';
 
 /**
  * ADR: Hono sub-app typing
@@ -72,7 +73,7 @@ export function createAutonomousRoutes(deps: AutonomousRouteDeps): Hono {
     const conviction = await convictionResolver.resolve(wallet);
     if (!tierMeetsRequirement(conviction.tier, 'sovereign')) {
       return c.json(
-        { error: 'forbidden', message: 'Sovereign conviction tier required for autonomous mode' },
+        buildConvictionDenialResponse(conviction.tier, 'sovereign', 'Sovereign conviction tier required for autonomous mode'),
         403,
       );
     }

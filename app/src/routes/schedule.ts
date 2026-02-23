@@ -4,6 +4,7 @@ import type { ConvictionResolver } from '../services/conviction-resolver.js';
 import type { FinnClient } from '../proxy/finn-client.js';
 import { isValidPathParam, getRequestContext } from '../validation.js';
 import { tierMeetsRequirement } from '../types/conviction.js';
+import { buildConvictionDenialResponse } from '../services/conviction-boundary.js';
 
 export interface ScheduleRouteDeps {
   scheduleStore: ScheduleStore;
@@ -74,7 +75,7 @@ export function createScheduleRoutes(deps: ScheduleRouteDeps): Hono {
     const conviction = await convictionResolver.resolve(wallet);
     if (!tierMeetsRequirement(conviction.tier, 'builder')) {
       return c.json(
-        { error: 'forbidden', message: 'Builder conviction tier or higher required for scheduling' },
+        buildConvictionDenialResponse(conviction.tier, 'builder', 'Builder conviction tier or higher required for scheduling'),
         403,
       );
     }
