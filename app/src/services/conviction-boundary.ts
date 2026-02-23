@@ -73,23 +73,27 @@ export function evaluateEconomicBoundaryForWallet(
 ): EconomicBoundaryEvaluationResult {
   const profile = TIER_TRUST_PROFILES[tier];
 
+  // Compute timestamp once to avoid multiple Date constructions in hot path (Bridge iter2-medium-6)
+  const now = new Date();
+  const nowIso = now.toISOString();
+
   const trustSnapshot: TrustLayerSnapshot = {
     reputation_state: profile.reputation_state,
     blended_score: profile.blended_score,
-    snapshot_at: new Date().toISOString(),
+    snapshot_at: nowIso,
   };
 
   const capitalSnapshot: CapitalLayerSnapshot = {
     budget_remaining: String(budgetRemainingMicroUsd),
     billing_tier: tier,
-    budget_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    budget_period_end: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
   };
 
   return evaluateEconomicBoundary(
     trustSnapshot,
     capitalSnapshot,
     criteria,
-    new Date().toISOString(),
+    nowIso,
     `wallet:${wallet}`,
   );
 }

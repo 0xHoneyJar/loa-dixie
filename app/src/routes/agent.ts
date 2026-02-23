@@ -16,6 +16,7 @@ import type {
 } from '../types/agent-api.js';
 import { DEFAULT_AGENT_RATE_LIMITS } from '../types/agent-api.js';
 import type { KnowledgePriorityStore } from '../services/knowledge-priority-store.js';
+import { computeCost } from '../types/economic.js';
 
 export interface AgentRouteDeps {
   finnClient: FinnClient;
@@ -158,8 +159,8 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
 
     // Pre-flight budget check BEFORE incurring cost (Bridge medium-8)
     if (body.maxCostMicroUsd) {
-      // Estimate based on typical query: ~200 prompt + ~400 completion tokens
-      const estimatedCost = Math.ceil((200 * 0.003 + 400 * 0.015) * 1000);
+      // Estimate based on typical query: ~200 prompt + ~400 completion tokens (Bridge iter2-medium-2)
+      const estimatedCost = computeCost('claude-sonnet-4-6', 200, 400);
       if (estimatedCost > body.maxCostMicroUsd) {
         return c.json(
           { error: 'budget_exceeded', message: `Estimated cost ${estimatedCost}μUSD exceeds max ${body.maxCostMicroUsd}μUSD` },
@@ -200,10 +201,8 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
         },
       });
 
-      // Calculate cost (simplified — in production, use model-specific pricing)
-      const costMicroUsd = Math.ceil(
-        (finnResponse.input_tokens * 0.003 + finnResponse.output_tokens * 0.015) * 1000,
-      );
+      // Calculate cost using model-specific pricing table (Bridge iter2-medium-2)
+      const costMicroUsd = computeCost(finnResponse.model, finnResponse.input_tokens, finnResponse.output_tokens);
 
       // Post-request budget check — warn if actual exceeds max (Bridge medium-8)
       // Pre-flight already rejected clearly over-budget requests;

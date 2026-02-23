@@ -72,10 +72,19 @@ export function authorizeMemoryAccess(params: {
 }): AuthorizationResult {
   const { wallet, ownerWallet, delegatedWallets, accessPolicy, operation } = params;
 
+  // Early guard: reject missing/empty wallet before any checksumAddress calls (Bridge iter2-high-2)
+  if (!wallet) {
+    return { allowed: false, reason: 'missing_wallet' };
+  }
+
   // 1. Owner has full access (EIP-55 checksummed comparison via hounfour)
   // Guard: skip owner check if ownerWallet is empty/falsy (unknown owner scenario)
-  if (ownerWallet && checksumAddress(wallet) === checksumAddress(ownerWallet)) {
-    return { allowed: true, reason: 'owner' };
+  // Guard: zero-address owner is treated as no owner — deny access (Bridge iter2-medium-5)
+  const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+  if (ownerWallet && checksumAddress(ownerWallet) !== checksumAddress(ZERO_ADDRESS)) {
+    if (checksumAddress(wallet) === checksumAddress(ownerWallet)) {
+      return { allowed: true, reason: 'owner' };
+    }
   }
 
   // 2. Delegated wallets can read and view history
@@ -134,8 +143,10 @@ export function authorizeMemoryAccess(params: {
 
   // Handle legacy `expires_at` field on time_limited policies by converting to
   // hounfour's `policy_created_at` + `duration_hours` convention.
+  // Shallow-copy the policy to avoid mutating the caller's reference (Bridge iter2-high-1).
+  let effectivePolicy: AccessPolicy = accessPolicy;
   if (policyType === 'time_limited') {
-    const policyRecord = accessPolicy as Record<string, unknown>;
+    const policyRecord = { ...accessPolicy } as Record<string, unknown>;
     const expiresAt = policyRecord.expires_at as string | undefined;
     if (expiresAt) {
       // Convert expires_at into a synthetic policy_created_at + duration_hours pair
@@ -143,15 +154,16 @@ export function authorizeMemoryAccess(params: {
       const expiresMs = new Date(expiresAt).getTime();
       // Use epoch as synthetic creation time; duration = entire span to expires_at
       ctx.policy_created_at = new Date(0).toISOString();
-      // Assign duration_hours onto the policy if not already present
+      // Assign duration_hours onto the copy if not already present
       if (policyRecord.duration_hours === undefined) {
         policyRecord.duration_hours = expiresMs / 3600_000;
       }
     }
+    effectivePolicy = policyRecord as AccessPolicy;
   }
 
   // Delegate to hounfour's evaluateAccessPolicy
-  const result = evaluateAccessPolicy(accessPolicy, ctx);
+  const result = evaluateAccessPolicy(effectivePolicy, ctx);
 
   return {
     allowed: result.allowed,

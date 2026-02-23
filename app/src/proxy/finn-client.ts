@@ -84,17 +84,18 @@ export class FinnClient {
     );
 
     // Compute integrity headers for mutation methods (POST/PUT/PATCH)
+    // Serialize body once and reuse for both hash and fetch (Bridge iter2-medium-3)
     const isMutation = ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase());
     const integrityHeaders: Record<string, string> = {};
+    const serializedBody = opts?.body ? JSON.stringify(opts.body) : undefined;
 
-    if (isMutation && opts?.body) {
-      const bodyString = JSON.stringify(opts.body);
-      const bodyBuffer = Buffer.from(bodyString, 'utf-8');
+    if (isMutation && serializedBody) {
+      const bodyBuffer = Buffer.from(serializedBody, 'utf-8');
       const reqHash = computeReqHash(bodyBuffer);
       integrityHeaders['X-Req-Hash'] = reqHash;
 
       // Derive idempotency key: tenant + reqHash + provider + model
-      const tenant = opts.nftId ?? 'anonymous';
+      const tenant = opts?.nftId ?? 'anonymous';
       const idempotencyKey = deriveIdempotencyKey(tenant, reqHash, 'loa-finn', path);
       integrityHeaders['X-Idempotency-Key'] = idempotencyKey;
     }
@@ -107,7 +108,7 @@ export class FinnClient {
           ...integrityHeaders,
           ...opts?.headers,
         },
-        body: opts?.body ? JSON.stringify(opts.body) : undefined,
+        body: serializedBody,
         signal: controller.signal,
       });
 
