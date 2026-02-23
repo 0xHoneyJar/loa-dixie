@@ -2,14 +2,44 @@
 /**
  * Conformance Fixture Auto-Generation from Hounfour — Sprint 7, Task 7.2
  *
- * Introspects hounfour's exported validators and generates minimal valid
- * samples using TypeBox's Value.Create(). When hounfour adds new schemas,
- * re-running this script auto-generates new samples.
+ * ## Hybrid Fixture Strategy
  *
- * Some schemas with `format` or `pattern` constraints lack default values
- * in their TypeBox definition, which causes Value.Create() to fail. These
- * are logged as "skipped" with the reason, and must be manually populated
- * or have defaults added upstream.
+ * This script implements a two-source fixture pipeline:
+ *
+ * 1. **Auto-generated** (TypeBox `Value.Create()`) — Produces minimal valid
+ *    samples for schemas whose TypeBox definitions include default values
+ *    for all required fields. Approximately 15 of 53 schemas auto-generate.
+ *
+ * 2. **Manually-crafted** (`hounfour-manual-samples.json`) — Supplements
+ *    auto-generation for the ~38 schemas that `Value.Create()` cannot handle.
+ *    These schemas use `format: "date-time"`, `format: "uuid"`, `format: "uri"`,
+ *    or `pattern:` constraints (e.g., EIP-155 NFT IDs `^eip155:...`, SHA-256
+ *    hashes `^sha256:[a-f0-9]{64}$`, semver `^\d+\.\d+\.\d+$`) where TypeBox
+ *    has no default value generator.
+ *
+ * ## Merge Pipeline
+ *
+ * - Auto-generated samples are always preferred (canonical minimal shape).
+ * - Manual samples only merge for schemas that auto-generation skipped.
+ * - Each manual sample is validated against the current hounfour validator
+ *   at merge time — invalid manual samples are logged as WARN, not merged.
+ *
+ * ## Adding New Manual Samples
+ *
+ * When hounfour adds a new schema that `Value.Create()` cannot generate:
+ * 1. Run this script — new schema will appear as SKIP in output
+ * 2. Check the validator type definition for required fields and valid union values:
+ *    `node_modules/@0xhoneyjar/loa-hounfour/dist/validators/index.d.ts`
+ * 3. Check pattern/format constraints: `npx tsx scripts/check-patterns.mjs`
+ * 4. Add a sample to `tests/fixtures/hounfour-manual-samples.json`
+ * 5. Re-run this script — should show OK for the new schema
+ *
+ * ## CI Integration
+ *
+ * The test `hounfour-conformance.test.ts` section "Fixture Freshness" validates:
+ * - All fixture samples pass current hounfour validators (detects schema drift)
+ * - Combined coverage meets minimum threshold (currently ≥35 of 53)
+ * - Total schema count matches hounfour registry (detects added/removed schemas)
  *
  * Usage:
  *   cd app && npx tsx scripts/generate-conformance-fixtures.ts
@@ -19,6 +49,7 @@
  *
  * See: grimoires/loa/context/adr-hounfour-alignment.md (Level 5)
  * @since Sprint 7 — Level 5 Foundation
+ * @updated Sprint 8 — Conformance Excellence (25 manual samples, 74% coverage)
  */
 
 import { createRequire } from 'node:module';

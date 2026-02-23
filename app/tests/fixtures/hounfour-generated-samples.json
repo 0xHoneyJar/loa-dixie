@@ -1,17 +1,24 @@
 {
-  "generated_at": "2026-02-23T22:15:10.874Z",
+  "generated_at": "2026-02-23T22:50:37.930Z",
   "hounfour_version": "linked",
   "total_schemas": 53,
-  "generated_count": 15,
-  "skipped_count": 38,
-  "manual_count": 1,
+  "generated_count": 39,
+  "skipped_count": 14,
+  "manual_count": 25,
   "samples": [
     {
       "schema": "jwtClaims",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "iss": "dixie-bff",
+        "aud": "loa-finn",
+        "sub": "0x1234567890abcdef1234567890abcdef12345678",
+        "iat": 1708800000,
+        "exp": 1708803600,
+        "tenant_id": "tenant-honeyjar",
+        "tier": "free",
+        "req_hash": "sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+      }
     },
     {
       "schema": "s2sJwtClaims",
@@ -45,10 +52,23 @@
     },
     {
       "schema": "usageReport",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with formats must specify a default value"
+      "valid": true,
+      "sample": {
+        "trace_id": "trace-usage-001",
+        "tenant_id": "tenant-honeyjar",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "pool_id": "pool-default",
+        "usage": {
+          "prompt_tokens": 1000,
+          "completion_tokens": 500
+        },
+        "billing_entry_id": "bill-001",
+        "billing_method": "provider_reported",
+        "idempotency_key": "idem-usage-001",
+        "timestamp": "2026-02-24T12:00:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "streamEvent",
@@ -64,45 +84,125 @@
     },
     {
       "schema": "routingPolicy",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "version": "1.0.0",
+        "personalities": [
+          {
+            "personality_id": "default",
+            "task_routing": {
+              "chat": "cheap",
+              "analysis": "reasoning",
+              "architecture": "architect",
+              "code": "fast-code",
+              "default": "cheap"
+            }
+          }
+        ]
+      }
     },
     {
       "schema": "agentDescriptor",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "@context": "https://schema.honeyjar.xyz/agent/v1",
+        "id": "eip155:1/0x1234567890abcdef1234567890abcdef12345678/42",
+        "name": "Oracle Alpha",
+        "chain_id": 1,
+        "collection": "0x1234567890abcdef1234567890abcdef12345678",
+        "token_id": "42",
+        "personality": "default",
+        "capabilities": [
+          "chat",
+          "code_review"
+        ],
+        "models": {
+          "chat": "cheap",
+          "code": "fast-code"
+        },
+        "homepage": "https://honeyjar.xyz/agent/42",
+        "lifecycle_state": "ACTIVE",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "billingEntry",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "id": "bill-001",
+        "trace_id": "trace-20260224-abc",
+        "tenant_id": "tenant-honeyjar",
+        "cost_type": "model_inference",
+        "provider": "openai",
+        "currency": "USD",
+        "precision": 6,
+        "raw_cost_micro": "1500",
+        "multiplier_bps": 10000,
+        "total_cost_micro": "1500",
+        "rounding_policy": "largest_remainder",
+        "recipients": [
+          {
+            "address": "0x1234567890abcdef1234567890abcdef12345678",
+            "role": "provider",
+            "share_bps": 8000,
+            "amount_micro": "1200"
+          },
+          {
+            "address": "0xabcdef1234567890abcdef1234567890abcdef12",
+            "role": "platform",
+            "share_bps": 2000,
+            "amount_micro": "300"
+          }
+        ],
+        "idempotency_key": "idem-bill-001",
+        "timestamp": "2026-02-24T12:00:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "creditNote",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "id": "credit-001",
+        "references_billing_entry": "bill-001",
+        "reason": "refund",
+        "amount_micro": "50000",
+        "recipients": [
+          {
+            "address": "0x1234567890abcdef1234567890abcdef12345678",
+            "role": "provider",
+            "share_bps": 10000,
+            "amount_micro": "50000"
+          }
+        ],
+        "issued_at": "2026-02-24T12:00:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "conversation",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "id": "conv-001",
+        "nft_id": "eip155:1/0x1234567890abcdef1234567890abcdef12345678/42",
+        "status": "active",
+        "message_count": 5,
+        "created_at": "2026-02-24T12:00:00.000Z",
+        "updated_at": "2026-02-24T12:30:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "message",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with formats must specify a default value"
+      "valid": true,
+      "sample": {
+        "id": "msg-001",
+        "conversation_id": "conv-001",
+        "role": "user",
+        "content": "Hello, world!",
+        "created_at": "2026-02-24T12:00:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "conversationSealingPolicy",
@@ -115,24 +215,58 @@
     },
     {
       "schema": "transferSpec",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "transfer_id": "txn-001",
+        "nft_id": "eip155:1/0x1234567890abcdef1234567890abcdef12345678/42",
+        "from_owner": "0x1234567890abcdef1234567890abcdef12345678",
+        "to_owner": "0xabcdef1234567890abcdef1234567890abcdef12",
+        "scenario": "sale",
+        "sealing_policy": {
+          "encryption_scheme": "aes-256-gcm",
+          "key_derivation": "hkdf-sha256",
+          "access_audit": true
+        },
+        "initiated_at": "2026-02-24T12:00:00.000Z",
+        "initiated_by": "0x1234567890abcdef1234567890abcdef12345678",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "transferEvent",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "transfer_id": "txn-001",
+        "nft_id": "eip155:1/0x1234567890abcdef1234567890abcdef12345678/42",
+        "from_owner": "0x1234567890abcdef1234567890abcdef12345678",
+        "to_owner": "0xabcdef1234567890abcdef1234567890abcdef12",
+        "scenario": "sale",
+        "result": "completed",
+        "sealing_policy": {
+          "encryption_scheme": "aes-256-gcm",
+          "key_derivation": "hkdf-sha256",
+          "access_audit": true
+        },
+        "conversations_sealed": 3,
+        "conversations_migrated": 3,
+        "initiated_at": "2026-02-24T12:00:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "domainEvent",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "event_id": "evt-001",
+        "aggregate_id": "agent-test-01",
+        "aggregate_type": "agent",
+        "type": "agent.lifecycle.invoked",
+        "version": 1,
+        "occurred_at": "2026-02-24T12:00:00.000Z",
+        "actor": "system",
+        "payload": {},
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "domainEventBatch",
@@ -197,10 +331,15 @@
     },
     {
       "schema": "healthStatus",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with formats must specify a default value"
+      "valid": true,
+      "sample": {
+        "healthy": true,
+        "latency_ms": 45,
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-4-6",
+        "checked_at": "2026-02-24T12:00:00.000Z",
+        "circuit_state": "closed"
+      }
     },
     {
       "schema": "thinkingTrace",
@@ -230,38 +369,84 @@
     },
     {
       "schema": "performanceRecord",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with formats must specify a default value"
+      "valid": true,
+      "sample": {
+        "record_id": "perf-001",
+        "agent_id": "agent-test-01",
+        "billing_entry_id": "bill-001",
+        "occurred_at": "2026-02-24T12:00:00.000Z",
+        "output": {
+          "tokens_consumed": 1500,
+          "model_used": "claude-sonnet-4-6"
+        },
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "contributionRecord",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "contribution_id": "contrib-001",
+        "agent_id": "agent-test-01",
+        "contribution_type": "curation",
+        "value_micro": "50000",
+        "assessed_by": "peer",
+        "assessed_at": "2026-02-24T12:00:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "sanction",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with formats must specify a default value"
+      "valid": true,
+      "sample": {
+        "sanction_id": "sanc-001",
+        "agent_id": "agent-bad-01",
+        "severity": "warning",
+        "trigger": {
+          "violation_type": "content_policy",
+          "occurrence_count": 3,
+          "evidence_event_ids": [
+            "evt-001",
+            "evt-002",
+            "evt-003"
+          ]
+        },
+        "imposed_by": "automatic",
+        "imposed_at": "2026-02-24T12:00:00.000Z",
+        "appeal_available": true,
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "disputeRecord",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with formats must specify a default value"
+      "valid": true,
+      "sample": {
+        "dispute_id": "disp-001",
+        "filed_by": "agent-test-01",
+        "filed_against": "agent-test-02",
+        "dispute_type": "quality",
+        "evidence": [
+          {
+            "event_id": "evt-001",
+            "description": "Low quality output in conversation conv-001"
+          }
+        ],
+        "filed_at": "2026-02-24T12:00:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "validatedOutcome",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "validation_id": "val-001",
+        "performance_record_id": "perf-001",
+        "validator_agent_id": "agent-validator-01",
+        "validator_stake_micro": "100000",
+        "rating": 0.92,
+        "validated_at": "2026-02-24T12:00:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "reputationScore",
@@ -283,17 +468,34 @@
     },
     {
       "schema": "escrowEntry",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "escrow_id": "550e8400-e29b-41d4-a716-446655440001",
+        "payer_id": "tenant-honeyjar",
+        "payee_id": "agent-test-01",
+        "amount_micro": "100000",
+        "state": "held",
+        "held_at": "2026-02-24T12:00:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "stakePosition",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "stake_id": "550e8400-e29b-41d4-a716-446655440002",
+        "staker_id": "agent-test-01",
+        "target_id": "pool-governance",
+        "amount_micro": "1000000",
+        "stake_type": "conviction",
+        "vesting": {
+          "schedule": "immediate",
+          "vested_micro": "1000000",
+          "remaining_micro": "0"
+        },
+        "staked_at": "2026-02-24T12:00:00.000Z",
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "commonsDividend",
@@ -311,24 +513,60 @@
     },
     {
       "schema": "completionRequest",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with formats must specify a default value"
+      "valid": true,
+      "sample": {
+        "request_id": "550e8400-e29b-41d4-a716-446655440000",
+        "agent_id": "agent-test-01",
+        "tenant_id": "tenant-honeyjar",
+        "model": "gpt-4o",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello"
+          }
+        ],
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "completionResult",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with formats must specify a default value"
+      "valid": true,
+      "sample": {
+        "request_id": "550e8400-e29b-41d4-a716-446655440000",
+        "model": "gpt-4o",
+        "provider": "openai",
+        "content": "Hello! How can I help you?",
+        "finish_reason": "stop",
+        "usage": {
+          "prompt_tokens": 10,
+          "completion_tokens": 8,
+          "total_tokens": 18,
+          "cost_micro": "150"
+        },
+        "latency_ms": 450,
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "modelCapabilities",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "model_id": "claude-sonnet-4-6",
+        "provider": "anthropic",
+        "capabilities": {
+          "thinking_traces": true,
+          "vision": true,
+          "tool_calling": true,
+          "streaming": true,
+          "json_mode": false,
+          "native_runtime": false
+        },
+        "limits": {
+          "max_context_tokens": 200000,
+          "max_output_tokens": 8192
+        },
+        "contract_version": "7.9.2"
+      }
     },
     {
       "schema": "providerWireMessage",
@@ -339,10 +577,14 @@
     },
     {
       "schema": "toolDefinition",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with patterns must specify a default value"
+      "valid": true,
+      "sample": {
+        "type": "function",
+        "function": {
+          "name": "web_search",
+          "description": "Search the web for information"
+        }
+      }
     },
     {
       "schema": "toolResult",
@@ -416,10 +658,19 @@
     },
     {
       "schema": "auditTrailEntry",
-      "valid": false,
-      "sample": null,
-      "skipped": true,
-      "skip_reason": "String types with formats must specify a default value"
+      "valid": true,
+      "sample": {
+        "entry_id": "550e8400-e29b-41d4-a716-446655440003",
+        "completion_id": "550e8400-e29b-41d4-a716-446655440004",
+        "billing_entry_id": "550e8400-e29b-41d4-a716-446655440005",
+        "agent_id": "agent-test-01",
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-4-6",
+        "cost_micro": "1500",
+        "timestamp": "2026-02-24T12:00:00.000Z",
+        "conservation_status": "conserved",
+        "contract_version": "7.9.2"
+      }
     }
   ]
 }

@@ -562,7 +562,47 @@ describe('Hounfour Conformance: Billing Conservation', () => {
   });
 });
 
-// ─── 10. Full Conformance Suite ───────────────────────────────────
+// ─── 10. Fixture Freshness — Schema Drift Detection ──────────────
+
+describe('Hounfour Conformance: Fixture Freshness', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const generatedSamples = require('../fixtures/hounfour-generated-samples.json');
+
+  /** Minimum number of valid samples across auto + manual. Raise as coverage improves. */
+  const MIN_COVERAGE_THRESHOLD = 35;
+
+  it('all generated fixture samples pass current hounfour validators', () => {
+    const failures: string[] = [];
+    for (const entry of generatedSamples.samples) {
+      if (entry.skipped || !entry.valid) continue;
+      const validatorFn = (validators as Record<string, (() => { Check: (d: unknown) => boolean }) | undefined>)[entry.schema];
+      if (!validatorFn) continue;
+      const compiled = validatorFn();
+      if (!compiled.Check(entry.sample)) {
+        failures.push(`${entry.schema}: fixture sample fails current validator`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it('combined coverage (auto + manual) meets minimum threshold', () => {
+    const validCount = generatedSamples.samples.filter(
+      (s: { valid: boolean; skipped?: boolean }) => s.valid && !s.skipped,
+    ).length;
+    expect(validCount).toBeGreaterThanOrEqual(MIN_COVERAGE_THRESHOLD);
+  });
+
+  it('manual sample count matches expectation', () => {
+    expect(generatedSamples.manual_count).toBeGreaterThanOrEqual(20);
+  });
+
+  it('total schema count matches hounfour validator registry', () => {
+    const validatorCount = Object.keys(validators).length;
+    expect(generatedSamples.total_schemas).toBe(validatorCount);
+  });
+});
+
+// ─── 11. Full Conformance Suite ───────────────────────────────────
 
 describe('Hounfour Conformance: Full Suite', () => {
   it('runFullSuite passes all sample payloads', () => {
