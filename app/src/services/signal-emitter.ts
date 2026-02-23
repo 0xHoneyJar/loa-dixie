@@ -40,6 +40,7 @@ export class SignalEmitter {
     'dixie.signal.personality',
     'dixie.signal.schedule',
     'dixie.signal.economic',
+    'dixie.signal.conformance',
   ] as const;
 
   constructor(opts: NatsClientOptions) {

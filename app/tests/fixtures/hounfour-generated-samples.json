@@ -1,0 +1,413 @@
+{
+  "generated_at": "2026-02-23T13:56:57.632Z",
+  "hounfour_version": "linked",
+  "total_schemas": 53,
+  "generated_count": 14,
+  "skipped_count": 39,
+  "samples": [
+    {
+      "schema": "jwtClaims",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "s2sJwtClaims",
+      "valid": true,
+      "sample": {
+        "iss": "",
+        "aud": "",
+        "sub": "",
+        "iat": 0,
+        "exp": 0
+      }
+    },
+    {
+      "schema": "invokeResponse",
+      "valid": true,
+      "sample": {
+        "id": "",
+        "model": "",
+        "provider": "",
+        "pool_id": "",
+        "content": "",
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0
+        },
+        "billing_entry_id": " ",
+        "billing_method": "provider_reported",
+        "latency_ms": 0,
+        "contract_version": ""
+      }
+    },
+    {
+      "schema": "usageReport",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "streamEvent",
+      "valid": true,
+      "sample": {
+        "type": "stream_start",
+        "model": "",
+        "provider": "",
+        "pool_id": "",
+        "trace_id": "",
+        "contract_version": ""
+      }
+    },
+    {
+      "schema": "routingPolicy",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "agentDescriptor",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "billingEntry",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "creditNote",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "conversation",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "message",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "conversationSealingPolicy",
+      "valid": true,
+      "sample": {
+        "encryption_scheme": "aes-256-gcm",
+        "key_derivation": "hkdf-sha256",
+        "access_audit": false
+      }
+    },
+    {
+      "schema": "transferSpec",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "transferEvent",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "domainEvent",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "domainEventBatch",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "lifecycleTransitionPayload",
+      "valid": true,
+      "sample": {
+        "agent_id": " ",
+        "previous_state": "DORMANT",
+        "new_state": "DORMANT",
+        "reason": " "
+      }
+    },
+    {
+      "schema": "capability",
+      "valid": true,
+      "sample": {
+        "skill_id": " "
+      }
+    },
+    {
+      "schema": "capabilityQuery",
+      "valid": true,
+      "sample": {}
+    },
+    {
+      "schema": "capabilityResponse",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "protocolDiscovery",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "sagaContext",
+      "valid": true,
+      "sample": {
+        "saga_id": " ",
+        "step": 1,
+        "direction": "forward"
+      }
+    },
+    {
+      "schema": "accessPolicy",
+      "valid": true,
+      "sample": {
+        "type": "none",
+        "audit_required": false,
+        "revocable": false
+      }
+    },
+    {
+      "schema": "healthStatus",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "thinkingTrace",
+      "valid": true,
+      "sample": {
+        "content": "",
+        "model_id": " ",
+        "provider": " ",
+        "redacted": false
+      }
+    },
+    {
+      "schema": "toolCall",
+      "valid": true,
+      "sample": {
+        "id": "",
+        "name": "",
+        "arguments": ""
+      }
+    },
+    {
+      "schema": "routingConstraint",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "performanceRecord",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "contributionRecord",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "sanction",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "disputeRecord",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "validatedOutcome",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "reputationScore",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "escrowEntry",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "stakePosition",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "commonsDividend",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "mutualCredit",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "completionRequest",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "completionResult",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "modelCapabilities",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "providerWireMessage",
+      "valid": true,
+      "sample": {
+        "role": "system"
+      }
+    },
+    {
+      "schema": "toolDefinition",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "toolResult",
+      "valid": true,
+      "sample": {
+        "role": "tool",
+        "tool_call_id": " ",
+        "content": ""
+      }
+    },
+    {
+      "schema": "ensembleRequest",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "ensembleResult",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "agentRequirements",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "budgetScope",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "routingResolution",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "constraintProposal",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "modelProviderSpec",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "conformanceLevel",
+      "valid": true,
+      "sample": "self_declared"
+    },
+    {
+      "schema": "agentCapacityReservation",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "auditTrailEntry",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    }
+  ]
+}

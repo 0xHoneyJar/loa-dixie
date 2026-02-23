@@ -53,12 +53,13 @@ describe('services/signal-emitter', () => {
       expect(SignalEmitter.STREAM_NAME).toBe('DIXIE_SIGNALS');
     });
 
-    it('has 4 signal subjects', () => {
-      expect(SignalEmitter.SUBJECTS).toHaveLength(4);
+    it('has 5 signal subjects', () => {
+      expect(SignalEmitter.SUBJECTS).toHaveLength(5);
       expect(SignalEmitter.SUBJECTS).toContain('dixie.signal.interaction');
       expect(SignalEmitter.SUBJECTS).toContain('dixie.signal.personality');
       expect(SignalEmitter.SUBJECTS).toContain('dixie.signal.schedule');
       expect(SignalEmitter.SUBJECTS).toContain('dixie.signal.economic');
+      expect(SignalEmitter.SUBJECTS).toContain('dixie.signal.conformance');
     });
   });
 

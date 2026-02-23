@@ -13,7 +13,7 @@ The Bridgebuilder review identified Hounfour alignment as the highest-priority s
 
 ## Protocol Maturity Levels
 
-Hounfour defines four levels of protocol maturity:
+Hounfour defines five levels of protocol maturity:
 
 | Level | Name | What It Means | Dixie Status |
 |-------|------|---------------|-------------|
@@ -21,6 +21,7 @@ Hounfour defines four levels of protocol maturity:
 | 2 | Structural | Aggregate boundaries enforced; state machines use protocol transitions | **Achieved (Sprint 1)** |
 | 3 | Behavioral | Formal temporal invariants; protocol-level validation at runtime | **Achieved (Sprints 2-3)** |
 | 4 | Civilizational | Cross-system E2E validator (Freeside PR #63) can mechanically verify compliance | **Achieved (Sprint 4)** |
+| 5 | Runtime Constitutional Enforcement | Every payload crossing a protocol boundary is validated at runtime; invalid payloads rejected or logged; conformance is mechanical, not social | **Foundation (Sprint 7)** |
 
 ## Current State (Post Sprint 4 — Level 4 Achieved)
 
@@ -54,7 +55,7 @@ These types are genuinely Dixie-specific and have no Hounfour equivalent:
 - `ErrorResponse` — BFF error format for API consumers
 - `DixieConfig` — BFF configuration
 
-## Progression Roadmap (All Levels Achieved)
+## Progression Roadmap
 
 ### Level 1 → Level 2 (Structural) — Achieved Sprint 1
 
@@ -82,6 +83,38 @@ E2E conformance suite validates all protocol-touching payloads mechanically:
 6. State machine transitions match hounfour canonical definitions
 7. Request hashes deterministic, idempotency keys collision-resistant
 
+### Level 4 → Level 5 (Runtime Constitutional Enforcement) — Foundation Sprint 7
+
+Level 4 proves compliance mechanically via test suites that run at build time. Level 5
+extends this to **runtime**: every payload that crosses a protocol boundary is validated
+before it reaches the consumer. Invalid payloads are rejected (development) or logged
+with full diagnostic context (production).
+
+**Analogy**: Kubernetes admission webhooks. In Kubernetes, a ValidatingAdmissionWebhook
+intercepts every API request and rejects those that violate policy — regardless of who
+submitted them. Level 5 is the same concept applied to protocol payloads: the middleware
+intercepts every outgoing response and validates it against hounfour schemas.
+
+**Components (Sprint 7)**:
+1. `conformance-middleware.ts` — Hono middleware factory with configurable sampling
+2. `conformance-signal.ts` — Wires violations into NATS signal pipeline
+3. `generate-conformance-fixtures.ts` — Auto-generates valid samples from hounfour schemas
+4. `ConformanceViolationSignal` — Signal type for telemetry/alerting
+
+**Progression Criteria (Level 5 Fully Achieved)**:
+- [ ] Middleware deployed on all protocol-boundary routes (not just opt-in)
+- [ ] Sample rate tuned per environment (1.0 dev, 0.001 prod)
+- [ ] Violation alerting wired to CloudWatch/PagerDuty
+- [ ] Zero violations sustained for 7 days in production
+- [ ] Auto-generated fixtures cover all 53 hounfour schemas (requires upstream defaults)
+
+**What Level 5 guarantees that Level 4 does not**:
+- Level 4: "Our test payloads conform" (build-time assurance)
+- Level 5: "Every payload conforms" (runtime assurance)
+- The gap between these is the gap between sample-based testing and monitoring.
+  Level 5 closes it by treating schema conformance as a runtime property, not
+  just a test property.
+
 ## Design Principles
 
 1. **Import, don't duplicate.** When Hounfour has a type, use it. Don't create local copies.
@@ -94,6 +127,11 @@ E2E conformance suite validates all protocol-touching payloads mechanically:
 
 - `app/src/types.ts` — Type audit and Hounfour imports
 - `app/src/services/conformance-suite.ts` — E2E conformance suite service (Sprint 4)
+- `app/src/middleware/conformance-middleware.ts` — Runtime conformance middleware (Sprint 7, Level 5)
+- `app/src/services/conformance-signal.ts` — Conformance violation signal pipeline (Sprint 7)
+- `app/scripts/generate-conformance-fixtures.ts` — Auto-fixture generation from hounfour (Sprint 7)
+- `app/tests/unit/level5-foundation.test.ts` — Level 5 foundation tests (Sprint 7)
+- `app/tests/fixtures/hounfour-generated-samples.json` — Auto-generated conformance samples
 - `app/tests/unit/hounfour-conformance.test.ts` — Level 4 conformance tests (Sprint 4)
 - `app/tests/unit/protocol-compliance.test.ts` — Protocol compliance tests (Sprint 13, expanded Sprint 4)
 - `app/src/services/access-policy-validator.ts` — Runtime AccessPolicy validation (Sprint 1)
@@ -101,3 +139,4 @@ E2E conformance suite validates all protocol-touching payloads mechanically:
 - `app/src/services/conviction-boundary.ts` — Economic boundary integration (Sprint 3)
 - `app/src/services/reputation-service.ts` — Governance function wiring (Sprint 3)
 - `grimoires/loa/context/adr-communitarian-agents.md` — Why the governance types matter
+- `grimoires/loa/context/adr-dixie-enrichment-tier.md` — Dixie as context enrichment tier (Sprint 7)
