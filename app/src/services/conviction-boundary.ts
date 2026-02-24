@@ -29,6 +29,7 @@ import type { ReputationAggregate } from '@0xhoneyjar/loa-hounfour/governance';
 import type { ConvictionTier } from '../types/conviction.js';
 import type { TaskType, ScoringPathLog } from '../types/reputation-evolution.js';
 import type { DixieReputationAggregate } from '../types/reputation-evolution.js';
+import type { ScoringPathTracker } from './scoring-path-tracker.js';
 
 /**
  * Trust profile derived from a conviction tier.
@@ -127,6 +128,15 @@ export interface EconomicBoundaryOptions {
    * @since Sprint 10 — Task 10.4
    */
   taskType?: TaskType;
+  /**
+   * When provided, scoring path entries are recorded with hash chain integrity.
+   * Each entry gets `entry_hash` (SHA-256 of canonical JSON) and `previous_hash`
+   * (link to preceding entry). When absent, scoring paths are plain objects
+   * without hash fields (backward compatible).
+   *
+   * @since cycle-005 — Sprint 61 (Hounfour v7.11.0 hash chain)
+   */
+  scoringPathTracker?: ScoringPathTracker;
 }
 
 /**
@@ -197,7 +207,7 @@ export function evaluateEconomicBoundaryForWallet(
     // EconomicBoundaryOptions ever gained 'min_trust_score', the old
     // check would misclassify it as QualificationCriteria. These fields
     // are structurally unique to each type.
-    if ('criteria' in criteriaOrOpts || 'reputationAggregate' in criteriaOrOpts || 'budgetPeriodDays' in criteriaOrOpts || 'taskType' in criteriaOrOpts) {
+    if ('criteria' in criteriaOrOpts || 'reputationAggregate' in criteriaOrOpts || 'budgetPeriodDays' in criteriaOrOpts || 'taskType' in criteriaOrOpts || 'scoringPathTracker' in criteriaOrOpts) {
       // New: EconomicBoundaryOptions
       const opts = criteriaOrOpts as EconomicBoundaryOptions;
       criteria = opts.criteria ?? DEFAULT_CRITERIA;
@@ -223,14 +233,20 @@ export function evaluateEconomicBoundaryForWallet(
   // task_cohorts matching that task type, use the task-specific score instead
   // of the aggregate score. This provides more precise access decisions when
   // the request context includes a known task type.
-  let blendedScore = profile.blended_score;
-  let reputationState = profile.reputation_state;
-  let scoringPath: ScoringPathLog = { path: 'tier_default', reason: 'No reputation aggregate available; using static tier-based score' };
-
-  // Resolve taskType from options (may be undefined even when opts is provided)
+  // Resolve taskType and tracker from options (may be undefined even when opts is provided)
   const taskType = (criteriaOrOpts && 'taskType' in criteriaOrOpts)
     ? (criteriaOrOpts as EconomicBoundaryOptions).taskType
     : undefined;
+  const tracker = (criteriaOrOpts && 'scoringPathTracker' in criteriaOrOpts)
+    ? (criteriaOrOpts as EconomicBoundaryOptions).scoringPathTracker
+    : undefined;
+
+  let blendedScore = profile.blended_score;
+  let reputationState = profile.reputation_state;
+  let scoringPathInput: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'> = {
+    path: 'tier_default',
+    reason: 'No reputation aggregate available; using static tier-based score',
+  };
 
   if (reputationAggregate) {
     // Sprint 10 — Task 10.4: Try task-specific cohort first
@@ -254,7 +270,7 @@ export function evaluateEconomicBoundaryForWallet(
             reputationAggregate.pseudo_count,
           );
           reputationState = reputationAggregate.state;
-          scoringPath = {
+          scoringPathInput = {
             path: 'task_cohort',
             model_id: activeCohort.model_id,
             task_type: taskType,
@@ -274,9 +290,12 @@ export function evaluateEconomicBoundaryForWallet(
         reputationAggregate.pseudo_count,
       );
       reputationState = reputationAggregate.state;
-      scoringPath = { path: 'aggregate', reason: 'Using aggregate personal score (no task-specific cohort)' };
+      scoringPathInput = { path: 'aggregate', reason: 'Using aggregate personal score (no task-specific cohort)' };
     }
   }
+
+  // Record scoring path — with hash chain when tracker is provided, plain object otherwise
+  const scoringPath: ScoringPathLog = tracker ? tracker.record(scoringPathInput) : scoringPathInput;
 
   // Log the scoring path for observability (Sprint 10 — Task 10.4)
   // Using console.debug for minimal overhead; structured logging in production.

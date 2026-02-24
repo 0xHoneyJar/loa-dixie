@@ -1,21 +1,27 @@
 /**
  * Conformance Suite Service — Sprint 4, Task 4.1
  *
- * Validates Dixie payloads against Hounfour v7.9.2 schemas. This service is
- * the Level 4 gate: if all payloads pass, Dixie achieves Civilizational
- * protocol maturity.
+ * Validates Dixie payloads against Hounfour v7.11.0 schemas. This service is
+ * the Level 4+ gate: if all payloads pass, Dixie achieves protocol maturity.
  *
  * Methods:
  * - validatePayload(schemaName, payload) — validate any payload against a named schema
  * - runFullSuite() — validate all protocol-touching payloads
  *
- * See: grimoires/loa/context/adr-hounfour-alignment.md (Level 4)
+ * See: grimoires/loa/context/adr-hounfour-alignment.md (Level 4+)
  * @since Sprint 4 — E2E Conformance & Level 4 Gate
+ * @since cycle-005 — Sprint 61 (governance schema extension for v7.11.0)
  */
 
 import { validate, validators } from '@0xhoneyjar/loa-hounfour';
 import { AccessPolicySchema, ConversationSealingPolicySchema } from '@0xhoneyjar/loa-hounfour/core';
 import type { AccessPolicy, ConversationSealingPolicy } from '@0xhoneyjar/loa-hounfour/core';
+import {
+  TaskTypeSchema,
+  TaskTypeCohortSchema,
+  ReputationEventSchema,
+  ScoringPathLogSchema,
+} from '@0xhoneyjar/loa-hounfour/governance';
 
 /**
  * Supported schema names for conformance validation.
@@ -28,7 +34,11 @@ export type ConformanceSchemaName =
   | 'billingEntry'
   | 'domainEvent'
   | 'agentDescriptor'
-  | 'healthStatus';
+  | 'healthStatus'
+  | 'taskType'
+  | 'taskTypeCohort'
+  | 'reputationEvent'
+  | 'scoringPathLog';
 
 /** Result of a single conformance check. */
 export interface ConformanceResult {
@@ -47,6 +57,17 @@ export interface ConformanceSuiteResult {
   readonly results: ConformanceResult[];
   readonly timestamp: string;
 }
+
+/**
+ * Governance schema map for direct TypeBox validation.
+ * These schemas are imported from @0xhoneyjar/loa-hounfour/governance.
+ */
+const GOVERNANCE_SCHEMAS: Record<string, unknown> = {
+  taskType: TaskTypeSchema,
+  taskTypeCohort: TaskTypeCohortSchema,
+  reputationEvent: ReputationEventSchema,
+  scoringPathLog: ScoringPathLogSchema,
+};
 
 /**
  * Validate a single payload against a named hounfour schema.
@@ -72,6 +93,18 @@ export function validatePayload(
 
     if (schemaName === 'conversationSealingPolicy') {
       const result = validate(ConversationSealingPolicySchema, payload);
+      return {
+        schemaName,
+        valid: result.valid,
+        errors: result.valid ? [] : (result as { errors: string[] }).errors,
+        warnings: result.warnings,
+      };
+    }
+
+    // Governance schemas — use validate() with TypeBox schemas directly
+    const govSchema = GOVERNANCE_SCHEMAS[schemaName];
+    if (govSchema) {
+      const result = validate(govSchema, payload);
       return {
         schemaName,
         valid: result.valid,
@@ -173,6 +206,99 @@ function getSamplePayloads(): Array<{ schemaName: ConformanceSchemaName; payload
         },
       } satisfies ConversationSealingPolicy,
     },
+
+    // ─── Governance schemas (v7.11.0) ───────────────────────────────────
+
+    // TaskType — protocol literal
+    {
+      schemaName: 'taskType',
+      label: 'TaskType protocol literal (code_review)',
+      payload: 'code_review',
+    },
+    // TaskType — community-defined (namespace:type pattern)
+    {
+      schemaName: 'taskType',
+      label: 'TaskType community pattern (legal-guild:contract_review)',
+      payload: 'legal-guild:contract_review',
+    },
+    // TaskTypeCohort — full cohort with confidence_threshold
+    {
+      schemaName: 'taskTypeCohort',
+      label: 'TaskTypeCohort with confidence_threshold',
+      payload: {
+        model_id: 'gpt-4o',
+        personal_score: 0.85,
+        sample_count: 42,
+        last_updated: '2026-02-24T10:00:00Z',
+        task_type: 'code_review',
+        confidence_threshold: 30,
+      },
+    },
+    // ReputationEvent — quality_signal variant
+    {
+      schemaName: 'reputationEvent',
+      label: 'ReputationEvent (quality_signal)',
+      payload: {
+        event_id: '550e8400-e29b-41d4-a716-446655440001',
+        agent_id: 'agent-dixie-01',
+        collection_id: 'collection-honeyjar',
+        timestamp: '2026-02-24T10:00:00Z',
+        type: 'quality_signal',
+        score: 0.92,
+        task_type: 'code_review',
+      },
+    },
+    // ReputationEvent — task_completed variant
+    {
+      schemaName: 'reputationEvent',
+      label: 'ReputationEvent (task_completed)',
+      payload: {
+        event_id: '550e8400-e29b-41d4-a716-446655440002',
+        agent_id: 'agent-dixie-01',
+        collection_id: 'collection-honeyjar',
+        timestamp: '2026-02-24T10:05:00Z',
+        type: 'task_completed',
+        task_type: 'analysis',
+        success: true,
+        duration_ms: 4500,
+      },
+    },
+    // ReputationEvent — credential_update variant
+    {
+      schemaName: 'reputationEvent',
+      label: 'ReputationEvent (credential_update)',
+      payload: {
+        event_id: '550e8400-e29b-41d4-a716-446655440003',
+        agent_id: 'agent-dixie-01',
+        collection_id: 'collection-honeyjar',
+        timestamp: '2026-02-24T10:10:00Z',
+        type: 'credential_update',
+        credential_id: '660e8400-e29b-41d4-a716-446655440004',
+        action: 'issued',
+      },
+    },
+    // ScoringPathLog — with hash chain fields (v7.11.0)
+    {
+      schemaName: 'scoringPathLog',
+      label: 'ScoringPathLog with hash chain',
+      payload: {
+        path: 'task_cohort',
+        model_id: 'gpt-4o',
+        task_type: 'code_review',
+        reason: 'Task-specific cohort found',
+        scored_at: '2026-02-24T10:00:00Z',
+        entry_hash: 'sha256:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+        previous_hash: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      },
+    },
+    // ScoringPathLog — without hash chain (backward compat)
+    {
+      schemaName: 'scoringPathLog',
+      label: 'ScoringPathLog without hash chain (backward compat)',
+      payload: {
+        path: 'tier_default',
+      },
+    },
   ];
 }
 
@@ -180,7 +306,7 @@ function getSamplePayloads(): Array<{ schemaName: ConformanceSchemaName; payload
  * Run the full conformance suite against all sample payloads.
  *
  * Returns a ConformanceSuiteResult with per-check results and
- * an aggregate pass/fail. This IS the Level 4 gate.
+ * an aggregate pass/fail. This IS the Level 4+ gate.
  */
 export function runFullSuite(): ConformanceSuiteResult {
   const samples = getSamplePayloads();
