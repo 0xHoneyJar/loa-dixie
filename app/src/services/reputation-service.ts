@@ -491,7 +491,7 @@ export function reconstructAggregateFromEvents(
     created_at: events.length > 0 ? events[0].timestamp : new Date().toISOString(),
     last_updated: events.length > 0 ? events[events.length - 1].timestamp : new Date().toISOString(),
     transition_history: [],
-    contract_version: '7.9.2',
+    contract_version: '7.11.0',
     task_cohorts: [],
   };
 }
@@ -505,11 +505,16 @@ export type {
   ModelCohort,
 };
 
-// Re-export Sprint 10 types
+// Re-export Sprint 10 types + v7.11.0 additions
 export type {
   TaskTypeCohort,
   ReputationEvent,
+  QualitySignalEvent,
+  TaskCompletedEvent,
+  CredentialUpdateEvent,
   DixieReputationAggregate,
+  ScoringPath,
+  ScoringPathLog,
 } from '../types/reputation-evolution.js';
-export { TASK_TYPES } from '../types/reputation-evolution.js';
-export type { TaskType, ScoringPathLog } from '../types/reputation-evolution.js';
+export { TASK_TYPES, validateTaskCohortUniqueness } from '../types/reputation-evolution.js';
+export type { TaskType } from '../types/reputation-evolution.js';

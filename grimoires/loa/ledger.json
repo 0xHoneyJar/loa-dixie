@@ -422,16 +422,64 @@
       ]
     }
   ],
-  "active_cycle": "cycle-004",
+  "active_cycle": {
+    "id": "cycle-005",
+    "label": "Hounfour v7.11.0 Full Adoption — Task-Dimensional Protocol Compliance",
+    "started": "2026-02-24",
+    "status": "active",
+    "prd": "grimoires/loa/prd.md",
+    "sdd": "grimoires/loa/sdd.md",
+    "sprint_plan": "grimoires/loa/sprint.md",
+    "sprints": [
+      {
+        "id": "sprint-1",
+        "global_id": 60,
+        "label": "Type Migration & Re-export Barrel",
+        "tasks": 6,
+        "status": "completed"
+      },
+      {
+        "id": "sprint-2",
+        "global_id": 61,
+        "label": "Hash Chain Implementation & Conformance",
+        "tasks": 6,
+        "status": "completed"
+      },
+      {
+        "id": "sprint-3",
+        "global_id": 62,
+        "label": "Correctness & Maintainability (Bridge Iter 1)",
+        "tasks": 4,
+        "status": "completed"
+      },
+      {
+        "id": "sprint-4",
+        "global_id": 63,
+        "label": "Production Conformance & Scoring Path Provenance",
+        "tasks": 5,
+        "status": "completed"
+      },
+      {
+        "id": "sprint-5",
+        "global_id": 64,
+        "label": "Governance Provenance & Multi-Model Accountability",
+        "tasks": 5,
+        "status": "completed"
+      }
+    ]
+  },
   "active_bugfix": null,
-  "global_sprint_counter": 59,
+  "global_sprint_counter": 64,
   "bugfix_cycles": [],
   "release_cycles": [
     {
       "id": "cycle-004",
       "label": "Tag Release v2.0.0 — Constitutional Architecture",
       "started": "2026-02-24",
-      "status": "active",
+      "status": "archived",
+      "completed": "2026-02-24",
+      "archived": "2026-02-24T00:00:00Z",
+      "archive_path": "grimoires/loa/archive/2026-02-24-v2-0-0-release",
       "prd": "grimoires/loa/prd.md",
       "sdd": null,
       "sprint_plan": "grimoires/loa/sprint.md",

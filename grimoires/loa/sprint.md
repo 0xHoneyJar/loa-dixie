@@ -1,116 +1,111 @@
-# Sprint Plan: v2.0.0 Excellence — Bridge Iteration 2 (Bridgebuilder Findings Resolution)
+# Sprint Plan: Correctness & Maintainability (Bridge Iter 1)
 
-**Cycle**: cycle-004 (bridge iteration 2)
-**Source**: Bridgebuilder review of PR #8 — all findings (2 HIGH, 4 MEDIUM, 2 LOW)
-**Sprints**: 2 (Global IDs: 58-59)
-**Strategy**: Correctness & security hardening → documentation & polish
-**Predecessor**: Bridge iteration 1 (sprints 55-57, 1076 tests passing)
-
----
-
-## Sprint 1 (Global #58): Correctness & Security Hardening
-
-**Goal**: Resolve both HIGH findings and the functional MEDIUM findings. Add observability to wallet normalization fallback, tighten the legacy error handler, guard enrichment service scans, and extract validation constants.
-
-### Tasks
-
-**Task 1.1: Add observability to normalizeWallet fallback path**
-- `app/src/utils/normalize-wallet.ts` — when the catch fires on what looks like a valid Ethereum address (starts with `0x`, length 42), emit `console.warn('[wallet-normalization] checksum-fallback', { prefix: address.slice(0, 10) })`
-- Non-Ethereum-shaped addresses (test wallets, short addresses) stay silent — these are expected
-- Bridgebuilder finding #2 (HIGH): cache key bifurcation risk from silent fallback
-- **AC**: `normalizeWallet('0x' + 'a'.repeat(40))` emits a warning. `normalizeWallet('0xshort')` does not. Test verifies both paths.
-
-**Task 1.2: Tighten legacy error handler with deprecation warning**
-- `app/src/utils/error-handler.ts` — add `console.warn('[error-handler] legacy error pattern', { status })` to the legacy branch (lines 20-26)
-- This makes the legacy path observable so we can measure usage and sunset it
-- Bridgebuilder finding #1 (HIGH): escape hatch accepts any object with status+body
-- **AC**: Legacy branch emits a warning on every invocation. Test verifies warning emitted. BffError path does NOT emit warning.
-
-**Task 1.3: Add cardinality guard to enrichment service listAll()**
-- `app/src/services/enrichment-service.ts` — add `MAX_SCAN_SIZE = 10_000` constant
-- Before iterating aggregates, check `aggregates.length > MAX_SCAN_SIZE` → log `[enrichment] tier-distribution scan exceeds cardinality limit` and fall back to percentage estimation
-- Bridgebuilder finding #3 (MEDIUM): unbounded scan O(n) memory risk
-- **AC**: When store has >10k entries, falls back to estimation with warning. Test verifies guard triggers.
-
-**Task 1.4: Extract agent route validation constants**
-- Create validation constants object in `app/src/routes/agent.ts` (or extract to `app/src/validation.ts` if it already has similar constants):
-  ```
-  AGENT_QUERY_MAX_LENGTH = 10_000
-  AGENT_MAX_TOKENS_MIN = 1
-  AGENT_MAX_TOKENS_MAX = 4_096
-  AGENT_KNOWLEDGE_DOMAIN_MAX_LENGTH = 100
-  ```
-- Replace magic numbers at agent.ts:170-181 with named constants
-- Bridgebuilder finding #4 (MEDIUM): magic numbers in route handlers
-- **AC**: No magic number literals in agent route validation. Constants are exported and used by tests.
-
-**Task 1.5: Hardening test suite**
-- Add tests to appropriate test files (or create `app/tests/unit/bridge-iter2-hardening.test.ts`):
-  - Test: normalizeWallet emits warning for valid-looking Ethereum addresses on fallback
-  - Test: normalizeWallet stays silent for short/test addresses
-  - Test: handleRouteError legacy branch emits deprecation warning
-  - Test: handleRouteError BffError path does not emit warning
-  - Test: enrichment service cardinality guard triggers at threshold
-  - Test: agent route uses named validation constants (verify 400 at boundary values)
-- **AC**: All tests pass. Minimum 8 new tests.
+**Version**: 5.1.0
+**Date**: 2026-02-24
+**Cycle**: cycle-005
+**PRD**: v5.0.0 | **SDD**: v5.0.0
+**Sprint**: 3 (global ID: 62)
+**Source**: Bridgebuilder Review — Iteration 1 (bridge-20260224-hf711adopt)
+**Estimated Tasks**: 4
 
 ---
 
-## Sprint 2 (Global #59): Documentation & Polish
+## Sprint Overview
 
-**Goal**: Resolve all remaining MEDIUM and LOW findings. Align documentation with implementation, document design decisions, and add intent comments for forward-looking code.
+| Sprint | Global ID | Label | Focus | Tasks |
+|--------|-----------|-------|-------|-------|
+| sprint-3 | 62 | Correctness & Maintainability (Bridge Iter 1) | MEDIUM-1, LOW-1, LOW-2 | 4 |
 
-### Tasks
-
-**Task 2.1: Align autonomousPermissionTtlSec JSDoc with default**
-- `app/src/config.ts:32-35` — soften JSDoc wording from implying TTLs *should* differ to saying they *can* differ independently
-- Updated JSDoc: "Separate config key allows independent tuning if permission revocation propagation needs to be faster than tier change propagation. Defaults match conviction TTL (300s) as a reasonable launch baseline."
-- Bridgebuilder finding #5 (MEDIUM): documentation-reality gap
-- **AC**: JSDoc accurately describes current behavior and future flexibility. No expectation mismatch.
-
-**Task 2.2: Document fromProtocolCircuitState intended consumer**
-- `app/src/types.ts` — add JSDoc to `fromProtocolCircuitState()` explaining its intended consumers: protocol conformance tests, future webhook consumers that receive snake_case state from upstream
-- Bridgebuilder finding #6 (MEDIUM): unused code is a maintenance liability without documented intent
-- **AC**: Function has JSDoc explaining why it exists and who will use it.
-
-**Task 2.3: Document cleanupInterval.unref() and lazy expiration design**
-- `app/src/routes/agent.ts:94-96` — add a comment block above the interval explaining:
-  1. Why interval-based (moved off request path in Sprint 56)
-  2. Why `.unref()` (graceful shutdown)
-  3. Why 60s lag is acceptable ("lazy expiration" — conservative for security boundary)
-- Bridgebuilder finding #7 (LOW): correct but undocumented
-- **AC**: Design decision documented inline. Comment references Bridgebuilder review rationale.
-
-**Task 2.4: Add domain-organization roadmap comments to test files**
-- `app/tests/unit/error-observability.test.ts`, `input-validation.test.ts`, `config-polish.test.ts` — add a header comment noting these are sprint-organized and may be consolidated into domain-organized files (e.g., `wallet.test.ts`, `error-handling.test.ts`) when the sprint structure stabilizes
-- Bridgebuilder finding #8 (LOW): test file proliferation awareness
-- **AC**: Each sprint-organized test file has a header comment noting future consolidation path. No structural changes — just awareness markers.
+**Source findings**: 1 MEDIUM, 2 LOW from bridge iteration 1 review.
 
 ---
 
-## Sprint Dependency Graph
+## Sprint 3: Correctness & Maintainability (Bridge Iter 1)
+
+**Global ID**: 62
+**Goal**: Address all actionable findings from Bridgebuilder iteration 1. Extract shared content field builder to eliminate hash/return divergence risk, add chain length observability, simplify type discriminator.
+**Success Criteria**: All 3 findings resolved, all existing tests pass, no API surface changes.
+
+### Task 3.1: Extract shared buildContentFields helper in ScoringPathTracker
+
+**Finding**: MEDIUM-1 — Optional field spreading duplicated between hash input and return value
+**File**: `app/src/services/scoring-path-tracker.ts`
+**Priority**: P0
+
+**Description**: The optional field spreading pattern (`entry.model_id !== undefined && { model_id: entry.model_id }`) is duplicated between the hashInput construction (lines 46-52) and the return value construction (lines 58-66). Extract a shared `buildContentFields(entry, scored_at)` helper that both the hash input and return value consume. This ensures the hash always covers exactly the fields present in the returned entry.
+
+**Acceptance Criteria**:
+- [ ] `buildContentFields()` private helper extracts shared field construction
+- [ ] Hash input uses `buildContentFields()` output
+- [ ] Return value uses `buildContentFields()` output + hash chain fields
+- [ ] Existing tests pass unchanged (determinism, chaining, genesis)
+- [ ] No API surface change (record() signature and return type unchanged)
+
+**Testing**: All existing scoring-path-tracker tests pass. Hash determinism verified.
+
+### Task 3.2: Add chain length accessor to ScoringPathTracker
+
+**Finding**: LOW-1 — ScoringPathTracker lacks chain length accessor
+**File**: `app/src/services/scoring-path-tracker.ts`
+**Priority**: P1
+
+**Description**: Add a `private entryCount: number = 0` field, increment in `record()`, reset in `reset()`, expose via `get length(): number`. This supports operational observability (log aggregation, anomaly detection).
+
+**Acceptance Criteria**:
+- [ ] `get length(): number` accessor exposed on ScoringPathTracker
+- [ ] Returns 0 after construction
+- [ ] Returns N after N `record()` calls
+- [ ] Returns 0 after `reset()`
+- [ ] New test verifying length behavior
+
+**Testing**: 1 new test scenario in scoring-path-tracker.test.ts.
+
+### Task 3.3: Simplify discriminator in conviction-boundary.ts
+
+**Finding**: LOW-2 — Conviction boundary options discriminator is a growing conditional
+**File**: `app/src/services/conviction-boundary.ts`
+**Priority**: P1
+
+**Description**: Replace the 5-field OR chain at line 210 with a negative check: `!('min_trust_score' in criteriaOrOpts)`. QualificationCriteria always has `min_trust_score` — its absence definitively indicates EconomicBoundaryOptions. This is a single check that scales regardless of how many fields are added to EconomicBoundaryOptions.
+
+**Acceptance Criteria**:
+- [ ] Discriminator reduced from 5-field OR chain to single negative check
+- [ ] All existing conviction-boundary tests pass unchanged
+- [ ] All existing conviction-boundary-hashchain tests pass unchanged
+- [ ] Comment explains the discrimination strategy
+
+**Testing**: All existing tests pass. No new tests needed (behavior unchanged).
+
+### Task 3.4: Run full test suite — regression gate
+
+**Priority**: P0
+
+**Description**: Run complete test suite. Verify all existing tests + new length test pass. Final gate.
+
+**Acceptance Criteria**:
+- [ ] All existing tests pass (0 failures)
+- [ ] New length accessor test passes
+- [ ] Total test count >= 1121
+- [ ] No TypeScript compilation errors
+
+**Testing**: Full vitest suite execution.
+
+---
+
+## Dependencies
 
 ```
-Sprint 1 (Correctness & Security Hardening)
+Task 3.1 (buildContentFields)
     │
-    └──▶ Sprint 2 (Documentation & Polish)
-```
+    ├──→ Task 3.2 (length accessor) [independent]
+    │
+    └──→ Task 3.4 (regression gate)
 
-Sequential — sprint 2's documentation references sprint 1's new code.
+Task 3.3 (discriminator) [independent]
+    │
+    └──→ Task 3.4 (regression gate)
+```
 
 ---
 
-## Findings Resolution Map
-
-| # | Finding | Severity | Sprint | Task |
-|---|---------|----------|--------|------|
-| 1 | Legacy error handler escape hatch | 🔴 HIGH | 1 | 1.2 |
-| 2 | normalizeWallet cache key bifurcation | 🔴 HIGH | 1 | 1.1 |
-| 3 | listAll() unbounded scan | 🟡 MEDIUM | 1 | 1.3 |
-| 4 | Agent route magic numbers | 🟡 MEDIUM | 1 | 1.4 |
-| 5 | autonomousPermissionTtlSec JSDoc drift | 🟡 MEDIUM | 2 | 2.1 |
-| 6 | fromProtocolCircuitState unused | 🟡 MEDIUM | 2 | 2.2 |
-| 7 | cleanupInterval.unref() undocumented | 🟢 LOW | 2 | 2.3 |
-| 8 | Sprint-organized test proliferation | 🟢 LOW | 2 | 2.4 |
-
-**Coverage**: 8/8 findings addressed. 4 PRAISE findings require no action.
+*Sprint plan for bridge iteration 1 findings: 1 sprint, 4 tasks, focused on DRY extraction (Task 3.1), observability (Task 3.2), and maintainability (Task 3.3). All changes are internal — zero API surface changes.*

@@ -26,9 +26,11 @@ import type {
   EconomicBoundaryEvaluationResult,
 } from '@0xhoneyjar/loa-hounfour/economy';
 import type { ReputationAggregate } from '@0xhoneyjar/loa-hounfour/governance';
+import type { ConstraintOrigin } from '@0xhoneyjar/loa-hounfour/constraints';
 import type { ConvictionTier } from '../types/conviction.js';
 import type { TaskType, ScoringPathLog } from '../types/reputation-evolution.js';
 import type { DixieReputationAggregate } from '../types/reputation-evolution.js';
+import type { ScoringPathTracker } from './scoring-path-tracker.js';
 
 /**
  * Trust profile derived from a conviction tier.
@@ -127,6 +129,15 @@ export interface EconomicBoundaryOptions {
    * @since Sprint 10 — Task 10.4
    */
   taskType?: TaskType;
+  /**
+   * When provided, scoring path entries are recorded with hash chain integrity.
+   * Each entry gets `entry_hash` (SHA-256 of canonical JSON) and `previous_hash`
+   * (link to preceding entry). When absent, scoring paths are plain objects
+   * without hash fields (backward compatible).
+   *
+   * @since cycle-005 — Sprint 61 (Hounfour v7.11.0 hash chain)
+   */
+  scoringPathTracker?: ScoringPathTracker;
 }
 
 /**
@@ -192,12 +203,12 @@ export function evaluateEconomicBoundaryForWallet(
   let reputationAggregate: ReputationAggregate | null | undefined;
 
   if (criteriaOrOpts) {
-    // Discriminate by checking for fields unique to EconomicBoundaryOptions.
-    // Using 'criteria' or 'reputationAggregate' avoids fragility: if
-    // EconomicBoundaryOptions ever gained 'min_trust_score', the old
-    // check would misclassify it as QualificationCriteria. These fields
-    // are structurally unique to each type.
-    if ('criteria' in criteriaOrOpts || 'reputationAggregate' in criteriaOrOpts || 'budgetPeriodDays' in criteriaOrOpts || 'taskType' in criteriaOrOpts) {
+    // Discriminate via negative check: QualificationCriteria always has
+    // 'min_trust_score', so its absence definitively indicates
+    // EconomicBoundaryOptions. This single check scales regardless of
+    // how many fields are added to EconomicBoundaryOptions.
+    // (Bridge iter1 LOW-2: replaces growing 5-field OR chain)
+    if (!('min_trust_score' in criteriaOrOpts)) {
       // New: EconomicBoundaryOptions
       const opts = criteriaOrOpts as EconomicBoundaryOptions;
       criteria = opts.criteria ?? DEFAULT_CRITERIA;
@@ -223,14 +234,23 @@ export function evaluateEconomicBoundaryForWallet(
   // task_cohorts matching that task type, use the task-specific score instead
   // of the aggregate score. This provides more precise access decisions when
   // the request context includes a known task type.
-  let blendedScore = profile.blended_score;
-  let reputationState = profile.reputation_state;
-  let scoringPath: ScoringPathLog = { path: 'tier_default' };
-
-  // Resolve taskType from options (may be undefined even when opts is provided)
+  // Resolve taskType and tracker from options (may be undefined even when opts is provided)
   const taskType = (criteriaOrOpts && 'taskType' in criteriaOrOpts)
     ? (criteriaOrOpts as EconomicBoundaryOptions).taskType
     : undefined;
+  const tracker = (criteriaOrOpts && 'scoringPathTracker' in criteriaOrOpts)
+    ? (criteriaOrOpts as EconomicBoundaryOptions).scoringPathTracker
+    : undefined;
+
+  let blendedScore = profile.blended_score;
+  let reputationState = profile.reputation_state;
+  // Governance origin tag for scoring path reasons (Sprint 64 — Q5 governance provenance)
+  const weightsTag = `[weights: ${CONVICTION_ACCESS_MATRIX_ORIGIN.origin}]`;
+
+  let scoringPathInput: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'> = {
+    path: 'tier_default',
+    reason: `No reputation aggregate available; using static tier-based score ${weightsTag}`,
+  };
 
   if (reputationAggregate) {
     // Sprint 10 — Task 10.4: Try task-specific cohort first
@@ -254,10 +274,11 @@ export function evaluateEconomicBoundaryForWallet(
             reputationAggregate.pseudo_count,
           );
           reputationState = reputationAggregate.state;
-          scoringPath = {
+          scoringPathInput = {
             path: 'task_cohort',
-            model: activeCohort.model_id,
+            model_id: activeCohort.model_id,
             task_type: taskType,
+            reason: `Task-specific cohort found for ${activeCohort.model_id}:${taskType} ${weightsTag}`,
           };
           usedTaskCohort = true;
         }
@@ -273,13 +294,29 @@ export function evaluateEconomicBoundaryForWallet(
         reputationAggregate.pseudo_count,
       );
       reputationState = reputationAggregate.state;
-      scoringPath = { path: 'aggregate' };
+      scoringPathInput = { path: 'aggregate', reason: `Using aggregate personal score (no task-specific cohort) ${weightsTag}` };
     }
   }
 
-  // Log the scoring path for observability (Sprint 10 — Task 10.4)
-  // Using console.debug for minimal overhead; structured logging in production.
-  console.debug('[conviction-boundary] scoring_path:', JSON.stringify(scoringPath));
+  // Compute reputation freshness when aggregate is available (Sprint 63 — Q3 temporal blindness)
+  const reputationFreshness = reputationAggregate
+    ? { sample_count: reputationAggregate.sample_count, newest_event_at: reputationAggregate.last_updated }
+    : undefined;
+
+  // Record scoring path — with hash chain when tracker is provided, plain object otherwise
+  const scoringPath: ScoringPathLog = tracker
+    ? tracker.record(scoringPathInput, { reputation_freshness: reputationFreshness })
+    : scoringPathInput;
+
+  // Structured provenance log: what happened, with what data, and how fresh
+  // (Sprint 63 — Task 4.4, Bridge deep review Q3)
+  console.debug('[conviction-boundary] scoring_path:', JSON.stringify({
+    ...scoringPath,
+    wallet,
+    tier,
+    blending_used: !!reputationAggregate,
+    reputation_freshness: reputationFreshness,
+  }));
 
   const trustSnapshot: TrustLayerSnapshot = {
     reputation_state: reputationState,
@@ -550,6 +587,7 @@ export interface ConvictionAccessCapabilities {
  *
  * @since Sprint 5 — Bridgebuilder Q4 (conviction voting x economic boundary reconciliation)
  * @since Sprint 9 — PRAISE-1 formalization (constitutional annotation)
+ * @since cycle-005 — Sprint 64, Task 5.1 (Bridge deep review Q5: governance bootstrap)
  */
 export const CONVICTION_ACCESS_MATRIX: Record<ConvictionTier, ConvictionAccessCapabilities> = {
   observer: {
@@ -589,5 +627,38 @@ export const CONVICTION_ACCESS_MATRIX: Record<ConvictionTier, ConvictionAccessCa
   },
 } as const;
 
+/**
+ * Constitutional provenance annotation for the CONVICTION_ACCESS_MATRIX.
+ *
+ * Tags the governance policy with its origin per Hounfour v7.9.1
+ * ConstraintOrigin taxonomy:
+ * - `genesis`: Set at system creation (current state — values defined by founding team)
+ * - `enacted`: Modified through conviction-weighted governance vote (future)
+ * - `migrated`: Carried forward from a prior system version (future)
+ *
+ * This annotation shifts the architectural framing from "hardcoded policy"
+ * to "initial policy awaiting governance evolution." Even though the values
+ * don't change today, the metadata signals that these are genesis parameters
+ * subject to future conviction-weighted modification — closing the governance
+ * bootstrap gap identified in Bridgebuilder Deep Review Q5.
+ *
+ * The governance evolution path:
+ * 1. Current weights are `origin: 'genesis'` (set at system creation)
+ * 2. A governance proposal (via conviction voting) could produce `origin: 'enacted'` weights
+ * 3. The hash chain records which weights were in effect for each scoring decision
+ *
+ * @since cycle-005 — Sprint 64, Task 5.1 (Bridge deep review Q5)
+ */
+export interface GovernanceAnnotation {
+  readonly origin: ConstraintOrigin;
+  readonly enacted_at?: string;
+  readonly enacted_by?: string;
+}
+
+export const CONVICTION_ACCESS_MATRIX_ORIGIN: GovernanceAnnotation = {
+  origin: 'genesis',
+};
+
 export { TIER_TRUST_PROFILES, DEFAULT_CRITERIA };
-export type { TierTrustProfile, EconomicBoundaryOptions, ScoringPathLog };
+export type { TierTrustProfile, EconomicBoundaryOptions };
+export type { ScoringPathLog } from '../types/reputation-evolution.js';

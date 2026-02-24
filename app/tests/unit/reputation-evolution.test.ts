@@ -507,7 +507,7 @@ describe('Reputation Evolution — Sprint 10', () => {
         const aggregate = reconstructAggregateFromEvents([]);
         expect(aggregate.state).toBe('cold');
         expect(aggregate.sample_count).toBe(0);
-        expect(aggregate.contract_version).toBe('7.9.2');
+        expect(aggregate.contract_version).toBe('7.11.0');
       });
     });
   });

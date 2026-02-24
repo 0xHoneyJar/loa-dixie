@@ -1,65 +1,67 @@
 {
   "schema_version": 1,
-  "bridge_id": "bridge-20260224-v200exc",
+  "bridge_id": "bridge-20260224-excellence",
   "state": "JACKED_OUT",
   "config": {
     "depth": 3,
     "mode": "full",
     "flatline_threshold": 0.05,
     "per_sprint": false,
-    "branch": "feature/v2.0.0-excellence",
+    "branch": "feature/hounfour-v7.11.0-adoption",
     "repo": "0xHoneyJar/loa-dixie"
   },
   "timestamps": {
-    "started": "2026-02-24T23:55:00Z",
-    "last_activity": "2026-02-25T14:15:00Z"
+    "started": "2026-02-24T23:00:00Z",
+    "last_activity": "2026-02-25T00:50:00Z"
   },
   "iterations": [
     {
       "iteration": 1,
-      "sprints": ["sprint-55", "sprint-56", "sprint-57"],
-      "global_sprints": [55, 56, 57],
+      "sprints_executed": ["sprint-63", "sprint-64"],
+      "review_posted": true,
+      "review_comment_url": "https://github.com/0xHoneyJar/loa-dixie/pull/9#issuecomment-3951473787",
       "findings": {
-        "high": 2,
-        "medium": 4,
-        "low": 2,
-        "praise": 4,
-        "score": 16
+        "total": 11,
+        "by_severity": { "PRAISE": 8, "SPECULATION": 2, "LOW": 1 },
+        "convergence_score": 1,
+        "convergence_findings": ["BB-064-007"]
       },
-      "tests_after": 1076,
-      "files_changed": 27
+      "fix_sprint": {
+        "tasks": 1,
+        "description": "Document single-caller assumption on _lastRecordOptions",
+        "commit": "d71e6b4"
+      }
     },
     {
       "iteration": 2,
-      "sprints": ["sprint-58", "sprint-59"],
-      "global_sprints": [58, 59],
+      "sprints_executed": [],
+      "review_posted": true,
+      "review_comment_url": "https://github.com/0xHoneyJar/loa-dixie/pull/9#issuecomment-3951486316",
       "findings": {
-        "high": 0,
-        "medium": 0,
-        "low": 2,
-        "praise": 0,
-        "score": 2
+        "total": 0,
+        "by_severity": {},
+        "convergence_score": 0,
+        "convergence_findings": []
       },
-      "tests_after": 1090,
-      "files_changed": 12,
-      "flatline": true
+      "fix_sprint": null
     }
   ],
   "flatline": {
-    "initial_score": 16,
-    "last_score": 2,
-    "consecutive_below_threshold": 1,
-    "delta_pct": -87.5
+    "detected": true,
+    "iteration": 2,
+    "consecutive_sub_threshold": 2,
+    "final_score": 0,
+    "score_history": [1, 0]
   },
   "metrics": {
-    "total_sprints_executed": 5,
-    "total_files_changed": 39,
-    "total_findings_addressed": 20,
+    "total_sprints_executed": 2,
+    "total_files_changed": 7,
+    "total_findings_addressed": 1,
     "total_visions_captured": 0
   },
   "finalization": {
     "ground_truth_updated": false,
     "rtfm_passed": false,
-    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/8"
+    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/9"
   }
 }
