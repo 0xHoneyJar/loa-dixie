@@ -22,6 +22,11 @@ import * as jose from 'jose';
  * JWT verification middleware.
  * Extracts wallet from JWT sub claim and sets it on the context.
  * Does not reject requests without JWT — that's the allowlist middleware's job.
+ *
+ * @security Uses HS256 (symmetric HMAC) — both signing and verification use the
+ * same secret. This is acceptable for Phase 1 (single-service) but MUST migrate
+ * to ES256 (asymmetric ECDSA) before loa-finn verifies dixie-issued tokens.
+ * See ADR comment block above for migration steps.
  */
 export function createJwtMiddleware(jwtSecret: string, issuer: string) {
   const secret = new TextEncoder().encode(jwtSecret);

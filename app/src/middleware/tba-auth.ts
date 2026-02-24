@@ -21,7 +21,11 @@ import type { TBAVerification } from '../types/agent-api.js';
  * See: SDD §7.2, PRD FR-6, Bridge high-1
  */
 export interface TBAAuthDeps {
-  /** Optional Redis cache for TBA identity lookups (5min TTL) — caches ownership, NOT auth */
+  /**
+   * Optional Redis cache for TBA identity lookups (5min TTL).
+   * @security Caches ownership resolution ONLY, never authentication results.
+   * Signature verification is per-request (Step 4). Caching auth results
+   * would allow replayed signatures to bypass verification. */
   cache: ProjectionCache<TBAVerification> | null;
   /** Verify TBA signature and resolve ownership — calls RPC or freeside */
   verifyTBA: (tbaAddress: string, signature: string, message: string) => Promise<TBAVerification | null>;

@@ -174,7 +174,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     autonomousProjectionCache = new ProjectionCache(
       redisClient,
       'autonomous',
-      config.convictionTierTtlSec, // reuse same TTL
+      config.autonomousPermissionTtlSec,
     );
   }
   const autonomousEngine = new AutonomousEngine(finnClient, autonomousProjectionCache, {

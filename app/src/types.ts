@@ -74,6 +74,8 @@ export interface ServiceHealth {
   status: 'healthy' | 'degraded' | 'unreachable';
   latency_ms?: number;
   error?: string;
+  /** Protocol-compatible circuit state (snake_case: 'half_open', not 'half-open') */
+  circuit_state?: HounfourCircuitState;
 }
 
 /** Aggregated health response */

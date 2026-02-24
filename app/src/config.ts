@@ -20,13 +20,19 @@ export interface DixieConfig {
   memoryProjectionTtlSec: number;
   memoryMaxEventsPerQuery: number;
 
-  // Phase 2: Conviction tier cache
+  /** Cache TTL for conviction tier lookups (seconds). Default 300.
+   *  5 minutes balances freshness (BGT staking changes are infrequent)
+   *  against freeside API load. Invalidated on staking events. */
   convictionTierTtlSec: number;
 
   // Phase 2: BEAUVOIR personality cache
   personalityTtlSec: number;
 
   // Phase 2: Autonomous mode
+  /** Cache TTL for autonomous permission lookups (seconds). Default 300.
+   *  Separate from conviction tier TTL because permission changes (revocations)
+   *  need faster propagation than tier changes (staking is slow). */
+  autonomousPermissionTtlSec: number;
   autonomousBudgetDefaultMicroUsd: number;
 
   // Phase 2: Rate limiting backend
@@ -59,6 +65,7 @@ export interface DixieConfig {
  * DIXIE_MEMORY_MAX_EVENTS     (optional) — max events per query; default 100
  * DIXIE_CONVICTION_TIER_TTL   (optional) — conviction tier cache TTL in seconds; default 300
  * DIXIE_PERSONALITY_TTL       (optional) — BEAUVOIR personality cache TTL in seconds; default 1800
+ * DIXIE_AUTONOMOUS_PERMISSION_TTL (optional) — autonomous permission cache TTL in seconds; default 300
  * DIXIE_AUTONOMOUS_BUDGET     (optional) — default autonomous budget in micro-USD; default 100000
  * DIXIE_RATE_LIMIT_BACKEND    (optional) — 'memory' or 'redis'; default 'memory' (auto-upgrades to 'redis' when REDIS_URL set)
  * DIXIE_SCHEDULE_CALLBACK_SECRET (optional) — HMAC secret for schedule callback verification; default '' (rejects all callbacks in production)
@@ -140,6 +147,7 @@ export function loadConfig(): DixieConfig {
     personalityTtlSec: parseInt(process.env.DIXIE_PERSONALITY_TTL ?? '1800', 10),
 
     // Phase 2: Autonomous
+    autonomousPermissionTtlSec: parseInt(process.env.DIXIE_AUTONOMOUS_PERMISSION_TTL ?? '300', 10),
     autonomousBudgetDefaultMicroUsd: parseInt(process.env.DIXIE_AUTONOMOUS_BUDGET ?? '100000', 10),
 
     // Phase 2: Rate limiting
