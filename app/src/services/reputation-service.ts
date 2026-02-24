@@ -124,10 +124,35 @@ export interface ReputationStore {
    * audit trails, aggregate reconstruction, and debugging.
    *
    * @param nftId - The dNFT ID
+   * @param limit - Optional maximum number of events to return (default: all)
    * @returns Array of reputation events in chronological order
    * @since Sprint 10 — Task 10.5
    */
-  getEventHistory(nftId: string): Promise<ReputationEvent[]>;
+  getEventHistory(nftId: string, limit?: number): Promise<ReputationEvent[]>;
+
+  /**
+   * Retrieve the N most recent events for a specific NFT.
+   *
+   * Returns events in chronological order (oldest first among the recent N).
+   * Uses DESC LIMIT + reverse for index-efficient top-N access on PostgreSQL.
+   *
+   * @param nftId - The dNFT ID
+   * @param limit - Maximum number of recent events to return
+   * @returns Array of recent reputation events in chronological order
+   * @since Sprint 5 (G-69) — Task 5.2
+   */
+  getRecentEvents(nftId: string, limit: number): Promise<ReputationEvent[]>;
+
+  /**
+   * Count aggregates grouped by reputation state.
+   *
+   * Returns a Map from state name to count. Used for tier distribution
+   * dashboards without loading full JSONB blobs.
+   *
+   * @returns Map of state → count
+   * @since Sprint 5 (G-69) — Task 5.1
+   */
+  countByState(): Promise<Map<string, number>>;
 }
 
 /**
@@ -218,8 +243,22 @@ export class InMemoryReputationStore implements ReputationStore {
    * Returns events in insertion order (oldest first).
    * @since Sprint 10 — Task 10.5
    */
-  async getEventHistory(nftId: string): Promise<ReputationEvent[]> {
-    return this.eventLog.get(nftId) ?? [];
+  async getEventHistory(nftId: string, limit?: number): Promise<ReputationEvent[]> {
+    const events = this.eventLog.get(nftId) ?? [];
+    return limit !== undefined ? events.slice(0, limit) : events;
+  }
+
+  async getRecentEvents(nftId: string, limit: number): Promise<ReputationEvent[]> {
+    const events = this.eventLog.get(nftId) ?? [];
+    return events.slice(-limit);
+  }
+
+  async countByState(): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    for (const aggregate of this.store.values()) {
+      counts.set(aggregate.state, (counts.get(aggregate.state) ?? 0) + 1);
+    }
+    return counts;
   }
 
   /** Clear all stored data (aggregates, task cohorts, events) for testing. */

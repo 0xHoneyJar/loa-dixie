@@ -213,6 +213,62 @@ describe('PostgresReputationStore', () => {
     });
   });
 
+  describe('getRecentEvents', () => {
+    it('queries with DESC LIMIT and reverses result', async () => {
+      const evt1 = makeEvent('quality_signal');
+      const evt2 = makeEvent('task_completed');
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        rows: [{ event: evt2 }, { event: evt1 }], // DESC order from DB
+      });
+      const result = await store.getRecentEvents('nft-1', 5);
+      // Should reverse to chronological order
+      expect(result).toEqual([evt1, evt2]);
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.stringContaining('ORDER BY created_at DESC LIMIT $2'),
+        ['nft-1', 5],
+      );
+    });
+
+    it('returns empty array when no events', async () => {
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ rows: [] });
+      const result = await store.getRecentEvents('nft-1', 10);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('put (snapshot_version)', () => {
+    it('includes snapshot_version in upsert query', async () => {
+      const aggregate = makeAggregate();
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ rows: [] });
+      await store.put('nft-1', aggregate);
+      const sql = (pool.query as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(sql).toContain('snapshot_version');
+      expect(sql).toContain('reputation_aggregates.snapshot_version + 1');
+    });
+  });
+
+  describe('appendEvent (event_count)', () => {
+    it('increments event_count on aggregate row after inserting event', async () => {
+      const event = makeEvent('quality_signal');
+      (pool.query as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({ rows: [] })  // INSERT event
+        .mockResolvedValueOnce({ rows: [] }); // UPDATE event_count
+      await store.appendEvent('nft-1', event);
+      expect(pool.query).toHaveBeenCalledTimes(2);
+      const secondCall = (pool.query as ReturnType<typeof vi.fn>).mock.calls[1];
+      expect(secondCall[0]).toContain('event_count = event_count + 1');
+      expect(secondCall[1]).toEqual(['nft-1']);
+    });
+
+    it('does not error when aggregate row does not exist', async () => {
+      const event = makeEvent('quality_signal');
+      (pool.query as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({ rows: [] })  // INSERT event
+        .mockResolvedValueOnce({ rowCount: 0, rows: [] }); // UPDATE finds nothing — OK
+      await expect(store.appendEvent('nft-1', event)).resolves.not.toThrow();
+    });
+  });
+
   describe('JSONB round-trip', () => {
     it('aggregate serializes and deserializes correctly', async () => {
       const aggregate = makeAggregate({

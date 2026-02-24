@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { ReputationService } from '../../src/services/reputation-service.js';
+import { ReputationService, InMemoryReputationStore } from '../../src/services/reputation-service.js';
 import type {
   ReputationScore,
   ReputationAggregate,
 } from '../../src/services/reputation-service.js';
+import type { ReputationEvent } from '../../src/types/reputation-evolution.js';
 
 describe('ReputationService', () => {
   const service = new ReputationService();
@@ -218,6 +219,109 @@ describe('ReputationService', () => {
     it('returns undefined for missing model', () => {
       const cohort = service.getModelCohort(aggregate, 'nonexistent');
       expect(cohort).toBeUndefined();
+    });
+  });
+});
+
+describe('InMemoryReputationStore', () => {
+  function makeAggregate(state: string = 'cold'): ReputationAggregate {
+    return {
+      personality_id: 'p1',
+      collection_id: 'c1',
+      pool_id: 'pool1',
+      state: state as ReputationAggregate['state'],
+      personal_score: null,
+      collection_score: 0.5,
+      blended_score: 0.5,
+      sample_count: 0,
+      pseudo_count: 10,
+      contributor_count: 0,
+      min_sample_count: 10,
+      created_at: '2026-01-01T00:00:00Z',
+      last_updated: '2026-01-01T00:00:00Z',
+      transition_history: [],
+      contract_version: '7.11.0',
+    };
+  }
+
+  function makeEvent(type: string, ts: string): ReputationEvent {
+    return {
+      type,
+      event_id: `evt-${ts}`,
+      agent_id: 'agent-1',
+      collection_id: 'col-1',
+      timestamp: ts,
+      task_type: 'code_review',
+      score: 0.9,
+      model_id: 'gpt-4o',
+    } as unknown as ReputationEvent;
+  }
+
+  describe('getEventHistory with limit', () => {
+    it('returns all events when no limit specified', async () => {
+      const store = new InMemoryReputationStore();
+      for (let i = 0; i < 10; i++) {
+        await store.appendEvent('nft-1', makeEvent('quality_signal', `2026-01-0${i + 1}T00:00:00Z`));
+      }
+      const events = await store.getEventHistory('nft-1');
+      expect(events).toHaveLength(10);
+    });
+
+    it('respects limit parameter', async () => {
+      const store = new InMemoryReputationStore();
+      for (let i = 0; i < 10; i++) {
+        await store.appendEvent('nft-1', makeEvent('quality_signal', `2026-01-0${i + 1}T00:00:00Z`));
+      }
+      const events = await store.getEventHistory('nft-1', 5);
+      expect(events).toHaveLength(5);
+    });
+  });
+
+  describe('getRecentEvents', () => {
+    it('returns the N most recent events in chronological order', async () => {
+      const store = new InMemoryReputationStore();
+      for (let i = 1; i <= 10; i++) {
+        await store.appendEvent('nft-1', makeEvent('quality_signal', `2026-01-${String(i).padStart(2, '0')}T00:00:00Z`));
+      }
+      const recent = await store.getRecentEvents('nft-1', 3);
+      expect(recent).toHaveLength(3);
+      // Should be the last 3 events (8th, 9th, 10th)
+      expect(recent[0].timestamp).toBe('2026-01-08T00:00:00Z');
+      expect(recent[2].timestamp).toBe('2026-01-10T00:00:00Z');
+    });
+
+    it('returns all events when fewer than limit exist', async () => {
+      const store = new InMemoryReputationStore();
+      await store.appendEvent('nft-1', makeEvent('quality_signal', '2026-01-01T00:00:00Z'));
+      const recent = await store.getRecentEvents('nft-1', 10);
+      expect(recent).toHaveLength(1);
+    });
+
+    it('returns empty array for unknown nftId', async () => {
+      const store = new InMemoryReputationStore();
+      const recent = await store.getRecentEvents('unknown', 5);
+      expect(recent).toEqual([]);
+    });
+  });
+
+  describe('countByState', () => {
+    it('counts aggregates grouped by state', async () => {
+      const store = new InMemoryReputationStore();
+      await store.put('nft-1', makeAggregate('cold'));
+      await store.put('nft-2', makeAggregate('cold'));
+      await store.put('nft-3', makeAggregate('warming'));
+      await store.put('nft-4', makeAggregate('established'));
+
+      const counts = await store.countByState();
+      expect(counts.get('cold')).toBe(2);
+      expect(counts.get('warming')).toBe(1);
+      expect(counts.get('established')).toBe(1);
+    });
+
+    it('returns empty map when no aggregates', async () => {
+      const store = new InMemoryReputationStore();
+      const counts = await store.countByState();
+      expect(counts.size).toBe(0);
     });
   });
 });

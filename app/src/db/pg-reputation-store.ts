@@ -26,10 +26,12 @@ export class PostgresReputationStore implements ReputationStore {
 
   async put(nftId: string, aggregate: ReputationAggregate): Promise<void> {
     await this.pool.query(
-      `INSERT INTO reputation_aggregates (nft_id, state, aggregate)
-       VALUES ($1, $2, $3)
+      `INSERT INTO reputation_aggregates (nft_id, state, aggregate, snapshot_version)
+       VALUES ($1, $2, $3, 1)
        ON CONFLICT (nft_id) DO UPDATE
-       SET state = $2, aggregate = $3, updated_at = now()`,
+       SET state = $2, aggregate = $3,
+           snapshot_version = reputation_aggregates.snapshot_version + 1,
+           updated_at = now()`,
       [nftId, aggregate.state, JSON.stringify(aggregate)],
     );
   }
@@ -87,6 +89,12 @@ export class PostgresReputationStore implements ReputationStore {
        VALUES ($1, $2, $3)`,
       [nftId, event.type, JSON.stringify(event)],
     );
+    // Increment event_count on the aggregate row (if it exists).
+    // Missing aggregate is valid — events can precede aggregate creation.
+    await this.pool.query(
+      `UPDATE reputation_aggregates SET event_count = event_count + 1 WHERE nft_id = $1`,
+      [nftId],
+    );
   }
 
   async getEventHistory(nftId: string, limit = 1000): Promise<ReputationEvent[]> {
@@ -96,6 +104,16 @@ export class PostgresReputationStore implements ReputationStore {
       [nftId, limit],
     );
     return result.rows.map((row: { event: ReputationEvent }) => row.event);
+  }
+
+  async getRecentEvents(nftId: string, limit: number): Promise<ReputationEvent[]> {
+    const result = await this.pool.query(
+      `SELECT event FROM reputation_events
+       WHERE nft_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      [nftId, limit],
+    );
+    // Reverse to return chronological order (oldest first among the recent N)
+    return result.rows.map((row: { event: ReputationEvent }) => row.event).reverse();
   }
 
   /**

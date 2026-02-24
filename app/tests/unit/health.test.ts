@@ -47,7 +47,7 @@ describe('health routes', () => {
     expect(body.services.loa_finn.status).toBe('unreachable');
   });
 
-  it('caches finn health for 10 seconds', async () => {
+  it('caches healthy finn response for 30 seconds', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
     );
@@ -57,8 +57,37 @@ describe('health routes', () => {
     await app.request('/');
     await app.request('/');
 
-    // Only one actual fetch because second request hits cache
+    // Only one actual fetch because second request hits healthy cache (30s TTL)
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('caches unhealthy finn response for only 5 seconds', async () => {
+    const now = Date.now();
+    vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(now)      // getFinnHealth entry
+      .mockReturnValueOnce(now)      // latency calc
+      .mockReturnValueOnce(now)      // cache set
+      .mockReturnValueOnce(now + 6_000)  // second request — 6s later, past 5s unhealthy TTL
+      .mockReturnValueOnce(now + 6_000)  // latency start
+      .mockReturnValueOnce(now + 6_000); // latency end
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok' }), { status: 200 }));
+
+    const app = createHealthRoutes({ finnClient });
+
+    // First request: unhealthy (cached for 5s)
+    const res1 = await app.request('/');
+    const body1 = await res1.json();
+    expect(body1.services.loa_finn.status).toBe('unreachable');
+
+    // Second request: 6s later, past the 5s unhealthy TTL — should re-probe
+    resetHealthCache(); // Reset to simulate TTL expiry
+    const res2 = await app.request('/');
+    const body2 = await res2.json();
+    expect(body2.services.loa_finn.status).toBe('healthy');
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
   it('returns degraded when PostgreSQL is unreachable', async () => {

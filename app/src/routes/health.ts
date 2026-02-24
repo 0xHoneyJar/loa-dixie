@@ -16,7 +16,13 @@ const startedAt = Date.now();
 
 /** Cached finn health to avoid hitting upstream on every request */
 let cachedFinnHealth: { data: ServiceHealth; expiresAt: number } | null = null;
-const CACHE_TTL_MS = 10_000;
+/**
+ * Asymmetric cache TTLs (Netflix Eureka pattern):
+ * - Healthy upstream: cache for 30s (reduce probe load during normal operation)
+ * - Unhealthy upstream: cache for 5s (detect recovery within one ALB check interval)
+ */
+const HEALTHY_CACHE_TTL_MS = 30_000;
+const UNHEALTHY_CACHE_TTL_MS = 5_000;
 
 export interface HealthDependencies {
   finnClient: FinnClient;
@@ -154,7 +160,7 @@ async function getFinnHealth(client: FinnClient): Promise<ServiceHealth> {
       status: 'healthy',
       latency_ms: Date.now() - start,
     };
-    cachedFinnHealth = { data: result, expiresAt: now + CACHE_TTL_MS };
+    cachedFinnHealth = { data: result, expiresAt: now + HEALTHY_CACHE_TTL_MS };
     return result;
   } catch {
     const result: ServiceHealth = {
@@ -162,7 +168,7 @@ async function getFinnHealth(client: FinnClient): Promise<ServiceHealth> {
       latency_ms: Date.now() - start,
       error: 'Failed to reach loa-finn',
     };
-    cachedFinnHealth = { data: result, expiresAt: now + CACHE_TTL_MS };
+    cachedFinnHealth = { data: result, expiresAt: now + UNHEALTHY_CACHE_TTL_MS };
     return result;
   }
 }
