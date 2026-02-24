@@ -1,166 +1,116 @@
-# Sprint Plan: v2.0.0 Excellence — Bridgebuilder Findings
+# Sprint Plan: v2.0.0 Excellence — Bridge Iteration 2 (Bridgebuilder Findings Resolution)
 
-**Cycle**: cycle-004 (bridge iteration 1)
-**Source**: Bridgebuilder review of v2.0.0 codebase
-**Sprints**: 3 (Global IDs: 55-57)
-**Strategy**: Error observability → input validation & test coverage → configuration & protocol polish
-
----
-
-## Sprint 1 (Global #55): Error Observability & Fire-and-Forget Safety
-
-**Goal**: Eliminate silent failures in fire-and-forget operations. Add error categorization to conviction resolver. Fix error handling pattern consistency.
-
-### Tasks
-
-**Task 1.1: Add error logging to fire-and-forget operations**
-- `app/src/routes/chat.ts` — `emitChatSignal()`: wrap in try/catch with structured warning log
-- `app/src/services/stream-enricher.ts` — NATS publish: add `console.warn` with signal type and error
-- `app/src/services/autonomous-engine.ts` — finn write failures: add structured error log
-- Pattern: `console.warn('[signal-loss]', { event, error: String(err) })` for all fire-and-forget paths
-- **AC**: Every fire-and-forget operation logs on failure. `grep -r 'signal-loss' app/src/` returns all 3+ locations.
-
-**Task 1.2: Error categorization in conviction resolver**
-- `app/src/services/conviction-resolver.ts:resolveFromFreeside()` — inspect HTTP status before fallback
-- 404 → return null (correct, wallet not found)
-- 401/403 → log error, return null (auth failure)
-- 5xx → log warning, return null (transient)
-- Add structured log: `console.warn('[conviction-resolver]', { wallet: wallet.slice(0,10), status, error })`
-- **AC**: Different HTTP errors produce different log messages. Test verifies 404 vs 503 behavior.
-
-**Task 1.3: Extract shared error handler for route catch blocks**
-- Create `app/src/utils/error-handler.ts` with `handleRouteError(c, err)` function
-- Uses `BffError` type guard when `err instanceof BffError`
-- Falls back to generic 500 for unknown errors
-- Replace duplicate catch pattern in `chat.ts:130-139` and `agent.ts:257-262`
-- Fix `as 400` cast to proper status code handling
-- **AC**: `chat.ts` and `agent.ts` both use `handleRouteError()`. No more `as 400` casts.
-
-**Task 1.4: Stream enricher — emit economic event on incomplete sequences**
-- `app/src/services/stream-enricher.ts` — when `usageData` is missing but stream completed, emit economic event with `cost_micro_usd: 0` and `incomplete: true` flag
-- Log warning: `[stream-enricher] incomplete economic event — usage data missing`
-- **AC**: Test verifies economic event emitted even when usage is absent.
-
-**Task 1.5: Error observability test suite**
-- Create `app/tests/unit/error-observability.test.ts`
-- Test: fire-and-forget error logging (mock console.warn)
-- Test: conviction resolver error categorization (404 vs 503)
-- Test: shared error handler (BffError, generic Error, plain object)
-- Test: stream enricher incomplete sequence handling
-- **AC**: All tests pass. Zero silent failures remain in codebase.
+**Cycle**: cycle-004 (bridge iteration 2)
+**Source**: Bridgebuilder review of PR #8 — all findings (2 HIGH, 4 MEDIUM, 2 LOW)
+**Sprints**: 2 (Global IDs: 58-59)
+**Strategy**: Correctness & security hardening → documentation & polish
+**Predecessor**: Bridge iteration 1 (sprints 55-57, 1076 tests passing)
 
 ---
 
-## Sprint 2 (Global #56): Input Validation & Test Coverage Gaps
+## Sprint 1 (Global #58): Correctness & Security Hardening
 
-**Goal**: Add missing input validation on agent routes. Fill test coverage gaps for critical services. Fix rate limit cleanup.
+**Goal**: Resolve both HIGH findings and the functional MEDIUM findings. Add observability to wallet normalization fallback, tighten the legacy error handler, guard enrichment service scans, and extract validation constants.
 
 ### Tasks
 
-**Task 2.1: Agent route input validation**
-- `app/src/routes/agent.ts` — add validation for:
-  - `query`: max 10,000 chars (match chat.ts)
-  - `maxTokens`: range 1-4096
-  - `sessionId`: validate format with `isValidPathParam()` (same as chat.ts)
-  - `knowledgeDomain`: validate against allowed set or max 100 chars
-- Use same pattern as chat.ts validation
-- **AC**: Invalid inputs return 400. Test exercises each validation rule.
+**Task 1.1: Add observability to normalizeWallet fallback path**
+- `app/src/utils/normalize-wallet.ts` — when the catch fires on what looks like a valid Ethereum address (starts with `0x`, length 42), emit `console.warn('[wallet-normalization] checksum-fallback', { prefix: address.slice(0, 10) })`
+- Non-Ethereum-shaped addresses (test wallets, short addresses) stay silent — these are expected
+- Bridgebuilder finding #2 (HIGH): cache key bifurcation risk from silent fallback
+- **AC**: `normalizeWallet('0x' + 'a'.repeat(40))` emits a warning. `normalizeWallet('0xshort')` does not. Test verifies both paths.
 
-**Task 2.2: Rate limit cleanup optimization**
-- `app/src/routes/agent.ts` rate limiter — replace request-driven cleanup with `setInterval`
-- Extract cleanup into named function called by interval
-- Add cleanup duration metric: `console.debug('[rate-limit] cleanup', { evicted, durationMs })`
-- **AC**: Cleanup runs on interval, not request path. Test verifies stale entries evicted.
+**Task 1.2: Tighten legacy error handler with deprecation warning**
+- `app/src/utils/error-handler.ts` — add `console.warn('[error-handler] legacy error pattern', { status })` to the legacy branch (lines 20-26)
+- This makes the legacy path observable so we can measure usage and sunset it
+- Bridgebuilder finding #1 (HIGH): escape hatch accepts any object with status+body
+- **AC**: Legacy branch emits a warning on every invocation. Test verifies warning emitted. BffError path does NOT emit warning.
 
-**Task 2.3: Test coverage for protocol-evolution.test.ts improvements**
-- `app/tests/unit/protocol-evolution.test.ts` already has 30 tests for diff engine and migration proposals
-- Add edge case tests: empty manifest, manifest with only breaking changes, manifest with mixed priorities
-- Add test: `generateMigrationProposal` sorts required items first
-- **AC**: protocol-evolution tests cover all edge cases. >=35 tests.
+**Task 1.3: Add cardinality guard to enrichment service listAll()**
+- `app/src/services/enrichment-service.ts` — add `MAX_SCAN_SIZE = 10_000` constant
+- Before iterating aggregates, check `aggregates.length > MAX_SCAN_SIZE` → log `[enrichment] tier-distribution scan exceeds cardinality limit` and fall back to percentage estimation
+- Bridgebuilder finding #3 (MEDIUM): unbounded scan O(n) memory risk
+- **AC**: When store has >10k entries, falls back to estimation with warning. Test verifies guard triggers.
 
-**Task 2.4: Wallet normalization consistency**
-- Create `app/src/utils/normalize-wallet.ts` with `normalizeWallet(address: string): string`
-- Uses `checksumAddress()` from hounfour (already imported in other files)
-- Replace `wallet.toLowerCase()` in `conviction-resolver.ts:42` with `normalizeWallet()`
-- Audit all wallet comparison patterns and normalize consistently
-- **AC**: `grep -r 'toLowerCase.*wallet\|wallet.*toLowerCase' app/src/` returns 0 matches. All wallet comparisons use `normalizeWallet()` or `checksumAddress()`.
+**Task 1.4: Extract agent route validation constants**
+- Create validation constants object in `app/src/routes/agent.ts` (or extract to `app/src/validation.ts` if it already has similar constants):
+  ```
+  AGENT_QUERY_MAX_LENGTH = 10_000
+  AGENT_MAX_TOKENS_MIN = 1
+  AGENT_MAX_TOKENS_MAX = 4_096
+  AGENT_KNOWLEDGE_DOMAIN_MAX_LENGTH = 100
+  ```
+- Replace magic numbers at agent.ts:170-181 with named constants
+- Bridgebuilder finding #4 (MEDIUM): magic numbers in route handlers
+- **AC**: No magic number literals in agent route validation. Constants are exported and used by tests.
 
-**Task 2.5: Input validation and coverage test suite**
-- Create `app/tests/unit/input-validation.test.ts`
-- Test: agent route rejects oversized query (>10000 chars)
-- Test: agent route rejects invalid maxTokens
-- Test: agent route validates sessionId format
-- Test: wallet normalization consistency across mixed-case inputs
-- Test: rate limit cleanup evicts stale entries
-- **AC**: All validation tests pass.
+**Task 1.5: Hardening test suite**
+- Add tests to appropriate test files (or create `app/tests/unit/bridge-iter2-hardening.test.ts`):
+  - Test: normalizeWallet emits warning for valid-looking Ethereum addresses on fallback
+  - Test: normalizeWallet stays silent for short/test addresses
+  - Test: handleRouteError legacy branch emits deprecation warning
+  - Test: handleRouteError BffError path does not emit warning
+  - Test: enrichment service cardinality guard triggers at threshold
+  - Test: agent route uses named validation constants (verify 400 at boundary values)
+- **AC**: All tests pass. Minimum 8 new tests.
 
 ---
 
-## Sprint 3 (Global #57): Configuration Consolidation & Protocol Polish
+## Sprint 2 (Global #59): Documentation & Polish
 
-**Goal**: Consolidate scattered TTL configuration. Add missing JSDoc on security functions. Fix CircuitState health reporting.
+**Goal**: Resolve all remaining MEDIUM and LOW findings. Align documentation with implementation, document design decisions, and add intent comments for forward-looking code.
 
 ### Tasks
 
-**Task 3.1: Consolidate cache TTL configuration**
-- `app/src/config.ts` — add `autonomousPermissionTtlSec` (default: same as conviction, but separate key)
-- Add `DIXIE_AUTONOMOUS_PERMISSION_TTL` env var
-- Update `server.ts` to use new config key instead of reusing `convictionTierTtlSec`
-- Document each TTL in JSDoc with freshness rationale
-- **AC**: Each cache has its own documented TTL config. No TTL reuse without explicit comment.
+**Task 2.1: Align autonomousPermissionTtlSec JSDoc with default**
+- `app/src/config.ts:32-35` — soften JSDoc wording from implying TTLs *should* differ to saying they *can* differ independently
+- Updated JSDoc: "Separate config key allows independent tuning if permission revocation propagation needs to be faster than tier change propagation. Defaults match conviction TTL (300s) as a reasonable launch baseline."
+- Bridgebuilder finding #5 (MEDIUM): documentation-reality gap
+- **AC**: JSDoc accurately describes current behavior and future flexibility. No expectation mismatch.
 
-**Task 3.2: Security function JSDoc**
-- `app/src/middleware/jwt.ts` — add JSDoc explaining HS256 limitations and when ES256 migration required
-- `app/src/middleware/allowlist.ts:hasWallet()` — add JSDoc explaining EIP-55 normalization
-- `app/src/middleware/tba-auth.ts` — add JSDoc warning: "SECURITY: Do NOT cache verification result" with rationale
-- **AC**: All security-critical functions have JSDoc with @security tags.
+**Task 2.2: Document fromProtocolCircuitState intended consumer**
+- `app/src/types.ts` — add JSDoc to `fromProtocolCircuitState()` explaining its intended consumers: protocol conformance tests, future webhook consumers that receive snake_case state from upstream
+- Bridgebuilder finding #6 (MEDIUM): unused code is a maintenance liability without documented intent
+- **AC**: Function has JSDoc explaining why it exists and who will use it.
 
-**Task 3.3: CircuitState protocol mapping in health responses**
-- Audit health endpoint to ensure circuit state reported in protocol form
-- If health response includes circuit state, apply `toProtocolCircuitState()` before serialization
-- Add test: health response circuit state uses snake_case (`half_open` not `half-open`)
-- **AC**: Health endpoint returns protocol-compatible circuit state.
+**Task 2.3: Document cleanupInterval.unref() and lazy expiration design**
+- `app/src/routes/agent.ts:94-96` — add a comment block above the interval explaining:
+  1. Why interval-based (moved off request path in Sprint 56)
+  2. Why `.unref()` (graceful shutdown)
+  3. Why 60s lag is acceptable ("lazy expiration" — conservative for security boundary)
+- Bridgebuilder finding #7 (LOW): correct but undocumented
+- **AC**: Design decision documented inline. Comment references Bridgebuilder review rationale.
 
-**Task 3.4: Enrichment service tier distribution accuracy**
-- `app/src/services/enrichment-service.ts` — replace hardcoded approximation with actual scan
-- Scan reputation store for all aggregates, map reputation_state to tier
-- Cache result for 5 minutes (in-memory, not Redis)
-- Fall back to hardcoded estimate if store is empty
-- **AC**: Tier distribution reflects actual data when aggregates exist. Test verifies accuracy.
-
-**Task 3.5: Configuration and polish test suite**
-- Add tests for: autonomous TTL configuration, circuit state mapping in health, tier distribution accuracy
-- **AC**: All polish tests pass.
+**Task 2.4: Add domain-organization roadmap comments to test files**
+- `app/tests/unit/error-observability.test.ts`, `input-validation.test.ts`, `config-polish.test.ts` — add a header comment noting these are sprint-organized and may be consolidated into domain-organized files (e.g., `wallet.test.ts`, `error-handling.test.ts`) when the sprint structure stabilizes
+- Bridgebuilder finding #8 (LOW): test file proliferation awareness
+- **AC**: Each sprint-organized test file has a header comment noting future consolidation path. No structural changes — just awareness markers.
 
 ---
 
 ## Sprint Dependency Graph
 
 ```
-Sprint 1 (Error Observability)
+Sprint 1 (Correctness & Security Hardening)
     │
-    └──▶ Sprint 2 (Validation + Coverage)
-             │
-             └──▶ Sprint 3 (Config + Polish)
+    └──▶ Sprint 2 (Documentation & Polish)
 ```
 
-Sequential — each builds on previous foundation.
+Sequential — sprint 2's documentation references sprint 1's new code.
 
 ---
 
-## Findings Addressed by Sprint
+## Findings Resolution Map
 
-| Finding | Severity | Sprint | Task |
-|---------|----------|--------|------|
-| Silent fire-and-forget failures | HIGH | 1 | 1.1 |
-| Conviction resolver error blindness | HIGH | 1 | 1.2 |
-| Inconsistent route error handling | LOW | 1 | 1.3 |
-| Missing economic event on incomplete stream | MEDIUM | 1 | 1.4 |
-| Agent route missing input validation | HIGH | 2 | 2.1 |
-| Rate limit cleanup blocking request path | MEDIUM | 2 | 2.2 |
-| Test coverage gaps | HIGH | 2 | 2.3 |
-| Wallet normalization inconsistency | MEDIUM | 2 | 2.4 |
-| TTL configuration scattered/reused | MEDIUM | 3 | 3.1 |
-| Missing security JSDoc | MEDIUM | 3 | 3.2 |
-| CircuitState not mapped in health | LOW | 3 | 3.3 |
-| Enrichment tier distribution hardcoded | MEDIUM | 3 | 3.4 |
+| # | Finding | Severity | Sprint | Task |
+|---|---------|----------|--------|------|
+| 1 | Legacy error handler escape hatch | 🔴 HIGH | 1 | 1.2 |
+| 2 | normalizeWallet cache key bifurcation | 🔴 HIGH | 1 | 1.1 |
+| 3 | listAll() unbounded scan | 🟡 MEDIUM | 1 | 1.3 |
+| 4 | Agent route magic numbers | 🟡 MEDIUM | 1 | 1.4 |
+| 5 | autonomousPermissionTtlSec JSDoc drift | 🟡 MEDIUM | 2 | 2.1 |
+| 6 | fromProtocolCircuitState unused | 🟡 MEDIUM | 2 | 2.2 |
+| 7 | cleanupInterval.unref() undocumented | 🟢 LOW | 2 | 2.3 |
+| 8 | Sprint-organized test proliferation | 🟢 LOW | 2 | 2.4 |
+
+**Coverage**: 8/8 findings addressed. 4 PRAISE findings require no action.

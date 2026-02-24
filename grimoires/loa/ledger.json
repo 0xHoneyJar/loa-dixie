@@ -424,7 +424,7 @@
   ],
   "active_cycle": "cycle-004",
   "active_bugfix": null,
-  "global_sprint_counter": 57,
+  "global_sprint_counter": 59,
   "bugfix_cycles": [],
   "release_cycles": [
     {
@@ -459,6 +459,20 @@
           "global_id": 57,
           "label": "Configuration Consolidation & Protocol Polish",
           "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-4",
+          "global_id": 58,
+          "label": "Correctness & Security Hardening (Bridge Iter 2)",
+          "tasks": 5,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-5",
+          "global_id": 59,
+          "label": "Documentation & Polish (Bridge Iter 2)",
+          "tasks": 4,
           "status": "completed"
         }
       ]
