@@ -1,0 +1,92 @@
+{
+  "bridge_id": "bridge-20260220-b2ff98",
+  "iteration": 1,
+  "timestamp": "2026-02-20T22:00:00Z",
+  "summary": {
+    "critical": 0,
+    "high": 2,
+    "medium": 5,
+    "low": 3,
+    "praise": 5,
+    "total": 15
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "severity": "HIGH",
+      "title": "WebSocket proxy does not validate upstream TLS certificates",
+      "file": "app/src/ws-upgrade.ts:100-106",
+      "fix": "Explicitly set rejectUnauthorized: true in https.request options"
+    },
+    {
+      "id": "F-2",
+      "severity": "HIGH",
+      "title": "Unbounded ticket store growth under ticket-stuffing attacks",
+      "file": "app/src/services/ticket-store.ts:32-36",
+      "fix": "Add maxTicketsPerWallet guard (e.g., 5) to issue()"
+    },
+    {
+      "id": "F-3",
+      "severity": "MEDIUM",
+      "title": "Self-write detection race window in allowlist file watcher",
+      "file": "app/src/middleware/allowlist.ts:210-211",
+      "fix": "Replace timestamp heuristic with write-nonce comparison"
+    },
+    {
+      "id": "F-4",
+      "severity": "MEDIUM",
+      "title": "Audit log ring buffer uses shift() — O(n) per eviction",
+      "file": "app/src/middleware/allowlist.ts:119-133",
+      "fix": "Batch eviction via splice() or true ring buffer with head/tail pointers"
+    },
+    {
+      "id": "F-5",
+      "severity": "MEDIUM",
+      "title": "WebSocket proxy does not destroy socket after upstream rejection",
+      "file": "app/src/ws-upgrade.ts:136-146",
+      "fix": "Add res.on('end', () => clientSocket.destroy()) after pipe"
+    },
+    {
+      "id": "F-6",
+      "severity": "MEDIUM",
+      "title": "No test coverage for ws-upgrade.ts proxy logic",
+      "file": "app/src/ws-upgrade.ts",
+      "fix": "Add tests for missing/invalid ticket rejection, path validation, proxy setup"
+    },
+    {
+      "id": "F-7",
+      "severity": "MEDIUM",
+      "title": "Admin key comparison is not constant-time",
+      "file": "app/src/routes/admin.ts:26",
+      "fix": "Use crypto.timingSafeEqual for admin key comparison"
+    },
+    {
+      "id": "F-8",
+      "severity": "LOW",
+      "title": "finnWsUrl derivation uses naive http->ws replacement",
+      "file": "app/src/config.ts:54",
+      "fix": "Use explicit scheme replacement or URL parsing"
+    },
+    {
+      "id": "F-9",
+      "severity": "LOW",
+      "title": "JWT middleware silently swallows all verification errors",
+      "file": "app/src/middleware/jwt.ts:39-41",
+      "fix": "Add structured logging in catch block with error type"
+    },
+    {
+      "id": "F-10",
+      "severity": "LOW",
+      "title": "tracing.ts uses as never type assertions",
+      "file": "app/src/middleware/tracing.ts:40-42",
+      "fix": "Define custom Variables type or use header-based communication"
+    }
+  ],
+  "praise": [
+    {"id": "F-11", "title": "WebSocket ticket pattern is a textbook security improvement"},
+    {"id": "F-12", "title": "Circuit breaker logging with stable event contract"},
+    {"id": "F-13", "title": "Bounded audit log with overflow emission"},
+    {"id": "F-14", "title": "ES256 migration ADR is thorough and actionable"},
+    {"id": "F-15", "title": "x402 payment middleware is a well-designed noop hook"}
+  ]
+}
