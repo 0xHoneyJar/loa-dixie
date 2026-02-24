@@ -53,8 +53,10 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     const corpusMeta = getCorpusMeta();
 
     // Sprint 6 — Task 6.2: Reputation service health reporting
+    // Phase 3: Enhanced with store_type for operational visibility
     const reputationStatus = deps.reputationService ? {
       initialized: true,
+      store_type: deps.reputationService.store.constructor.name,
       aggregate_count: await deps.reputationService.store.count(),
     } : undefined;
 
@@ -73,7 +75,7 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     if (redisHealth) infraServices.redis = redisHealth;
     if (natsHealth) infraServices.nats = natsHealth;
 
-    const response: HealthResponse & { reputation_service?: { initialized: boolean; aggregate_count: number } } = {
+    const response: HealthResponse & { reputation_service?: { initialized: boolean; store_type: string; aggregate_count: number } } = {
       status: overallStatus,
       version: VERSION,
       uptime_seconds: Math.floor((Date.now() - startedAt) / 1000),

@@ -15,6 +15,21 @@
 version: "3.9"
 
 services:
+  # --- PostgreSQL (reputation storage for dixie-bff) ---
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5532:5432"
+    environment:
+      POSTGRES_DB: dixie_test
+      POSTGRES_USER: dixie
+      POSTGRES_PASSWORD: dixie_test_pw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dixie -d dixie_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # --- Redis (session storage for loa-finn) ---
   redis:
     image: redis:7-alpine
@@ -86,11 +101,15 @@ services:
       DIXIE_ADMIN_KEY: "integration-test-admin-key"
       DIXIE_ALLOWLIST_PATH: "/data/allowlist.json"
       DIXIE_RATE_LIMIT_RPM: "1000"
+      DATABASE_URL: "postgresql://dixie:dixie_test_pw@postgres:5432/dixie_test"
+      REDIS_URL: "redis://redis:6379"
       NODE_ENV: test
       LOG_LEVEL: "debug"
     volumes:
       - dixie-data:/data
     depends_on:
+      postgres:
+        condition: service_healthy
       loa-finn:
         condition: service_healthy
       knowledge-init:
