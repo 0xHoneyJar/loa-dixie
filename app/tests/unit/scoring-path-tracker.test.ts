@@ -188,6 +188,26 @@ describe('ScoringPathTracker', () => {
     expect(tracker.lastRecordOptions).toBeUndefined();
   });
 
+  it('stores routed_model_id in options without affecting hash', () => {
+    const entry = tracker.record(
+      { path: 'task_cohort', model_id: 'gpt-4o', task_type: 'code_review', reason: 'cohort' },
+      { routed_model_id: 'qwen3-coder-next' },
+    );
+
+    // routed_model_id is accessible via lastRecordOptions
+    expect(tracker.lastRecordOptions?.routed_model_id).toBe('qwen3-coder-next');
+
+    // Entry itself is a clean ScoringPathLog (no routed_model_id in return)
+    expect(entry.model_id).toBe('gpt-4o');
+    expect(entry.path).toBe('task_cohort');
+    expect(entry.entry_hash).toBeDefined();
+  });
+
+  it('record without options leaves lastRecordOptions undefined', () => {
+    tracker.record({ path: 'tier_default' });
+    expect(tracker.lastRecordOptions).toBeUndefined();
+  });
+
   it('hash pair constraint: both entry_hash and previous_hash always present', () => {
     const e1 = tracker.record({ path: 'tier_default' });
     const e2 = tracker.record({ path: 'aggregate', model_id: 'gpt-4o' });

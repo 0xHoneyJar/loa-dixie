@@ -26,6 +26,7 @@ import type {
   EconomicBoundaryEvaluationResult,
 } from '@0xhoneyjar/loa-hounfour/economy';
 import type { ReputationAggregate } from '@0xhoneyjar/loa-hounfour/governance';
+import type { ConstraintOrigin } from '@0xhoneyjar/loa-hounfour/constraints';
 import type { ConvictionTier } from '../types/conviction.js';
 import type { TaskType, ScoringPathLog } from '../types/reputation-evolution.js';
 import type { DixieReputationAggregate } from '../types/reputation-evolution.js';
@@ -243,9 +244,12 @@ export function evaluateEconomicBoundaryForWallet(
 
   let blendedScore = profile.blended_score;
   let reputationState = profile.reputation_state;
+  // Governance origin tag for scoring path reasons (Sprint 64 — Q5 governance provenance)
+  const weightsTag = `[weights: ${CONVICTION_ACCESS_MATRIX_ORIGIN.origin}]`;
+
   let scoringPathInput: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'> = {
     path: 'tier_default',
-    reason: 'No reputation aggregate available; using static tier-based score',
+    reason: `No reputation aggregate available; using static tier-based score ${weightsTag}`,
   };
 
   if (reputationAggregate) {
@@ -274,7 +278,7 @@ export function evaluateEconomicBoundaryForWallet(
             path: 'task_cohort',
             model_id: activeCohort.model_id,
             task_type: taskType,
-            reason: `Task-specific cohort found for ${activeCohort.model_id}:${taskType}`,
+            reason: `Task-specific cohort found for ${activeCohort.model_id}:${taskType} ${weightsTag}`,
           };
           usedTaskCohort = true;
         }
@@ -290,7 +294,7 @@ export function evaluateEconomicBoundaryForWallet(
         reputationAggregate.pseudo_count,
       );
       reputationState = reputationAggregate.state;
-      scoringPathInput = { path: 'aggregate', reason: 'Using aggregate personal score (no task-specific cohort)' };
+      scoringPathInput = { path: 'aggregate', reason: `Using aggregate personal score (no task-specific cohort) ${weightsTag}` };
     }
   }
 
@@ -583,6 +587,7 @@ export interface ConvictionAccessCapabilities {
  *
  * @since Sprint 5 — Bridgebuilder Q4 (conviction voting x economic boundary reconciliation)
  * @since Sprint 9 — PRAISE-1 formalization (constitutional annotation)
+ * @since cycle-005 — Sprint 64, Task 5.1 (Bridge deep review Q5: governance bootstrap)
  */
 export const CONVICTION_ACCESS_MATRIX: Record<ConvictionTier, ConvictionAccessCapabilities> = {
   observer: {
@@ -621,6 +626,38 @@ export const CONVICTION_ACCESS_MATRIX: Record<ConvictionTier, ConvictionAccessCa
     reputation_state: 'authoritative',
   },
 } as const;
+
+/**
+ * Constitutional provenance annotation for the CONVICTION_ACCESS_MATRIX.
+ *
+ * Tags the governance policy with its origin per Hounfour v7.9.1
+ * ConstraintOrigin taxonomy:
+ * - `genesis`: Set at system creation (current state — values defined by founding team)
+ * - `enacted`: Modified through conviction-weighted governance vote (future)
+ * - `migrated`: Carried forward from a prior system version (future)
+ *
+ * This annotation shifts the architectural framing from "hardcoded policy"
+ * to "initial policy awaiting governance evolution." Even though the values
+ * don't change today, the metadata signals that these are genesis parameters
+ * subject to future conviction-weighted modification — closing the governance
+ * bootstrap gap identified in Bridgebuilder Deep Review Q5.
+ *
+ * The governance evolution path:
+ * 1. Current weights are `origin: 'genesis'` (set at system creation)
+ * 2. A governance proposal (via conviction voting) could produce `origin: 'enacted'` weights
+ * 3. The hash chain records which weights were in effect for each scoring decision
+ *
+ * @since cycle-005 — Sprint 64, Task 5.1 (Bridge deep review Q5)
+ */
+export interface GovernanceAnnotation {
+  readonly origin: ConstraintOrigin;
+  readonly enacted_at?: string;
+  readonly enacted_by?: string;
+}
+
+export const CONVICTION_ACCESS_MATRIX_ORIGIN: GovernanceAnnotation = {
+  origin: 'genesis',
+};
 
 export { TIER_TRUST_PROFILES, DEFAULT_CRITERIA };
 export type { TierTrustProfile, EconomicBoundaryOptions };

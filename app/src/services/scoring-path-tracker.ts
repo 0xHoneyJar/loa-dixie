@@ -41,9 +41,24 @@ export interface ReputationFreshness {
  * (freshness is observational, not part of the audit commitment).
  *
  * @since cycle-005 — Sprint 63, Task 4.2
+ * @since cycle-005 — Sprint 64, Task 5.2 (routed_model_id)
  */
 export interface RecordOptions {
   reputation_freshness?: ReputationFreshness;
+  /**
+   * The model actually selected by the router, which may differ from
+   * model_id (the model recommended by the reputation system).
+   *
+   * The delta between model_id and routed_model_id is a valuable signal:
+   * if they consistently differ, the reputation system's recommendations
+   * are being overridden (budget, capacity, fallback), which should feed
+   * back into reputation calibration.
+   *
+   * Not included in hash input — populated after the scoring decision.
+   *
+   * @since cycle-005 — Sprint 64, Task 5.2 (Bridge deep review Q2: multi-model accountability)
+   */
+  routed_model_id?: string;
 }
 
 /**

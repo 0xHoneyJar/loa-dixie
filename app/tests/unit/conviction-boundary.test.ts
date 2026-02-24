@@ -5,7 +5,11 @@ import {
   getTierTrustProfile,
   TIER_TRUST_PROFILES,
   DEFAULT_CRITERIA,
+  CONVICTION_ACCESS_MATRIX,
+  CONVICTION_ACCESS_MATRIX_ORIGIN,
 } from '../../src/services/conviction-boundary.js';
+import type { ConvictionTier } from '../../src/types/conviction.js';
+import { TIER_ORDER } from '../../src/types/conviction.js';
 
 describe('conviction-boundary', () => {
   describe('TIER_TRUST_PROFILES', () => {
@@ -151,6 +155,49 @@ describe('conviction-boundary', () => {
       expect(DEFAULT_CRITERIA.min_trust_score).toBe(0.3);
       expect(DEFAULT_CRITERIA.min_reputation_state).toBe('warming');
       expect(DEFAULT_CRITERIA.min_available_budget).toBe('0');
+    });
+  });
+
+  // ─── Governance Annotation (Sprint 64 — Task 5.1) ─────────────────────
+  describe('CONVICTION_ACCESS_MATRIX_ORIGIN', () => {
+    it('has genesis origin annotation', () => {
+      expect(CONVICTION_ACCESS_MATRIX_ORIGIN).toBeDefined();
+      expect(CONVICTION_ACCESS_MATRIX_ORIGIN.origin).toBe('genesis');
+      expect(CONVICTION_ACCESS_MATRIX_ORIGIN.enacted_at).toBeUndefined();
+      expect(CONVICTION_ACCESS_MATRIX_ORIGIN.enacted_by).toBeUndefined();
+    });
+  });
+
+  // ─── Matrix Conformance (Sprint 64 — Task 5.4) ────────────────────────
+  // Verifies the CONVICTION_ACCESS_MATRIX is internally consistent with
+  // TIER_TRUST_PROFILES and DEFAULT_CRITERIA. Guards against silent drift
+  // between the matrix declaration and the actual evaluation logic.
+  describe('CONVICTION_ACCESS_MATRIX conformance', () => {
+    const stateOrder = ['cold', 'warming', 'established', 'authoritative'] as const;
+
+    it.each(TIER_ORDER)('tier %s: matrix trust_score matches TIER_TRUST_PROFILES', (tier: ConvictionTier) => {
+      const matrixEntry = CONVICTION_ACCESS_MATRIX[tier];
+      const profile = TIER_TRUST_PROFILES[tier];
+      expect(matrixEntry.trust_score).toBe(profile.blended_score);
+    });
+
+    it.each(TIER_ORDER)('tier %s: matrix reputation_state matches TIER_TRUST_PROFILES', (tier: ConvictionTier) => {
+      const matrixEntry = CONVICTION_ACCESS_MATRIX[tier];
+      const profile = TIER_TRUST_PROFILES[tier];
+      expect(matrixEntry.reputation_state).toBe(profile.reputation_state);
+    });
+
+    it.each(TIER_ORDER)('tier %s: passes_economic_boundary matches evaluation result', (tier: ConvictionTier) => {
+      const matrixEntry = CONVICTION_ACCESS_MATRIX[tier];
+      const profile = TIER_TRUST_PROFILES[tier];
+
+      // Replicate the economic boundary pass/fail logic from DEFAULT_CRITERIA
+      const meetsScore = profile.blended_score >= DEFAULT_CRITERIA.min_trust_score;
+      const meetsState = stateOrder.indexOf(profile.reputation_state) >=
+        stateOrder.indexOf(DEFAULT_CRITERIA.min_reputation_state as typeof stateOrder[number]);
+      const expectedPass = meetsScore && meetsState;
+
+      expect(matrixEntry.passes_economic_boundary).toBe(expectedPass);
     });
   });
 });
