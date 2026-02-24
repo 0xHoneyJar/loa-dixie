@@ -5,6 +5,70 @@ All notable changes to Loa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] — 2026-02-24 — Constitutional Architecture
+
+Dixie transforms from a BFF proxy into a constitutional architecture with Hounfour Level 6 protocol evolution foundation. Two development cycles (35 sprints, 54 global sprints total) deliver full protocol compliance, economic governance, and self-improving capabilities.
+
+**Why MAJOR**: New public API surface, new type exports, paradigm shift from ad-hoc alignment to constitutional protocol compliance.
+
+### Added
+
+- **Enrichment endpoint**: `POST /api/enrich/review-context` — Dixie as context enrichment tier in self-improving review infrastructure (Sprint 53)
+- **Reputation evolution**: Per-model per-task cohorts (`TaskTypeCohort`), event sourcing foundation (`ReputationEvent`), 3-tier scoring fallback (Sprint 52)
+- **Protocol diff engine**: Snapshot-based hounfour version comparison for automated change detection (Sprint 54)
+- **Migration proposal generator**: Actionable proposals from protocol change manifests with effort/priority estimates (Sprint 54)
+- **Constitutional amendment process**: Patch/minor/major categories with IETF RFC 2026 parallel (Sprint 54)
+- **Runtime conformance middleware**: Hono middleware with configurable sampling for Level 5 runtime validation (Sprint 49)
+- **Conformance fixture auto-generation**: Script generates valid samples from hounfour schemas via TypeBox `Value.Create()` (Sprint 50)
+- **Quality feedback loop**: Soft sigmoid scoring (`1/(1+weighted_count)`) for graduated reputation impact (Sprint 53)
+- **BffError class**: Proper Error subclass with stack traces for monitoring tools (Sprint 47)
+- **ConvictionAccessMatrix**: Explicit tier-to-capability mapping across governance and economic systems (Sprint 47)
+- **Reputation service**: Full persistence layer with `InMemoryReputationStore`, blended scoring, credential prior computation (Sprint 48)
+- **Soul Memory API**: Conviction-gated governance with Ostrom's commons principles (Cycle-002)
+- **Tool event streaming**: Real-time tool use visualization with economic metadata (Cycle-002)
+- **BEAUVOIR personality surfacing**: Agent personality system (Cycle-002)
+- **Conviction-gated access**: BGT staking to 9 tiers with Ostrom's graduated sanctions (Cycle-002)
+- **Autonomous operation mode**: Agent delegation and scheduling (Cycle-002)
+- **NL scheduling**: Natural language cron integration (Cycle-002)
+- **Agent API surface**: TBA auth + x402 metering foundation (Cycle-002)
+- **Compound learning pipeline**: Interaction signals for knowledge improvement (Cycle-002)
+- **ResourceGovernor\<T\>**: Generalized resource governance pattern (Cycle-002)
+- **Knowledge governance**: Communitarian conviction voting for corpus management (Cycle-002)
+
+### Changed
+
+- **Access control**: Hand-rolled `checkAccessPolicy()` replaced with hounfour `evaluateAccessPolicy()` — 6 policy types including `reputation_gated` and `compound`, hysteresis support (Sprint 44)
+- **Validators**: All hand-rolled validators replaced with hounfour TypeCompiler-cached equivalents with cross-field invariants (Sprint 43)
+- **Economic arithmetic**: All micro-USD computations migrated to BigInt via `computeCostMicro()` with conservation verification (Sprint 44)
+- **Economic boundary**: Conviction tier resolution wired to `evaluateEconomicBoundary()` with structured denial codes (Sprint 45)
+- **Stream types**: Protocol stream types imported from hounfour with Dixie-specific enrichments as additive extensions (Sprint 43)
+- **State machines**: `CircuitStateMachine` verified against hounfour canonical transitions (Sprint 43)
+- **Request integrity**: `computeReqHash()` and `deriveIdempotencyKey()` integrated for request deduplication (Sprint 45)
+- **Wallet comparison**: Raw `toLowerCase()` replaced with `checksumAddress()` for EIP-55 compliance (Sprint 43)
+- **Denial codes**: `translateReason` evolved toward structured codes with sunset plan and observability (Sprint 48)
+
+### Architecture
+
+- **Hounfour Protocol Maturity**: Level 1 (Interface) → Level 4 (Civilizational, achieved) → Level 5-6 (foundation laid)
+- **Separation of Powers**: Hounfour=Constitution, Finn=Judiciary, Freeside=Treasury, Dixie=Commons, Arrakis=Agora, Loa=Legal Process
+- **Autopoietic Property**: Self-improving enrichment → review → quality event → reputation → enrichment loop with 100ms timeout membrane
+- **Conviction-to-Currency Path**: 4-stage progression from static tiers to social money (Web4 "May A Million Monies Bloom")
+- **Conservation Invariants as Social Contracts**: I-1 (resource accounting), I-2 (lot consumption), I-3 (storage consistency)
+- **Convivial Code**: Ivan Illich's conviviality principles applied as code review checklist (P1-P7)
+- **Constitutional Amendment Protocol**: Formalized schema evolution governance for the hounfour ecosystem
+
+### Test Coverage
+
+- 1011 tests across 62 test files
+- Zero regressions across 35 sprints (cycles 002 + 003)
+- Protocol conformance suite validates all hounfour v7.9.2 schemas
+- Economic conservation invariants verified with BigInt precision
+- 25 manual conformance fixtures at 74% schema coverage
+
+_Source: PR #7 (feature/dixie-phase2), 28 commits, 218 files changed_
+_Cycles: cycle-002 (23 sprints, globals 20-42), cycle-003 (12 sprints, globals 43-54)_
+_Reference: [loa-finn#66](https://github.com/0xHoneyJar/loa-finn/issues/66) (command center)_
+
 ## [1.39.1] — 2026-02-15 — Collateral Deletion Safeguard + CI Hardening
 
 ### Fixed
