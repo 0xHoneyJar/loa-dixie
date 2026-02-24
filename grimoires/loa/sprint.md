@@ -8,7 +8,7 @@
 
 ---
 
-## Sprint 1 (Global 65): Persistent Reputation
+## Sprint 1 (Global 65): Persistent Reputation ✅
 
 **Focus**: FR-1 (PostgresReputationStore) + FR-7 (Migration)
 **Dependencies**: None
@@ -69,7 +69,7 @@
 
 ---
 
-## Sprint 2 (Global 66): Auth Hardening
+## Sprint 2 (Global 66): Auth Hardening ✅
 
 **Focus**: FR-2 (ES256 JWT Migration + JWKS)
 **Dependencies**: None (independent of Sprint 1)
@@ -131,7 +131,7 @@
 
 ---
 
-## Sprint 3 (Global 67): Payment & Refactor
+## Sprint 3 (Global 67): Payment & Refactor ✅
 
 **Focus**: FR-3 (Payment Scaffold) + FR-4 (NFT Resolver) + FR-5 (Terraform)
 **Dependencies**: None (can run parallel with Sprint 1/2)
@@ -192,7 +192,7 @@
 
 ---
 
-## Sprint 4 (Global 68): E2E & Polish
+## Sprint 4 (Global 68): E2E & Polish ✅
 
 **Focus**: FR-6 (E2E Tests) + FR-8 (Health Enhancement)
 **Dependencies**: Sprint 1 (needs PostgresReputationStore for E2E), Sprint 2 (needs ES256 for auth flow E2E)

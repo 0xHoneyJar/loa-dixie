@@ -487,35 +487,35 @@
           "global_id": 65,
           "label": "Persistent Reputation",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-2",
           "global_id": 66,
           "label": "Auth Hardening",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-3",
           "global_id": 67,
           "label": "Payment & Refactor",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-4",
           "global_id": 68,
           "label": "E2E & Polish",
           "tasks": 4,
-          "status": "pending"
+          "status": "completed"
         }
       ]
     }
   ],
   "active_cycle": "cycle-006",
   "active_bugfix": null,
-  "global_sprint_counter": 64,
+  "global_sprint_counter": 68,
   "bugfix_cycles": [],
   "release_cycles": [
     {
