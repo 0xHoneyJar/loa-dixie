@@ -269,6 +269,133 @@ describe('PostgresReputationStore', () => {
     });
   });
 
+  describe('compactSnapshot', () => {
+    it('uses transaction with put + event_count reset', async () => {
+      const aggregate = makeAggregate({ state: 'established' });
+      const mockClient = {
+        query: vi.fn().mockResolvedValue({ rows: [] }),
+        release: vi.fn(),
+      };
+      (pool as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockClient);
+
+      await store.compactSnapshot('nft-1', aggregate);
+
+      expect(mockClient.query).toHaveBeenCalledTimes(3); // BEGIN, UPSERT, COMMIT
+      expect(mockClient.query).toHaveBeenNthCalledWith(1, 'BEGIN');
+      const upsertSql = mockClient.query.mock.calls[1][0];
+      expect(upsertSql).toContain('event_count = 0');
+      expect(upsertSql).toContain('snapshot_version');
+      expect(mockClient.query).toHaveBeenNthCalledWith(3, 'COMMIT');
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('rolls back on failure', async () => {
+      const aggregate = makeAggregate();
+      const mockClient = {
+        query: vi.fn()
+          .mockResolvedValueOnce(undefined) // BEGIN
+          .mockRejectedValueOnce(new Error('db error')), // UPSERT fails
+        release: vi.fn(),
+      };
+      (pool as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockClient);
+
+      await expect(store.compactSnapshot('nft-1', aggregate)).rejects.toThrow('db error');
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+  });
+
+  describe('needsCompaction', () => {
+    it('returns true when event_count exceeds threshold', async () => {
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        rows: [{ event_count: 150 }],
+      });
+      expect(await store.needsCompaction('nft-1')).toBe(true);
+    });
+
+    it('returns false when event_count is below threshold', async () => {
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        rows: [{ event_count: 50 }],
+      });
+      expect(await store.needsCompaction('nft-1')).toBe(false);
+    });
+
+    it('returns false when aggregate does not exist', async () => {
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ rows: [] });
+      expect(await store.needsCompaction('nft-nonexistent')).toBe(false);
+    });
+
+    it('uses custom threshold', async () => {
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        rows: [{ event_count: 25 }],
+      });
+      expect(await store.needsCompaction('nft-1', 20)).toBe(true);
+    });
+  });
+
+  describe('countEventsBefore', () => {
+    it('counts events older than cutoff', async () => {
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        rows: [{ count: 42 }],
+      });
+      const cutoff = new Date('2026-01-15T00:00:00Z');
+      const result = await store.countEventsBefore(cutoff);
+      expect(result).toBe(42);
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE created_at < $1'),
+        [cutoff],
+      );
+    });
+  });
+
+  describe('deleteEventsBefore', () => {
+    it('returns count without deleting when dryRun is true (default)', async () => {
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        rows: [{ count: 10 }],
+      });
+      const cutoff = new Date('2026-01-15T00:00:00Z');
+      const result = await store.deleteEventsBefore(cutoff);
+      expect(result).toBe(10);
+      // Should have called countEventsBefore, not DELETE
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT COUNT'),
+        [cutoff],
+      );
+    });
+
+    it('deletes events when dryRun is false', async () => {
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        rowCount: 10,
+        rows: [],
+      });
+      const cutoff = new Date('2026-01-15T00:00:00Z');
+      const result = await store.deleteEventsBefore(cutoff, false);
+      expect(result).toBe(10);
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM reputation_events'),
+        [cutoff],
+      );
+    });
+  });
+
+  describe('getOldestEventDate', () => {
+    it('returns the oldest event date', async () => {
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        rows: [{ oldest: '2026-01-01T00:00:00.000Z' }],
+      });
+      const result = await store.getOldestEventDate();
+      expect(result).toEqual(new Date('2026-01-01T00:00:00.000Z'));
+    });
+
+    it('returns null when table is empty', async () => {
+      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        rows: [{ oldest: null }],
+      });
+      const result = await store.getOldestEventDate();
+      expect(result).toBeNull();
+    });
+  });
+
   describe('JSONB round-trip', () => {
     it('aggregate serializes and deserializes correctly', async () => {
       const aggregate = makeAggregate({

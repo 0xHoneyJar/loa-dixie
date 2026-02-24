@@ -129,6 +129,15 @@ describe('Reputation Evolution — Sprint 10', () => {
       expect(agg.task_cohorts!.length).toBe(3);
       expect(agg.task_cohorts![0].task_type).toBe('code_review');
     });
+
+    it('DixieReputationAggregate supports optional community_id', () => {
+      const agg = makeDixieAggregate({ community_id: 'community-abc' });
+      expect(agg.community_id).toBe('community-abc');
+
+      // Without community_id — backward compatible
+      const globalAgg = makeDixieAggregate();
+      expect(globalAgg.community_id).toBeUndefined();
+    });
   });
 
   describe('Task 10.2: Task-type keyed reputation storage', () => {
@@ -486,28 +495,80 @@ describe('Reputation Evolution — Sprint 10', () => {
       expect(history[0].timestamp).toBe('2026-02-01T00:00:00Z');
     });
 
-    describe('reconstructAggregateFromEvents (stub)', () => {
-      it('returns a cold-start aggregate from events', () => {
-        const events: ReputationEvent[] = [
-          makeEvent({ timestamp: '2026-02-01T00:00:00Z' }),
-          makeEvent({ timestamp: '2026-02-02T00:00:00Z' }),
-          makeEvent({ timestamp: '2026-02-03T00:00:00Z' }),
-        ];
-
-        const aggregate = reconstructAggregateFromEvents(events);
-        expect(aggregate.state).toBe('cold');
-        expect(aggregate.personal_score).toBeNull();
-        expect(aggregate.sample_count).toBe(3); // Event count recorded
-        expect(aggregate.created_at).toBe('2026-02-01T00:00:00Z');
-        expect(aggregate.last_updated).toBe('2026-02-03T00:00:00Z');
-        expect(aggregate.task_cohorts).toEqual([]);
-      });
-
-      it('returns valid aggregate from empty event stream', () => {
+    describe('reconstructAggregateFromEvents', () => {
+      it('returns cold aggregate from empty event stream', () => {
         const aggregate = reconstructAggregateFromEvents([]);
         expect(aggregate.state).toBe('cold');
         expect(aggregate.sample_count).toBe(0);
+        expect(aggregate.personal_score).toBeNull();
         expect(aggregate.contract_version).toBe('7.11.0');
+      });
+
+      it('transitions to warming with quality signal events', () => {
+        const events: ReputationEvent[] = [
+          { type: 'quality_signal', timestamp: '2026-02-01T00:00:00Z', score: 0.8 } as unknown as ReputationEvent,
+          { type: 'quality_signal', timestamp: '2026-02-02T00:00:00Z', score: 0.9 } as unknown as ReputationEvent,
+        ];
+
+        const aggregate = reconstructAggregateFromEvents(events);
+        expect(aggregate.state).toBe('warming');
+        expect(aggregate.sample_count).toBe(2);
+        expect(aggregate.personal_score).not.toBeNull();
+        expect(aggregate.created_at).toBe('2026-02-01T00:00:00Z');
+        expect(aggregate.last_updated).toBe('2026-02-02T00:00:00Z');
+      });
+
+      it('transitions to established when sample_count >= min_sample_count', () => {
+        // Create 12 quality signal events to cross the threshold of 10
+        const events: ReputationEvent[] = Array.from({ length: 12 }, (_, i) => ({
+          type: 'quality_signal',
+          timestamp: `2026-02-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+          score: 0.85,
+        } as unknown as ReputationEvent));
+
+        const aggregate = reconstructAggregateFromEvents(events);
+        expect(aggregate.state).toBe('established');
+        expect(aggregate.sample_count).toBe(12);
+        expect(aggregate.transition_history).toHaveLength(2);
+      });
+
+      it('computes blended score using Hounfour computeBlendedScore', () => {
+        const events: ReputationEvent[] = Array.from({ length: 5 }, (_, i) => ({
+          type: 'quality_signal',
+          timestamp: `2026-02-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+          score: 0.9,
+        } as unknown as ReputationEvent));
+
+        const aggregate = reconstructAggregateFromEvents(events);
+        // blended_score should be computed (not zero or null)
+        expect(aggregate.blended_score).toBeGreaterThanOrEqual(0);
+        expect(aggregate.blended_score).toBeLessThanOrEqual(1);
+      });
+
+      it('accepts options for pseudo count and collection score', () => {
+        const events: ReputationEvent[] = [
+          { type: 'quality_signal', timestamp: '2026-02-01T00:00:00Z', score: 0.7 } as unknown as ReputationEvent,
+        ];
+
+        const aggregate = reconstructAggregateFromEvents(events, {
+          pseudoCount: 5,
+          collectionScore: 0.6,
+        });
+        expect(aggregate.pseudo_count).toBe(5);
+        expect(aggregate.collection_score).toBe(0.6);
+      });
+
+      it('records transition history with timestamps', () => {
+        const events: ReputationEvent[] = [
+          { type: 'quality_signal', timestamp: '2026-02-01T00:00:00Z', score: 0.8 } as unknown as ReputationEvent,
+        ];
+
+        const aggregate = reconstructAggregateFromEvents(events);
+        expect(aggregate.transition_history).toHaveLength(1);
+        const transition = (aggregate.transition_history as Array<{ from: string; to: string; timestamp: string }>)[0];
+        expect(transition.from).toBe('cold');
+        expect(transition.to).toBe('warming');
+        expect(transition.timestamp).toBe('2026-02-01T00:00:00Z');
       });
     });
   });

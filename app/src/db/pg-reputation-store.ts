@@ -130,4 +130,105 @@ export class PostgresReputationStore implements ReputationStore {
     }
     return map;
   }
+
+  /**
+   * Atomically compact the aggregate snapshot and reset event_count.
+   *
+   * Writes the aggregate via put() (incrementing snapshot_version),
+   * then resets event_count to 0 within the same transaction.
+   * On failure, the transaction rolls back — no partial compaction.
+   *
+   * @param nftId - The dNFT ID to compact
+   * @param aggregate - The current aggregate state to snapshot
+   * @since Sprint 7 (G-71) — Task 7.1
+   */
+  async compactSnapshot(nftId: string, aggregate: ReputationAggregate): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO reputation_aggregates (nft_id, state, aggregate, snapshot_version)
+         VALUES ($1, $2, $3, 1)
+         ON CONFLICT (nft_id) DO UPDATE
+         SET state = $2, aggregate = $3,
+             snapshot_version = reputation_aggregates.snapshot_version + 1,
+             event_count = 0,
+             updated_at = now()`,
+        [nftId, aggregate.state, JSON.stringify(aggregate)],
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Check whether an aggregate needs snapshot compaction.
+   *
+   * @param nftId - The dNFT ID to check
+   * @param threshold - Event count threshold (default: 100)
+   * @returns true if event_count >= threshold
+   * @since Sprint 7 (G-71) — Task 7.1
+   */
+  async needsCompaction(nftId: string, threshold = 100): Promise<boolean> {
+    const result = await this.pool.query(
+      'SELECT event_count FROM reputation_aggregates WHERE nft_id = $1',
+      [nftId],
+    );
+    if (result.rows.length === 0) return false;
+    return (result.rows[0].event_count as number) >= threshold;
+  }
+
+  /**
+   * Count events older than the given cutoff date.
+   * Used for retention monitoring dashboards.
+   *
+   * @param cutoff - Events with created_at < cutoff are counted
+   * @returns Number of events older than cutoff
+   * @since Sprint 7 (G-71) — Task 7.3
+   */
+  async countEventsBefore(cutoff: Date): Promise<number> {
+    const result = await this.pool.query(
+      'SELECT COUNT(*)::int AS count FROM reputation_events WHERE created_at < $1',
+      [cutoff],
+    );
+    return result.rows[0].count;
+  }
+
+  /**
+   * Delete events older than the given cutoff date.
+   *
+   * @param cutoff - Events with created_at < cutoff are deleted
+   * @param dryRun - When true (default), returns count without deleting
+   * @returns Number of events deleted (or would be deleted in dry run)
+   * @since Sprint 7 (G-71) — Task 7.3
+   */
+  async deleteEventsBefore(cutoff: Date, dryRun = true): Promise<number> {
+    if (dryRun) {
+      return this.countEventsBefore(cutoff);
+    }
+    const result = await this.pool.query(
+      'DELETE FROM reputation_events WHERE created_at < $1',
+      [cutoff],
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /**
+   * Return the created_at of the oldest event in the table.
+   * Useful for retention alerting and dashboard displays.
+   *
+   * @returns Date of the oldest event, or null when table is empty
+   * @since Sprint 7 (G-71) — Task 7.3
+   */
+  async getOldestEventDate(): Promise<Date | null> {
+    const result = await this.pool.query(
+      'SELECT MIN(created_at) AS oldest FROM reputation_events',
+    );
+    const oldest = result.rows[0]?.oldest;
+    return oldest ? new Date(oldest) : null;
+  }
 }

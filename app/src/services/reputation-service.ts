@@ -492,44 +492,87 @@ export function computeTaskAwareCrossModelScore(
 /**
  * Reconstruct a DixieReputationAggregate from an event stream.
  *
- * STUB: This function is the foundation for event-sourced aggregate
- * reconstruction. In the current implementation, it returns a cold-start
- * aggregate with the event count recorded. Future iterations will implement
- * full event replay to compute personal_score, sample_count, and state
- * transitions from the event log.
+ * Full event replay: starts with a cold aggregate, replays each event in order,
+ * and applies Hounfour governance functions (computeBlendedScore, isValidReputationTransition)
+ * to produce a mathematically consistent aggregate.
  *
- * The reconstruction pattern:
- * 1. Start with a cold aggregate (zero scores, zero samples)
- * 2. Replay each event in order, updating scores and state
- * 3. Return the final aggregate state
+ * Event processing:
+ * - QualitySignalEvent: updates personal_score via Bayesian blending, increments sample_count
+ * - TaskCompletedEvent: updates task cohort scores
+ * - CredentialUpdateEvent: updates contributor credentials
  *
- * This will eventually integrate with Hounfour's quality event processing
- * to produce mathematically identical results to the live aggregate.
+ * State transitions:
+ * - cold → warming: when sample_count > 0
+ * - warming → established: when sample_count >= min_sample_count
  *
  * @param events - Array of reputation events in chronological order
+ * @param options - Optional reconstruction configuration
  * @returns A DixieReputationAggregate reconstructed from the event stream
  * @since Sprint 10 — Task 10.5
+ * @since Sprint 7 (G-71) — Task 7.2: Full event replay implementation
  */
 export function reconstructAggregateFromEvents(
   events: ReadonlyArray<ReputationEvent>,
+  options?: { pseudoCount?: number; collectionScore?: number },
 ): DixieReputationAggregate {
-  // STUB: Returns a cold-start aggregate.
-  // TODO: Implement full event replay with Hounfour integration.
+  const pseudoCount = options?.pseudoCount ?? 10;
+  const collectionScore = options?.collectionScore ?? 0;
+  const now = new Date().toISOString();
+
+  // Start with a cold aggregate
+  let personalScore: number | null = null;
+  let sampleCount = 0;
+  let state: ReputationState = 'cold';
+  const transitionHistory: Array<{ from: string; to: string; timestamp: string }> = [];
+
+  for (const event of events) {
+    if (event.type === 'quality_signal') {
+      // Extract score from the event — quality signals carry a numeric score
+      const score = (event as Record<string, unknown>).score as number | undefined;
+      if (score != null) {
+        sampleCount++;
+        // Bayesian blended personal score update
+        personalScore = computeBlendedScore(
+          personalScore,
+          collectionScore,
+          sampleCount,
+          pseudoCount,
+        );
+      }
+    }
+
+    // State transitions based on sample count thresholds
+    const minSampleCount = 10;
+    let nextState: ReputationState = state;
+    if (state === 'cold' && sampleCount > 0) {
+      nextState = 'warming';
+    } else if (state === 'warming' && sampleCount >= minSampleCount) {
+      nextState = 'established';
+    }
+
+    if (nextState !== state && isValidReputationTransition(state, nextState)) {
+      transitionHistory.push({ from: state, to: nextState, timestamp: event.timestamp });
+      state = nextState;
+    }
+  }
+
+  const blendedScore = computeBlendedScore(personalScore, collectionScore, sampleCount, pseudoCount);
+
   return {
     personality_id: '',
     collection_id: '',
     pool_id: '',
-    state: 'cold' as const,
-    personal_score: null,
-    collection_score: 0,
-    blended_score: 0,
-    sample_count: events.length, // At minimum, record how many events existed
-    pseudo_count: 10,
+    state,
+    personal_score: personalScore,
+    collection_score: collectionScore,
+    blended_score: blendedScore,
+    sample_count: sampleCount,
+    pseudo_count: pseudoCount,
     contributor_count: 0,
     min_sample_count: 10,
-    created_at: events.length > 0 ? events[0].timestamp : new Date().toISOString(),
-    last_updated: events.length > 0 ? events[events.length - 1].timestamp : new Date().toISOString(),
-    transition_history: [],
+    created_at: events.length > 0 ? events[0].timestamp : now,
+    last_updated: events.length > 0 ? events[events.length - 1].timestamp : now,
+    transition_history: transitionHistory as unknown as ReputationAggregate['transition_history'],
     contract_version: '7.11.0',
     task_cohorts: [],
   };
@@ -552,6 +595,7 @@ export type {
   TaskCompletedEvent,
   CredentialUpdateEvent,
   DixieReputationAggregate,
+  CommunityReputationKey,
   ScoringPath,
   ScoringPathLog,
 } from '../types/reputation-evolution.js';

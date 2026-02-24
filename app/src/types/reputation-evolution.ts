@@ -57,7 +57,7 @@ export type {
 
 /**
  * DixieReputationAggregate — Extension of Hounfour's ReputationAggregate
- * with task-type cohort tracking.
+ * with task-type cohort tracking and community scoping.
  *
  * Adds a `task_cohorts` array that contains per-model per-task reputation
  * data. The existing `model_cohorts` field (from Hounfour) tracks per-model
@@ -68,10 +68,31 @@ export type {
  * - model_cohorts[i] = aggregate across all task types for model i
  * - task_cohorts[j] = score for model X on task type Y (one entry per combo)
  *
- * The task_cohorts array is optional to maintain backward compatibility
- * with aggregates that pre-date task-type tracking.
+ * Per-community scoping: An agent's reputation as a code reviewer in
+ * Community A is tracked independently from their reputation as a creative
+ * writer in Community B. The `TaskTypeCohort` already provides the task
+ * dimension — `community_id` adds the community dimension.
+ *
+ * The task_cohorts array and community_id are optional to maintain backward
+ * compatibility with aggregates that pre-date these features.
  */
 export type DixieReputationAggregate = ReputationAggregate & {
   /** Per-model per-task reputation cohorts. */
   readonly task_cohorts?: TaskTypeCohort[];
+  /** Community scope for this aggregate. Null/undefined = global (cross-community). */
+  readonly community_id?: string;
 };
+
+/**
+ * Composite key for community-scoped reputation lookups.
+ *
+ * Enables querying reputation by both NFT identity and community context.
+ * Used when an agent operates across multiple communities and needs
+ * independent reputation tracking per community.
+ *
+ * @since Sprint 7 (G-71) — Task 7.5: Per-community reputation scoping
+ */
+export interface CommunityReputationKey {
+  readonly nftId: string;
+  readonly communityId: string;
+}
