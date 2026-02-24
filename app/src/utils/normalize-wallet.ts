@@ -13,7 +13,12 @@ export function normalizeWallet(address: string): string {
   try {
     return checksumAddress(address);
   } catch {
-    // Fallback for non-standard addresses (e.g., test wallets, non-EVM chains)
+    // Warn when a valid-looking Ethereum address fails checksum — this indicates
+    // a potential cache key bifurcation (checksum vs lowercase producing different keys).
+    // Short/test addresses are expected to fail and stay silent.
+    if (address.startsWith('0x') && address.length === 42) {
+      console.warn('[wallet-normalization] checksum-fallback', { prefix: address.slice(0, 10) });
+    }
     return address.toLowerCase();
   }
 }

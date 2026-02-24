@@ -2,7 +2,14 @@ import { Hono } from 'hono';
 import type { FinnClient } from '../proxy/finn-client.js';
 import type { ConvictionResolver } from '../services/conviction-resolver.js';
 import type { MemoryStore } from '../services/memory-store.js';
-import { isValidPathParam, getRequestContext } from '../validation.js';
+import {
+  isValidPathParam,
+  getRequestContext,
+  AGENT_QUERY_MAX_LENGTH,
+  AGENT_MAX_TOKENS_MIN,
+  AGENT_MAX_TOKENS_MAX,
+  AGENT_KNOWLEDGE_DOMAIN_MAX_LENGTH,
+} from '../validation.js';
 import { handleRouteError } from '../utils/error-handler.js';
 import { getCorpusMeta, corpusMeta } from '../services/corpus-meta.js';
 import { generateDisclaimer } from '../services/freshness-disclaimer.js';
@@ -167,17 +174,18 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     }
 
     // Input validation (Sprint 56 — Task 2.1: match chat.ts validation patterns)
-    if (body.query.length > 10_000) {
-      return c.json({ error: 'invalid_request', message: 'query exceeds maximum length of 10000 characters' }, 400);
+    // Constants extracted to validation.ts (Sprint 58 — Task 1.4: Bridgebuilder finding #4)
+    if (body.query.length > AGENT_QUERY_MAX_LENGTH) {
+      return c.json({ error: 'invalid_request', message: `query exceeds maximum length of ${AGENT_QUERY_MAX_LENGTH} characters` }, 400);
     }
-    if (body.maxTokens !== undefined && (!Number.isInteger(body.maxTokens) || body.maxTokens < 1 || body.maxTokens > 4096)) {
-      return c.json({ error: 'invalid_request', message: 'maxTokens must be an integer between 1 and 4096' }, 400);
+    if (body.maxTokens !== undefined && (!Number.isInteger(body.maxTokens) || body.maxTokens < AGENT_MAX_TOKENS_MIN || body.maxTokens > AGENT_MAX_TOKENS_MAX)) {
+      return c.json({ error: 'invalid_request', message: `maxTokens must be an integer between ${AGENT_MAX_TOKENS_MIN} and ${AGENT_MAX_TOKENS_MAX}` }, 400);
     }
     if (body.sessionId !== undefined && !isValidPathParam(body.sessionId)) {
       return c.json({ error: 'invalid_request', message: 'Invalid sessionId format' }, 400);
     }
-    if (body.knowledgeDomain !== undefined && body.knowledgeDomain.length > 100) {
-      return c.json({ error: 'invalid_request', message: 'knowledgeDomain exceeds maximum length of 100 characters' }, 400);
+    if (body.knowledgeDomain !== undefined && body.knowledgeDomain.length > AGENT_KNOWLEDGE_DOMAIN_MAX_LENGTH) {
+      return c.json({ error: 'invalid_request', message: `knowledgeDomain exceeds maximum length of ${AGENT_KNOWLEDGE_DOMAIN_MAX_LENGTH} characters` }, 400);
     }
 
     // Pre-flight budget check BEFORE incurring cost (Bridge medium-8)

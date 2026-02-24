@@ -16,12 +16,15 @@ export function handleRouteError(
   if (BffError.isBffError(err)) {
     return c.json(err.body, err.status);
   }
-  // Legacy pattern: plain objects with { status, body } (pre-BffError code paths)
+  // Legacy pattern: plain objects with { status, body } (pre-BffError code paths).
+  // Deprecation warning — measure usage to determine when this branch can be removed.
+  // See: Bridgebuilder finding #1 — this accepts any object with status+body properties.
   if (err instanceof Object && 'status' in err && 'body' in err) {
     const bffErr = err as { status: number; body: unknown };
     const status = Number.isInteger(bffErr.status) && bffErr.status >= 100 && bffErr.status < 600
       ? bffErr.status
       : 500;
+    console.warn('[error-handler] legacy error pattern', { status });
     return c.json(bffErr.body, status);
   }
   return c.json({ error: 'internal_error', message: fallbackMessage }, 500);

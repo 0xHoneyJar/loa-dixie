@@ -198,6 +198,9 @@ export class EnrichmentService {
   /** Cached tier distribution — refreshed every 5 minutes */
   private tierDistCache: { distribution: Record<ConvictionTier, number>; expiresAt: number } | null = null;
   private static readonly TIER_DIST_TTL_MS = 5 * 60 * 1000;
+  /** Maximum aggregates to scan before falling back to percentage estimation.
+   *  Prevents O(n) memory duplication at scale. See: Bridgebuilder finding #3. */
+  static readonly MAX_SCAN_SIZE = 10_000;
 
   /**
    * Assemble conviction tier distribution from reputation store.
@@ -247,6 +250,15 @@ export class EnrichmentService {
         distribution.architect = Math.floor(count * 0.1);
         distribution.sovereign = Math.floor(count * 0.05);
       }
+    } else if (aggregates.length > EnrichmentService.MAX_SCAN_SIZE) {
+      // Cardinality guard — fall back to estimation to avoid O(n) memory duplication
+      console.warn('[enrichment] tier-distribution scan exceeds cardinality limit', { count: aggregates.length });
+      const count = aggregates.length;
+      distribution.observer = Math.max(1, Math.floor(count * 0.3));
+      distribution.participant = Math.max(1, Math.floor(count * 0.3));
+      distribution.builder = Math.max(1, Math.floor(count * 0.25));
+      distribution.architect = Math.floor(count * 0.1);
+      distribution.sovereign = Math.floor(count * 0.05);
     } else {
       for (const { aggregate } of aggregates) {
         switch (aggregate.state) {
