@@ -1,68 +1,59 @@
 /**
- * Reputation Evolution — Per-Model Per-Task Cohort Types
+ * Reputation Evolution — Re-export Barrel for Hounfour v7.11.0 Governance Types
  *
- * Extends Hounfour's ModelCohort with task-type dimensionality. A single model
- * may perform differently across task types (code review vs. creative writing
- * vs. analysis), so reputation tracking must be task-aware.
+ * This module re-exports canonical protocol types from @0xhoneyjar/loa-hounfour/governance.
+ * Local stub definitions have been replaced with protocol-canonical imports as of v7.11.0.
  *
- * The task type taxonomy is intentionally small — 5 categories that cover
- * the primary interaction modes. New task types should only be added when
- * there is measurable quality divergence between the new type and existing
- * categories (i.e., a model's score for the new type would be statistically
- * different from its score for any existing type).
+ * The only local definition is DixieReputationAggregate, which extends the protocol's
+ * ReputationAggregate with Dixie-specific task_cohorts tracking.
  *
- * See: Hounfour v7.9.2 ModelCohort, SDD §2.3 (ReputationAggregate FR-3)
+ * Migration summary (v7.9.2 → v7.11.0):
+ * - TaskType: fixed 5-literal union → open enum (5 protocol + namespace:type community pattern)
+ * - TaskTypeCohort: ModelCohort intersection → canonical schema with confidence_threshold
+ * - ReputationEvent: generic {type, timestamp, payload} → discriminated union of 3 structured variants
+ * - ScoringPathLog: 3 fields → 7 fields (adds reason, scored_at, entry_hash, previous_hash)
+ *
+ * See: Hounfour v7.11.0 governance barrel, ADR-001 (barrel precedence), ADR-003 (community task types)
  * @since Sprint 10 — Reputation Evolution (Per-Model Per-Task Cohorts)
+ * @since cycle-005 — Hounfour v7.11.0 Full Adoption (re-export barrel)
  */
 import type {
-  ModelCohort,
   ReputationAggregate,
+  TaskTypeCohort,
 } from '@0xhoneyjar/loa-hounfour/governance';
 
-/**
- * Task type taxonomy — the primary interaction modes for reputation tracking.
- *
- * Each task type represents a qualitatively distinct capability domain where
- * model performance may diverge. The taxonomy is kept intentionally small to
- * avoid over-segmentation (which dilutes sample counts and delays convergence
- * from the Bayesian prior).
- *
- * - code_review: Code analysis, review, debugging, refactoring suggestions
- * - creative_writing: Narrative, poetry, marketing copy, storytelling
- * - analysis: Data analysis, research synthesis, logical reasoning
- * - summarization: Condensing, extracting key points, TL;DR generation
- * - general: Default catch-all for interactions that don't fit above categories
- */
-export const TASK_TYPES = [
-  'code_review',
-  'creative_writing',
-  'analysis',
-  'summarization',
-  'general',
-] as const;
+// ─── Task Type Vocabulary (v7.10.0) ─────────────────────────────────────────
+// TaskType is an open enum: 5 protocol literals + community-defined namespace:type pattern.
+// TASK_TYPES const array contains the 5 protocol-defined task types only.
+export { TASK_TYPES } from '@0xhoneyjar/loa-hounfour/governance';
+export type { TaskType } from '@0xhoneyjar/loa-hounfour/governance';
 
-/** Union type derived from the TASK_TYPES const array. */
-export type TaskType = (typeof TASK_TYPES)[number];
+// ─── Task Type Cohorts (v7.10.0) ────────────────────────────────────────────
+// TaskTypeCohort includes optional confidence_threshold field (default: 30).
+// validateTaskCohortUniqueness enforces the (model_id, task_type) uniqueness invariant.
+export type { TaskTypeCohort } from '@0xhoneyjar/loa-hounfour/governance';
+export { validateTaskCohortUniqueness } from '@0xhoneyjar/loa-hounfour/governance';
 
-/**
- * TaskTypeCohort — Dixie-specific extension of Hounfour's ModelCohort
- * that adds task-type dimensionality.
- *
- * A single model (e.g., "gpt-4o") may have multiple TaskTypeCohorts,
- * one per task type. This allows the reputation system to answer:
- * "How well does gpt-4o perform specifically at code_review for this agent?"
- *
- * Extends ModelCohort with:
- * - task_type: Which task category this cohort tracks
- *
- * The intersection type preserves all ModelCohort fields (model_id,
- * personal_score, sample_count, last_updated) while adding the task
- * dimension.
- */
-export type TaskTypeCohort = ModelCohort & {
-  /** The task category this cohort tracks. */
-  readonly task_type: TaskType;
-};
+// ─── Reputation Events (v7.10.0) ────────────────────────────────────────────
+// ReputationEvent is a discriminated union of 3 structured event variants.
+// Each variant has envelope fields (event_id, agent_id, collection_id, timestamp)
+// plus variant-specific data fields.
+export type {
+  ReputationEvent,
+  QualitySignalEvent,
+  TaskCompletedEvent,
+  CredentialUpdateEvent,
+} from '@0xhoneyjar/loa-hounfour/governance';
+
+// ─── Scoring Path (v7.10.0 + v7.11.0 hash chain) ───────────────────────────
+// ScoringPath: 'task_cohort' | 'aggregate' | 'tier_default'
+// ScoringPathLog: includes optional hash chain fields (entry_hash, previous_hash, scored_at, reason)
+export type {
+  ScoringPath,
+  ScoringPathLog,
+} from '@0xhoneyjar/loa-hounfour/governance';
+
+// ─── Dixie-Specific Extension ───────────────────────────────────────────────
 
 /**
  * DixieReputationAggregate — Extension of Hounfour's ReputationAggregate
@@ -84,46 +75,3 @@ export type DixieReputationAggregate = ReputationAggregate & {
   /** Per-model per-task reputation cohorts. */
   readonly task_cohorts?: TaskTypeCohort[];
 };
-
-/**
- * ReputationEvent — Foundation for event-sourced reputation tracking.
- *
- * Events are the source of truth for reputation changes. Each event
- * records a discrete reputation-relevant action with its timestamp and
- * payload. The event log enables:
- *
- * 1. Audit trail: Full history of what changed reputation and when
- * 2. Reconstruction: Replay events to rebuild aggregate state
- * 3. Debugging: Trace unexpected reputation changes to their cause
- *
- * Event types:
- * - quality_signal: A quality observation from model output evaluation
- * - task_completed: A task was completed (affects sample count, score)
- * - credential_update: A reputation credential was issued or revoked
- */
-export interface ReputationEvent {
-  /** Discriminator for the event type. */
-  readonly type: 'quality_signal' | 'task_completed' | 'credential_update';
-  /** ISO 8601 timestamp of when the event occurred. */
-  readonly timestamp: string;
-  /** Event-specific payload. Structure depends on the event type. */
-  readonly payload: unknown;
-}
-
-/**
- * ScoringPath — Diagnostic record of which reputation scoring path
- * was used for an economic boundary evaluation.
- *
- * Enables observability into whether the system used:
- * - task_cohort: Task-specific reputation data (most precise)
- * - aggregate: Overall reputation aggregate (fallback)
- * - tier_default: Static tier-based default (cold start)
- */
-export interface ScoringPathLog {
-  /** Which scoring path was chosen. */
-  readonly path: 'task_cohort' | 'aggregate' | 'tier_default';
-  /** Model ID used for scoring, if applicable. */
-  readonly model?: string;
-  /** Task type used for scoring, if applicable. */
-  readonly task_type?: TaskType;
-}

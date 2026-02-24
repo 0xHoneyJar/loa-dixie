@@ -4,41 +4,52 @@
  * DECISION: Hounfour Protocol Alignment (v7.9.2, Level 4 — Civilizational)
  * See: grimoires/loa/context/adr-hounfour-alignment.md
  *
- * Type Audit — Dixie types vs @0xhoneyjar/loa-hounfour v7.9.2 protocol types:
+ * Type Audit — Dixie types vs @0xhoneyjar/loa-hounfour v7.11.0 protocol types:
  *
- * | Dixie Type           | Hounfour Equivalent              | Status                    |
- * |----------------------|----------------------------------|---------------------------|
- * | CircuitState         | CircuitState (core)              | Naming divergence¹        |
- * | ServiceHealth        | —                                | Dixie-specific (BFF)      |
- * | HealthResponse       | —                                | Dixie-specific (BFF)      |
- * | FinnHealthResponse   | —                                | Dixie-specific (proxy)    |
- * | ErrorResponse        | —                                | Dixie-specific (BFF)      |
- * | AllowlistData        | AccessPolicy (core)              | Replaced — Sprint 1       |
- * | AuditEntry           | AuditTrailEntry (economy)        | Subset                    |
- * | OracleIdentity       | AgentIdentity (core)             | Subset                    |
- * | —                    | AgentDescriptor (core)           | Imported — Sprint 1       |
+ * | Dixie Type              | Hounfour Equivalent                    | Status                    |
+ * |-------------------------|----------------------------------------|---------------------------|
+ * | CircuitState            | CircuitState (core)                    | Naming divergence¹        |
+ * | ServiceHealth           | —                                      | Dixie-specific (BFF)      |
+ * | HealthResponse          | —                                      | Dixie-specific (BFF)      |
+ * | FinnHealthResponse      | —                                      | Dixie-specific (proxy)    |
+ * | ErrorResponse           | —                                      | Dixie-specific (BFF)      |
+ * | DixieReputationAggregate| ReputationAggregate (governance)       | Extension (task_cohorts)  |
+ * | —                       | TaskType (governance)                  | Re-exported — cycle-005   |
+ * | —                       | TaskTypeCohort (governance)            | Re-exported — cycle-005   |
+ * | —                       | ReputationEvent (governance)           | Re-exported — cycle-005   |
+ * | —                       | QualitySignalEvent (governance)        | Re-exported — cycle-005   |
+ * | —                       | TaskCompletedEvent (governance)        | Re-exported — cycle-005   |
+ * | —                       | CredentialUpdateEvent (governance)     | Re-exported — cycle-005   |
+ * | —                       | ScoringPath (governance)               | Re-exported — cycle-005   |
+ * | —                       | ScoringPathLog (governance)            | Re-exported — cycle-005   |
+ * | —                       | validateTaskCohortUniqueness (govern.) | Re-exported — cycle-005   |
  *
- * Hounfour imports across the codebase (v7.9.2):
+ * Hounfour imports across the codebase (v7.11.0):
  *
- * | File                            | Import                                    | Barrel   |
- * |---------------------------------|-------------------------------------------|----------|
- * | types.ts                        | AccessPolicy, AgentIdentity,              | core     |
- * |                                 | AgentDescriptor, CircuitState             |          |
- * | services/access-policy-validator | validators, validateAccessPolicy          | root     |
- * | services/state-machine          | CircuitState, isValidTransition           | core     |
- * | services/conviction-boundary    | evaluateEconomicBoundary                  | root     |
- * |                                 | TrustLayerSnapshot, CapitalLayerSnapshot, | economy  |
- * |                                 | QualificationCriteria, EBEResult          |          |
- * | services/reputation-service     | isReliableReputation,                     | govern.  |
- * |                                 | computeBlendedScore, etc.                 |          |
- * | services/conformance-suite      | validate, validators                      | root     |
- * |                                 | AccessPolicySchema,                       | core     |
- * |                                 | ConversationSealingPolicySchema           |          |
- * | types/economic                  | computeCostMicro,                         | economy  |
- * |                                 | verifyPricingConservation, PricingInput   |          |
- * | types/stream-events             | StreamStartSchema, StreamChunkSchema,     | core     |
- * |                                 | etc. (type re-exports)                    |          |
- * | proxy/finn-client               | computeReqHash, deriveIdempotencyKey      | integr.  |
+ * | File                            | Import                                    | Barrel       |
+ * |---------------------------------|-------------------------------------------|--------------|
+ * | types.ts                        | AccessPolicy, AgentIdentity,              | core         |
+ * |                                 | AgentDescriptor, CircuitState             |              |
+ * | types/reputation-evolution      | TaskType, TASK_TYPES, TaskTypeCohort,     | governance   |
+ * |                                 | ReputationEvent, ScoringPath/Log,         |              |
+ * |                                 | validateTaskCohortUniqueness              |              |
+ * | services/access-policy-validator | validators, validateAccessPolicy          | root         |
+ * | services/state-machine          | CircuitState, isValidTransition           | core         |
+ * | services/conviction-boundary    | evaluateEconomicBoundary                  | root         |
+ * |                                 | TrustLayerSnapshot, CapitalLayerSnapshot, | economy      |
+ * |                                 | QualificationCriteria, EBEResult          |              |
+ * | services/reputation-service     | isReliableReputation,                     | governance   |
+ * |                                 | computeBlendedScore, etc.                 |              |
+ * | services/conformance-suite      | validate, validators                      | root         |
+ * |                                 | AccessPolicySchema,                       | core         |
+ * |                                 | ConversationSealingPolicySchema           |              |
+ * |                                 | TaskTypeSchema, TaskTypeCohortSchema,     | governance   |
+ * |                                 | ReputationEventSchema, ScoringPathLogSch. |              |
+ * | types/economic                  | computeCostMicro,                         | economy      |
+ * |                                 | verifyPricingConservation, PricingInput   |              |
+ * | types/stream-events             | StreamStartSchema, StreamChunkSchema,     | core         |
+ * |                                 | etc. (type re-exports)                    |              |
+ * | proxy/finn-client               | computeReqHash, deriveIdempotencyKey      | integration  |
  *
  * ¹ Dixie uses 'half-open' (kebab), Hounfour uses 'half_open' (snake).
  *   Both are valid circuit breaker naming. Dixie retains its own type
@@ -46,21 +57,30 @@
  *   cross-system protocol boundary. When Dixie reports health to
  *   Hounfour-consuming services, it should map to the protocol type.
  *
- * Types imported from Hounfour v7.9.2 (protocol-aligned):
+ * ADR-001 collision resolution: GovernanceTaskType alias available if Dixie
+ * ever needs a local TaskType (currently no collision — Dixie has no local TaskType).
+ *
+ * Types imported from Hounfour v7.11.0 (protocol-aligned):
  * - AccessPolicy (used in allowlist architecture, validated via hounfour validators)
  * - AgentIdentity (used in identity route response)
  * - AgentDescriptor (agent metadata for protocol-level agent descriptions)
  * - CircuitState as HounfourCircuitState (for protocol mapping)
+ * - TaskType, TASK_TYPES, TaskTypeCohort (governance — via re-export barrel)
+ * - ReputationEvent, QualitySignalEvent, TaskCompletedEvent, CredentialUpdateEvent (governance)
+ * - ScoringPath, ScoringPathLog (governance — with v7.11.0 hash chain fields)
+ * - validateTaskCohortUniqueness (governance — uniqueness invariant enforcement)
  */
 
-// DECISION: Hounfour protocol adoption — Level 4 (Civilizational) ACHIEVED.
+// DECISION: Hounfour protocol adoption — Level 6+ with task-dimensional vocabulary.
 // Level 1 (Interface): Types imported — Sprint 13
 // Level 2 (Structural): Validators + state machines aligned — Sprint 1
 // Level 3 (Behavioral): Runtime invariants, BigInt economics, integrity — Sprints 2-3
 // Level 4 (Civilizational): E2E conformance suite passes all schemas — Sprint 4
+// Level 5 (Constitutional): Runtime constitutional enforcement — cycle-003
+// Level 6+ (Task-Dimensional): Full v7.11.0 adoption with hash chain audit trail — cycle-005
 // See: grimoires/loa/context/adr-hounfour-alignment.md
 
-// Core protocol types — Hounfour v7.9.2 Level 2+
+// Core protocol types — Hounfour v7.11.0 Level 6+
 import type { CircuitState as _HounfourCircuitState } from '@0xhoneyjar/loa-hounfour/core';
 export type {
   AccessPolicy,

@@ -225,7 +225,7 @@ export function evaluateEconomicBoundaryForWallet(
   // the request context includes a known task type.
   let blendedScore = profile.blended_score;
   let reputationState = profile.reputation_state;
-  let scoringPath: ScoringPathLog = { path: 'tier_default' };
+  let scoringPath: ScoringPathLog = { path: 'tier_default', reason: 'No reputation aggregate available; using static tier-based score' };
 
   // Resolve taskType from options (may be undefined even when opts is provided)
   const taskType = (criteriaOrOpts && 'taskType' in criteriaOrOpts)
@@ -256,8 +256,9 @@ export function evaluateEconomicBoundaryForWallet(
           reputationState = reputationAggregate.state;
           scoringPath = {
             path: 'task_cohort',
-            model: activeCohort.model_id,
+            model_id: activeCohort.model_id,
             task_type: taskType,
+            reason: `Task-specific cohort found for ${activeCohort.model_id}:${taskType}`,
           };
           usedTaskCohort = true;
         }
@@ -273,7 +274,7 @@ export function evaluateEconomicBoundaryForWallet(
         reputationAggregate.pseudo_count,
       );
       reputationState = reputationAggregate.state;
-      scoringPath = { path: 'aggregate' };
+      scoringPath = { path: 'aggregate', reason: 'Using aggregate personal score (no task-specific cohort)' };
     }
   }
 
@@ -590,4 +591,5 @@ export const CONVICTION_ACCESS_MATRIX: Record<ConvictionTier, ConvictionAccessCa
 } as const;
 
 export { TIER_TRUST_PROFILES, DEFAULT_CRITERIA };
-export type { TierTrustProfile, EconomicBoundaryOptions, ScoringPathLog };
+export type { TierTrustProfile, EconomicBoundaryOptions };
+export type { ScoringPathLog } from '../types/reputation-evolution.js';
