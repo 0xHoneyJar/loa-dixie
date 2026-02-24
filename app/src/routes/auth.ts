@@ -98,6 +98,10 @@ export function createAuthRoutes(
         // 1. Current ES256 key (primary)
         // 2. Previous ES256 key (rotation grace period)
         // 3. HS256 fallback (migration transition)
+        // NOTE: Unlike jwt.ts middleware which always tries HS256 as final fallback,
+        // /verify only tries HS256 when hs256FallbackSecret is explicitly set.
+        // This is intentional — /verify is used by external verifiers (loa-finn)
+        // who should migrate to ES256. The middleware is more lenient for UX.
         try {
           const publicKey = getEs256PublicKey(config.jwtPrivateKey);
           ({ payload } = await jose.jwtVerify(token, publicKey, {
@@ -105,10 +109,10 @@ export function createAuthRoutes(
           }));
           return c.json({ wallet: payload.sub, role: payload.role, exp: payload.exp });
         } catch {
-          // Step 2: Try previous ES256 key if configured
+          // Step 2: Try previous ES256 key if configured (rotation grace period)
           if (config.previousEs256Key) {
             try {
-              const prevPublicKey = createPublicKey(createPrivateKey(config.previousEs256Key));
+              const prevPublicKey = getEs256PreviousPublicKey(config.previousEs256Key);
               ({ payload } = await jose.jwtVerify(token, prevPublicKey, {
                 issuer: config.issuer,
               }));
@@ -160,6 +164,7 @@ export function createAuthRoutes(
 // and caches the new KeyObject on first request. No explicit cache-bust needed.
 let cachedEs256PrivateKey: KeyObject | null = null;
 let cachedEs256PublicKey: KeyObject | null = null;
+let cachedEs256PreviousPublicKey: KeyObject | null = null;
 
 function getEs256PrivateKey(pem: string): KeyObject {
   if (!cachedEs256PrivateKey) {
@@ -175,10 +180,22 @@ function getEs256PublicKey(pem: string): KeyObject {
   return cachedEs256PublicKey;
 }
 
+/**
+ * Lazy-cached previous ES256 public key — for key rotation fallback.
+ * Same single-PEM assumption as the primary key cache.
+ */
+function getEs256PreviousPublicKey(pem: string): KeyObject {
+  if (!cachedEs256PreviousPublicKey) {
+    cachedEs256PreviousPublicKey = createPublicKey(createPrivateKey(pem));
+  }
+  return cachedEs256PreviousPublicKey;
+}
+
 /** Reset cached keys — useful for testing */
 export function resetAuthKeyCache(): void {
   cachedEs256PrivateKey = null;
   cachedEs256PublicKey = null;
+  cachedEs256PreviousPublicKey = null;
 }
 
 async function issueJwt(
