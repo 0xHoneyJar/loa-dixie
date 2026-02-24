@@ -70,9 +70,14 @@ temp/
 # Must be preserved locally for resume capability but not committed
 .run/
 
-# Loa Memory Stack state (v1.8.0)
+# Framework migration/eject backups (created by mount-loa.sh, update.sh, loa-eject.sh)
+# Timestamped directories that should never be committed
+.claude.backup.*
+
+# Loa Memory Stack persistent state (renamed from .loa-cache/ in cycle-035)
 # Contains vector database, embeddings, QMD indexes - machine-specific
-.loa/
+# Semantics: NOT a cache (not ephemeral) — this is persistent local state
+.loa-state/
 
 # User context files (discovery inputs, uploaded docs, extracted content)
 # These are user-specific inputs that should never be committed
@@ -163,6 +168,22 @@ grimoires/loa/analytics/*
 # Research files (project-specific discoveries)
 grimoires/loa/research/*
 !grimoires/loa/research/README.md
+
+# Ground truth (generated codebase analysis, project-specific)
+grimoires/loa/ground-truth/*
+!grimoires/loa/ground-truth/README.md
+
+# Vision registry (speculative insights captured per-project)
+grimoires/loa/visions/entries/*
+!grimoires/loa/visions/entries/.gitkeep
+grimoires/loa/visions/index.md
+
+# Feedback files (developer feedback, project-specific)
+grimoires/loa/feedback/*
+!grimoires/loa/feedback/README.md
+
+# Invariants (generated per-project)
+grimoires/loa/invariants.yaml
 
 # Public grimoires (project-specific outputs, not template content)
 # Only README.md files and research documents are tracked
