@@ -445,21 +445,21 @@
           "global_id": 55,
           "label": "Error Observability & Fire-and-Forget Safety",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-2",
           "global_id": 56,
           "label": "Input Validation & Test Coverage Gaps",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-3",
           "global_id": 57,
           "label": "Configuration Consolidation & Protocol Polish",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         }
       ]
     }
