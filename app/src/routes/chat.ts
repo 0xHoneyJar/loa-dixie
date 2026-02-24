@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { FinnClient } from '../proxy/finn-client.js';
 import type { SignalEmitter } from '../services/signal-emitter.js';
 import { isValidPathParam, getRequestContext } from '../validation.js';
+import { handleRouteError } from '../utils/error-handler.js';
 
 /**
  * ADR: Hono sub-app typing
@@ -128,14 +129,7 @@ export function createChatRoutes(finnClient: FinnClient, deps?: ChatRouteDeps): 
         messageId: requestId,
       });
     } catch (err) {
-      if (err instanceof Object && 'status' in err && 'body' in err) {
-        const bffErr = err as { status: number; body: unknown };
-        return c.json(bffErr.body, bffErr.status as 400);
-      }
-      return c.json(
-        { error: 'internal_error', message: 'Failed to process chat request' },
-        500,
-      );
+      return handleRouteError(c, err, 'Failed to process chat request');
     }
   });
 
@@ -180,5 +174,7 @@ function emitChatSignal(
     sessionId: context.sessionId,
     messageId: context.messageId,
     timestamp: new Date().toISOString(),
-  }).catch(() => {});
+  }).catch((err) => {
+    console.warn('[signal-loss]', { event: 'chat_interaction', error: String(err) });
+  });
 }

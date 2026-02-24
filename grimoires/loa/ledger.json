@@ -424,7 +424,7 @@
   ],
   "active_cycle": "cycle-004",
   "active_bugfix": null,
-  "global_sprint_counter": 54,
+  "global_sprint_counter": 57,
   "bugfix_cycles": [],
   "release_cycles": [
     {
@@ -439,7 +439,29 @@
       "semver_justification": "MAJOR — constitutional architecture, Level 6 protocol evolution, autopoietic loop, breaking API additions (enrichment endpoint, reputation evolution types)",
       "source_cycles": ["cycle-002", "cycle-003"],
       "source_pr": "#7",
-      "sprints": []
+      "sprints": [
+        {
+          "id": "sprint-1",
+          "global_id": 55,
+          "label": "Error Observability & Fire-and-Forget Safety",
+          "tasks": 5,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-2",
+          "global_id": 56,
+          "label": "Input Validation & Test Coverage Gaps",
+          "tasks": 5,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-3",
+          "global_id": 57,
+          "label": "Configuration Consolidation & Protocol Polish",
+          "tasks": 5,
+          "status": "pending"
+        }
+      ]
     }
   ]
 }

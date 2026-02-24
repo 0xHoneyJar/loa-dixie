@@ -31,11 +31,11 @@ describe('enrichStream', () => {
 
     const result = enrichStream(events, { sessionId: 'sess-001' }, null);
 
-    // Should have: model_selection (before first chunk) + chunk + done
-    // model not set → no model_selection injected
-    expect(result).toHaveLength(2);
+    // chunk + done + incomplete economic (no usage data) = 3
+    expect(result).toHaveLength(3);
     expect(result[0]).toEqual({ type: 'chunk', content: 'Hello' });
     expect(result[1]).toEqual({ type: 'done', messageId: 'msg-1' });
+    expect(result[2]).toMatchObject({ type: 'economic', incomplete: true, cost_micro_usd: 0 });
   });
 
   it('injects model_selection before first chunk when model is set', () => {
@@ -111,12 +111,13 @@ describe('enrichStream', () => {
 
     const result = enrichStream(events, baseContext(), null);
 
-    // model_selection + first chunk + second chunk + done = 4
-    expect(result).toHaveLength(4);
+    // model_selection + first chunk + second chunk + done + incomplete economic = 5
+    expect(result).toHaveLength(5);
     expect(result[0].type).toBe('model_selection');
     expect(result[1].type).toBe('chunk');
     expect(result[2].type).toBe('chunk');
     expect(result[3].type).toBe('done');
+    expect(result[4]).toMatchObject({ type: 'economic', incomplete: true });
   });
 
   it('injects economic metadata after done event when usage is available', () => {
@@ -161,14 +162,17 @@ describe('enrichStream', () => {
     expect(economic?.cost_micro_usd).toBe(10500);
   });
 
-  it('does not inject economic when no usage event', () => {
+  it('emits incomplete economic event when no usage event (done present)', () => {
     const events: StreamEvent[] = [
       { type: 'chunk', content: 'x' },
       { type: 'done', messageId: 'msg-1' },
     ];
 
     const result = enrichStream(events, baseContext(), null);
-    expect(result.find((e) => e.type === 'economic')).toBeUndefined();
+    const economic = result.find((e) => e.type === 'economic') as Record<string, unknown> | undefined;
+    expect(economic).toBeDefined();
+    expect(economic?.incomplete).toBe(true);
+    expect(economic?.cost_micro_usd).toBe(0);
   });
 
   it('includes knowledge tokens in breakdown when knowledge event present', () => {

@@ -3,6 +3,7 @@ import type { FinnClient } from '../proxy/finn-client.js';
 import type { ConvictionResolver } from '../services/conviction-resolver.js';
 import type { MemoryStore } from '../services/memory-store.js';
 import { getRequestContext } from '../validation.js';
+import { handleRouteError } from '../utils/error-handler.js';
 import { getCorpusMeta, corpusMeta } from '../services/corpus-meta.js';
 import { generateDisclaimer } from '../services/freshness-disclaimer.js';
 import { tierMeetsRequirement } from '../types/conviction.js';
@@ -255,11 +256,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
 
       return c.json(response);
     } catch (err) {
-      if (err instanceof Object && 'status' in err && 'body' in err) {
-        const bffErr = err as { status: number; body: unknown };
-        return c.json(bffErr.body, bffErr.status as 400);
-      }
-      return c.json({ error: 'internal_error', message: 'Agent query failed' }, 500);
+      return handleRouteError(c, err, 'Agent query failed');
     }
   });
 
@@ -560,11 +557,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
 
       return c.json(result, 201);
     } catch (err) {
-      if (err instanceof Object && 'status' in err && 'body' in err) {
-        const bffErr = err as { status: number; body: unknown };
-        return c.json(bffErr.body, bffErr.status as 400);
-      }
-      return c.json({ error: 'internal_error', message: 'Agent schedule creation failed' }, 500);
+      return handleRouteError(c, err, 'Agent schedule creation failed');
     }
   });
 

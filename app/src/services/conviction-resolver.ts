@@ -9,6 +9,7 @@ import {
   type ConvictionTier,
   type FreesideConvictionResponse,
 } from '../types/conviction.js';
+import { BffError } from '../errors.js';
 
 /**
  * Conviction Tier Resolver — resolves wallet → BGT staking → conviction tier.
@@ -112,7 +113,23 @@ export class ConvictionResolver {
         modelPool: TIER_MODEL_POOLS[tier],
         source: 'freeside',
       };
-    } catch {
+    } catch (err) {
+      const walletPrefix = wallet.slice(0, 10);
+      if (BffError.isBffError(err)) {
+        if (err.status === 404) {
+          // Expected — wallet not found in freeside
+          return null;
+        }
+        if (err.status === 401 || err.status === 403) {
+          console.warn('[conviction-resolver]', { wallet: walletPrefix, status: err.status, error: 'auth_failure' });
+          return null;
+        }
+        if (err.status >= 500) {
+          console.warn('[conviction-resolver]', { wallet: walletPrefix, status: err.status, error: 'transient_failure' });
+          return null;
+        }
+      }
+      console.warn('[conviction-resolver]', { wallet: walletPrefix, error: String(err) });
       return null;
     }
   }
