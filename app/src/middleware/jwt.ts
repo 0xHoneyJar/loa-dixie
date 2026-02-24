@@ -11,8 +11,14 @@ import * as jose from 'jose';
  * When isEs256 is true, the jwtSecret is a PEM-encoded EC private key
  * and verification uses the derived public key.
  */
-export function createJwtMiddleware(jwtSecret: string, issuer: string, isEs256?: boolean) {
-  const hs256Secret = isEs256 ? null : new TextEncoder().encode(jwtSecret);
+export function createJwtMiddleware(
+  jwtSecret: string,
+  issuer: string,
+  isEs256?: boolean,
+  /** HS256 secret for transition-period fallback when isEs256 is true. */
+  hs256FallbackSecret?: string,
+) {
+  const hs256Secret = new TextEncoder().encode(hs256FallbackSecret ?? jwtSecret);
 
   // Lazy-cached ES256 public key — derived from PEM private key on first use.
   let es256PublicKey: KeyObject | null = null;
@@ -29,8 +35,19 @@ export function createJwtMiddleware(jwtSecret: string, issuer: string, isEs256?:
     if (authHeader?.startsWith('Bearer ') && !authHeader.startsWith('Bearer dxk_')) {
       const token = authHeader.slice(7);
       try {
-        const key = isEs256 ? getPublicKey() : hs256Secret!;
-        const { payload } = await jose.jwtVerify(token, key, { issuer });
+        if (isEs256) {
+          // ES256 primary — try asymmetric first
+          try {
+            const { payload } = await jose.jwtVerify(token, getPublicKey(), { issuer });
+            if (payload.sub) c.set('wallet', payload.sub);
+            await next();
+            return;
+          } catch {
+            // Transition fallback: try HS256 for pre-migration tokens still in flight
+          }
+        }
+        // HS256 verification (primary when !isEs256, fallback when isEs256)
+        const { payload } = await jose.jwtVerify(token, hs256Secret, { issuer });
         if (payload.sub) {
           c.set('wallet', payload.sub);
         }

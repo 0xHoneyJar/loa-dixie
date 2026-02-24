@@ -10,6 +10,8 @@ export interface AuthConfig {
   issuer: string;
   expiresIn: string;
   isEs256?: boolean;
+  /** HS256 secret for transition-period fallback when isEs256 is true. */
+  hs256FallbackSecret?: string;
 }
 
 // ARCH-002: Runtime body validation — TypeScript generics are erased at compile time.
@@ -90,16 +92,30 @@ export function createAuthRoutes(
     try {
       let payload: jose.JWTPayload;
       if (config.isEs256) {
-        const publicKey = getEs256PublicKey(config.jwtPrivateKey);
-        ({ payload } = await jose.jwtVerify(token, publicKey, {
-          issuer: config.issuer,
-        }));
-      } else {
-        const secret = new TextEncoder().encode(config.jwtPrivateKey);
-        ({ payload } = await jose.jwtVerify(token, secret, {
-          issuer: config.issuer,
-        }));
+        // ES256 primary — try asymmetric first
+        try {
+          const publicKey = getEs256PublicKey(config.jwtPrivateKey);
+          ({ payload } = await jose.jwtVerify(token, publicKey, {
+            issuer: config.issuer,
+          }));
+          return c.json({ wallet: payload.sub, role: payload.role, exp: payload.exp });
+        } catch {
+          // Transition fallback: try HS256 for pre-migration tokens still in flight
+          if (config.hs256FallbackSecret) {
+            const secret = new TextEncoder().encode(config.hs256FallbackSecret);
+            ({ payload } = await jose.jwtVerify(token, secret, {
+              issuer: config.issuer,
+            }));
+            return c.json({ wallet: payload.sub, role: payload.role, exp: payload.exp });
+          }
+          throw new Error('ES256 verification failed, no HS256 fallback configured');
+        }
       }
+      // HS256 primary
+      const secret = new TextEncoder().encode(config.jwtPrivateKey);
+      ({ payload } = await jose.jwtVerify(token, secret, {
+        issuer: config.issuer,
+      }));
       return c.json({
         wallet: payload.sub,
         role: payload.role,

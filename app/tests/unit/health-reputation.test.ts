@@ -16,7 +16,7 @@ describe('health routes — reputation service reporting', () => {
     );
   });
 
-  it('reports InMemoryReputationStore type', async () => {
+  it('reports memory store type for InMemoryReputationStore', async () => {
     const store = new InMemoryReputationStore();
     const reputationService = new ReputationService(store);
     const app = createHealthRoutes({ finnClient, reputationService });
@@ -25,22 +25,30 @@ describe('health routes — reputation service reporting', () => {
     const body = await res.json();
 
     expect(body.reputation_service).toBeDefined();
-    expect(body.reputation_service.store_type).toBe('InMemoryReputationStore');
+    expect(body.reputation_service.store_type).toBe('memory');
     expect(body.reputation_service.initialized).toBe(true);
     expect(body.reputation_service.aggregate_count).toBe(0);
   });
 
-  it('reports PostgresReputationStore type', async () => {
-    const mockPool = { query: vi.fn().mockResolvedValue({ rows: [{ count: 5 }] }) };
+  it('reports postgres store type with pool metrics', async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [{ count: 5 }] }),
+      totalCount: 10,
+      idleCount: 8,
+      waitingCount: 0,
+    };
     const store = new PostgresReputationStore(mockPool as any);
     const reputationService = new ReputationService(store);
-    const app = createHealthRoutes({ finnClient, reputationService });
+    const app = createHealthRoutes({ finnClient, reputationService, dbPool: mockPool as any });
 
     const res = await app.request('/');
     const body = await res.json();
 
-    expect(body.reputation_service.store_type).toBe('PostgresReputationStore');
+    expect(body.reputation_service.store_type).toBe('postgres');
     expect(body.reputation_service.aggregate_count).toBe(5);
+    expect(body.reputation_service.pool_total).toBe(10);
+    expect(body.reputation_service.pool_idle).toBe(8);
+    expect(body.reputation_service.pool_waiting).toBe(0);
   });
 
   it('omits reputation_service when not provided', async () => {

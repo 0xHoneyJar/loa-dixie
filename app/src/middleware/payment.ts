@@ -23,9 +23,13 @@ export function createPaymentGate(options?: { x402Enabled?: boolean }) {
 
   return createMiddleware(async (c, next) => {
     await next();
-    // Scaffold: set header indicating payment scaffold is active.
+    // Scaffold: set headers indicating payment scaffold is active.
     // When @x402/hono is integrated, this middleware will enforce payment
     // and return 402 Payment Required for insufficient balance.
     c.header('X-Payment-Status', 'scaffold');
+    const wallet = c.get('wallet') as string | undefined;
+    if (wallet) {
+      c.header('X-Payment-Wallet', wallet);
+    }
   });
 }

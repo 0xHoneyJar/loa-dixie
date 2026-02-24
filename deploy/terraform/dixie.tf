@@ -177,6 +177,33 @@ resource "aws_security_group" "dixie" {
     cidr_blocks = ["10.0.0.0/8"]
   }
 
+  # Egress to PostgreSQL
+  egress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    description = "Dixie to PostgreSQL"
+    cidr_blocks = ["10.0.0.0/8"]
+  }
+
+  # Egress to Redis
+  egress {
+    from_port   = 6379
+    to_port     = 6379
+    protocol    = "tcp"
+    description = "Dixie to Redis"
+    cidr_blocks = ["10.0.0.0/8"]
+  }
+
+  # Egress to NATS
+  egress {
+    from_port   = 4222
+    to_port     = 4222
+    protocol    = "tcp"
+    description = "Dixie to NATS"
+    cidr_blocks = ["10.0.0.0/8"]
+  }
+
   tags = {
     Name        = "dixie-bff"
     Service     = "dixie-bff"
@@ -224,7 +251,8 @@ resource "aws_iam_role_policy" "dixie_secrets" {
         ]
         Resource = [
           data.aws_secretsmanager_secret.dixie_jwt_key.arn,
-          data.aws_secretsmanager_secret.dixie_admin_key.arn
+          data.aws_secretsmanager_secret.dixie_admin_key.arn,
+          data.aws_secretsmanager_secret.dixie_database_url.arn
         ]
       }
     ]

@@ -6,6 +6,7 @@ import type { DbPool } from '../db/client.js';
 import type { RedisClient } from '../services/redis-client.js';
 import type { SignalEmitter } from '../services/signal-emitter.js';
 import type { ReputationService } from '../services/reputation-service.js';
+import { PostgresReputationStore } from '../db/pg-reputation-store.js';
 import { getCorpusMeta, resetCorpusMetaCache } from '../services/corpus-meta.js';
 import { governorRegistry } from '../services/governor-registry.js';
 import { safeEqual } from '../utils/crypto.js';
@@ -53,11 +54,17 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     const corpusMeta = getCorpusMeta();
 
     // Sprint 6 — Task 6.2: Reputation service health reporting
-    // Phase 3: Enhanced with store_type for operational visibility
+    // Phase 3: Enhanced with store_type and pool metrics for operational visibility
+    const isPostgres = deps.reputationService?.store instanceof PostgresReputationStore;
     const reputationStatus = deps.reputationService ? {
       initialized: true,
-      store_type: deps.reputationService.store.constructor.name,
+      store_type: isPostgres ? 'postgres' : 'memory',
       aggregate_count: await deps.reputationService.store.count(),
+      ...(isPostgres && deps.dbPool ? {
+        pool_total: deps.dbPool.totalCount,
+        pool_idle: deps.dbPool.idleCount,
+        pool_waiting: deps.dbPool.waitingCount,
+      } : {}),
     } : undefined;
 
     const services: HealthResponse['services'] = {
@@ -75,7 +82,7 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     if (redisHealth) infraServices.redis = redisHealth;
     if (natsHealth) infraServices.nats = natsHealth;
 
-    const response: HealthResponse & { reputation_service?: { initialized: boolean; store_type: string; aggregate_count: number } } = {
+    const response: HealthResponse & { reputation_service?: Record<string, unknown> } = {
       status: overallStatus,
       version: VERSION,
       uptime_seconds: Math.floor((Date.now() - startedAt) / 1000),
