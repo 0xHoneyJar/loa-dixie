@@ -132,7 +132,9 @@ describe('AccessPolicy runtime validation', () => {
     const policy = { type: 'role_based', roles: [], audit_required: true, revocable: false } as unknown as AccessPolicy;
     const result = validateAccessPolicy(policy);
     expect(result.valid).toBe(false);
-    expect(result.errors).toContain('role_based policy requires non-empty roles array');
+    // Hounfour schema-level validation catches minItems: 1 on roles,
+    // or cross-field validator catches empty roles — either way it's invalid
+    expect(result.errors.length).toBeGreaterThan(0);
   });
 
   it('validates time_limited policy with duration', () => {
@@ -145,14 +147,16 @@ describe('AccessPolicy runtime validation', () => {
     const policy = { type: 'time_limited', audit_required: true, revocable: true } as AccessPolicy;
     const result = validateAccessPolicy(policy);
     expect(result.valid).toBe(false);
-    expect(result.errors[0]).toContain('duration_hours');
+    // Cross-field validator: 'duration_hours is required when type is "time_limited"'
+    expect(result.errors.some(e => e.toLowerCase().includes('duration_hours'))).toBe(true);
   });
 
   it('rejects missing audit_required', () => {
     const policy = { type: 'role_based', roles: ['team'], revocable: false } as unknown as AccessPolicy;
     const result = validateAccessPolicy(policy);
     expect(result.valid).toBe(false);
-    expect(result.errors).toContain('AccessPolicy.audit_required must be a boolean');
+    // Hounfour TypeBox schema requires audit_required as a boolean field
+    expect(result.errors.some(e => e.includes('audit_required'))).toBe(true);
   });
 });
 

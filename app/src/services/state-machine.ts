@@ -7,6 +7,9 @@
  * See: SDD §13.2 (Hounfour state machines), PRD FR-9 (Level 2 targets)
  */
 
+import type { CircuitState as HounfourCircuitState } from '@0xhoneyjar/loa-hounfour/core';
+import { isValidTransition } from '@0xhoneyjar/loa-hounfour/core';
+
 /** Generic state machine definition */
 export interface StateMachine<S extends string> {
   readonly name: string;
@@ -84,9 +87,10 @@ export function assertTransition<S extends string>(
 
 /**
  * Circuit breaker state machine.
+ * HounfourCircuitState imported from @0xhoneyjar/loa-hounfour/core.
  * Hounfour naming: half_open (not half-open).
  */
-export type HounfourCircuitState = 'closed' | 'open' | 'half_open';
+export type { HounfourCircuitState };
 
 export const CircuitStateMachine: StateMachine<HounfourCircuitState> = {
   name: 'CircuitState',

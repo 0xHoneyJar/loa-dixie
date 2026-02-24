@@ -25,11 +25,14 @@ const SealRequestSchema = z.object({
   sealingPolicy: z.object({
     encryption_scheme: z.literal('aes-256-gcm'),
     key_derivation: z.literal('hkdf-sha256'),
+    key_reference: z.string().min(1).optional(),
     access_audit: z.boolean().optional().default(true),
     access_policy: z.object({
       type: z.enum(['none', 'read_only', 'time_limited', 'role_based']),
       duration_hours: z.number().positive().optional(),
       roles: z.array(z.string().min(1)).optional(),
+      audit_required: z.boolean(),
+      revocable: z.boolean(),
     }),
   }),
 });

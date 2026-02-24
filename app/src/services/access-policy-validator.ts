@@ -1,12 +1,25 @@
-import type { AccessPolicy } from '../types.js';
+import { validators } from '@0xhoneyjar/loa-hounfour';
+import {
+  validateAccessPolicy as hounfourValidateAccessPolicy,
+} from '@0xhoneyjar/loa-hounfour/core';
+import type { AccessPolicy } from '@0xhoneyjar/loa-hounfour/core';
+import { BffError } from '../errors.js';
 
 /**
- * AccessPolicy runtime validator — Hounfour Level 2 cross-field invariants.
+ * AccessPolicy runtime validator — Hounfour v7.9.2 schema-backed.
  *
- * Enforces invariants at API boundaries (not just test-time):
- * - time_limited requires duration_hours > 0
- * - role_based requires non-empty roles array
- * - All policies must have audit_required as boolean
+ * Runs both TypeBox schema validation (structural) and hounfour's
+ * cross-field validator (semantic invariants) in sequence.
+ *
+ * Note: `Type.Recursive` schemas lose their `$id` at the wrapper level,
+ * so `validate()` cannot discover the cross-field validator via registry.
+ * We call the cross-field validator explicitly instead.
+ *
+ * Cross-field invariants enforced:
+ * - `time_limited` requires `duration_hours`
+ * - `role_based` requires non-empty `roles` array
+ * - `reputation_gated` requires `min_reputation_score` or `min_reputation_state`
+ * - `compound` requires `operator` and non-empty `policies` array
  *
  * See: SDD §12.2, §13 (Hounfour Level 2)
  */
@@ -17,66 +30,40 @@ export interface PolicyValidationResult {
 }
 
 /**
- * Validate an AccessPolicy at runtime.
+ * Validate an AccessPolicy at runtime using hounfour's schema + cross-field validators.
  * Returns all violations (not just the first).
  */
 export function validateAccessPolicy(policy: AccessPolicy): PolicyValidationResult {
-  const errors: string[] = [];
-
-  if (!policy.type) {
-    errors.push('AccessPolicy requires a type field');
+  // 1. Schema-level validation (TypeBox)
+  const compiled = validators.accessPolicy();
+  if (!compiled.Check(policy)) {
+    const errors = [...compiled.Errors(policy)].map(e => `${e.path}: ${e.message}`);
+    return { valid: false, errors };
   }
 
-  if (typeof policy.audit_required !== 'boolean') {
-    errors.push('AccessPolicy.audit_required must be a boolean');
+  // 2. Cross-field invariant validation (hounfour's validateAccessPolicy)
+  const crossField = hounfourValidateAccessPolicy(policy);
+  if (!crossField.valid) {
+    return { valid: false, errors: crossField.errors };
   }
 
-  // Cross-field invariants per policy type
-  switch (policy.type) {
-    case 'time_limited': {
-      const p = policy as AccessPolicy & { duration_hours?: number };
-      if (!p.duration_hours || p.duration_hours <= 0) {
-        errors.push('time_limited policy requires duration_hours > 0');
-      }
-      break;
-    }
-
-    case 'role_based': {
-      if (!policy.roles || !Array.isArray(policy.roles) || policy.roles.length === 0) {
-        errors.push('role_based policy requires non-empty roles array');
-      }
-      break;
-    }
-
-    case 'owner_only':
-    case 'public':
-      // No additional invariants
-      break;
-
-    default:
-      errors.push(`Unknown AccessPolicy type: ${policy.type}`);
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
+  return { valid: true, errors: [] };
 }
 
 /**
- * Assert a valid AccessPolicy — throws 400 if invalid.
+ * Assert a valid AccessPolicy — throws BffError(400) if invalid.
  * For use at API boundaries.
+ *
+ * @throws {BffError} with status 400 and violation details
+ * @since Sprint 5 — LOW-3: migrated from plain object to BffError
  */
 export function assertValidAccessPolicy(policy: AccessPolicy): void {
   const result = validateAccessPolicy(policy);
   if (!result.valid) {
-    throw {
-      status: 400,
-      body: {
-        error: 'invalid_policy',
-        message: result.errors.join('; '),
-        violations: result.errors,
-      },
-    };
+    throw new BffError(400, {
+      error: 'invalid_policy',
+      message: result.errors.join('; '),
+      violations: result.errors,
+    });
   }
 }

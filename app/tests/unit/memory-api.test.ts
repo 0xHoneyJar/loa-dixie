@@ -34,9 +34,10 @@ const MOCK_PROJECTION: MemoryProjection = {
   updatedAt: '2026-02-21T10:00:00Z',
 };
 
-const OWNER_WALLET = '0xowner123';
-const DELEGATE_WALLET = '0xdelegate456';
-const OTHER_WALLET = '0xother789';
+// Valid 42-char hex Ethereum addresses (checksumAddress-safe)
+const OWNER_WALLET = '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B';
+const DELEGATE_WALLET = '0x1234567890abcdef1234567890abcdef12345678';
+const OTHER_WALLET = '0xdead000000000000000000000000000000000789';
 
 function createApp(memoryStore: any) {
   const resolveNftOwnership = vi.fn<(wallet: string) => Promise<NftOwnershipInfo | null>>();
@@ -125,8 +126,9 @@ describe('routes/memory', () => {
       sealingPolicy: {
         encryption_scheme: 'aes-256-gcm',
         key_derivation: 'hkdf-sha256',
+        key_reference: 'kms://test-key-001',
         access_audit: true,
-        access_policy: { type: 'read_only' },
+        access_policy: { type: 'read_only', audit_required: true, revocable: false },
       },
     };
 
@@ -162,9 +164,9 @@ describe('routes/memory', () => {
         body: {
           conversationId: 'conv-1',
           sealingPolicy: {
-            encryption_scheme: 'aes-128-gcm', // invalid
+            encryption_scheme: 'aes-128-gcm', // invalid — caught by Zod
             key_derivation: 'hkdf-sha256',
-            access_policy: { type: 'none' },
+            access_policy: { type: 'none', audit_required: false, revocable: false },
           },
         },
       });
@@ -179,7 +181,8 @@ describe('routes/memory', () => {
           sealingPolicy: {
             encryption_scheme: 'aes-256-gcm',
             key_derivation: 'hkdf-sha256',
-            access_policy: { type: 'time_limited' },
+            key_reference: 'kms://test-key-001',
+            access_policy: { type: 'time_limited', audit_required: true, revocable: true },
           },
         },
       });

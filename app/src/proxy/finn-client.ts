@@ -1,10 +1,9 @@
-import type { CircuitState, FinnHealthResponse, ErrorResponse } from '../types.js';
+import type { CircuitState, FinnHealthResponse } from '../types.js';
+import { computeReqHash, deriveIdempotencyKey } from '@0xhoneyjar/loa-hounfour/integrity';
+import { BffError } from '../errors.js';
 
-/** Mapped BFF error from a loa-finn upstream error */
-export interface BffError {
-  status: number;
-  body: ErrorResponse;
-}
+// Re-export BffError for consumers that imported it from finn-client
+export { BffError } from '../errors.js';
 
 /** Log callback for circuit breaker observability (dependency injection). */
 export type LogCallback = (level: 'error' | 'warn' | 'info', data: Record<string, unknown>) => void;
@@ -69,6 +68,8 @@ export class FinnClient {
       body?: unknown;
       headers?: Record<string, string>;
       timeoutMs?: number;
+      /** Tenant identifier for idempotency key derivation (e.g. nftId) */
+      nftId?: string;
     },
   ): Promise<T> {
     this.checkCircuit();
@@ -80,14 +81,32 @@ export class FinnClient {
       opts?.timeoutMs ?? this.timeoutMs,
     );
 
+    // Compute integrity headers for mutation methods (POST/PUT/PATCH)
+    // Serialize body once and reuse for both hash and fetch (Bridge iter2-medium-3)
+    const isMutation = ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase());
+    const integrityHeaders: Record<string, string> = {};
+    const serializedBody = opts?.body ? JSON.stringify(opts.body) : undefined;
+
+    if (isMutation && serializedBody) {
+      const bodyBuffer = Buffer.from(serializedBody, 'utf-8');
+      const reqHash = computeReqHash(bodyBuffer);
+      integrityHeaders['X-Req-Hash'] = reqHash;
+
+      // Derive idempotency key: tenant + reqHash + provider + model
+      const tenant = opts?.nftId ?? 'anonymous';
+      const idempotencyKey = deriveIdempotencyKey(tenant, reqHash, 'loa-finn', path);
+      integrityHeaders['X-Idempotency-Key'] = idempotencyKey;
+    }
+
     try {
       const res = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
+          ...integrityHeaders,
           ...opts?.headers,
         },
-        body: opts?.body ? JSON.stringify(opts.body) : undefined,
+        body: serializedBody,
         signal: controller.signal,
       });
 
@@ -96,25 +115,21 @@ export class FinnClient {
       if (!res.ok) {
         const errorBody = await res.json().catch(() => ({}));
         this.recordFailure();
-        const mapped = mapFinnError(res.status, errorBody);
-        throw mapped;
+        throw mapFinnError(res.status, errorBody);
       }
 
       this.recordSuccess();
       return (await res.json()) as T;
     } catch (err) {
       clearTimeout(timeout);
-      if (err instanceof Object && 'status' in err) {
+      if (BffError.isBffError(err)) {
         throw err; // Already a BffError
       }
       this.recordFailure();
-      throw {
-        status: 503,
-        body: {
-          error: 'upstream_error',
-          message: 'Backend service unavailable',
-        },
-      } satisfies BffError;
+      throw new BffError(503, {
+        error: 'upstream_error',
+        message: 'Backend service unavailable',
+      });
     }
   }
 
@@ -150,13 +165,10 @@ export class FinnClient {
       if (elapsed >= this.cooldownMs) {
         this.transitionTo('half-open');
       } else {
-        throw {
-          status: 503,
-          body: {
-            error: 'circuit_open',
-            message: 'Service temporarily unavailable (circuit breaker open)',
-          },
-        } satisfies BffError;
+        throw new BffError(503, {
+          error: 'circuit_open',
+          message: 'Service temporarily unavailable (circuit breaker open)',
+        });
       }
     }
   }
@@ -180,7 +192,7 @@ export class FinnClient {
   }
 }
 
-/** Map loa-finn HTTP errors to BFF-friendly responses */
+/** Map loa-finn HTTP errors to BFF-friendly BffError instances */
 function mapFinnError(
   status: number,
   body: Record<string, unknown>,
@@ -188,43 +200,27 @@ function mapFinnError(
   const code = (body.code as string) ?? '';
   switch (code) {
     case 'BUDGET_EXCEEDED':
-      return {
-        status: 402,
-        body: { error: 'usage_limit', message: 'Usage limit reached' },
-      };
+      return new BffError(402, { error: 'usage_limit', message: 'Usage limit reached' });
     case 'RATE_LIMITED':
-      return {
-        status: 429,
-        body: {
-          error: 'rate_limited',
-          message: 'Too many requests',
-          retry_after: 60,
-        },
-      };
+      return new BffError(429, {
+        error: 'rate_limited',
+        message: 'Too many requests',
+        retry_after: 60,
+      });
     case 'ORACLE_MODEL_UNAVAILABLE':
-      return {
-        status: 503,
-        body: {
-          error: 'service_unavailable',
-          message: 'Oracle temporarily unavailable',
-        },
-      };
+      return new BffError(503, {
+        error: 'service_unavailable',
+        message: 'Oracle temporarily unavailable',
+      });
     case 'PROVIDER_UNAVAILABLE':
-      return {
-        status: 502,
-        body: {
-          error: 'service_unavailable',
-          message: 'Service temporarily unavailable',
-        },
-      };
+      return new BffError(502, {
+        error: 'service_unavailable',
+        message: 'Service temporarily unavailable',
+      });
     default:
-      return {
-        status,
-        body: {
-          error: 'upstream_error',
-          message:
-            (body.message as string) ?? `Upstream error (HTTP ${status})`,
-        },
-      };
+      return new BffError(status, {
+        error: 'upstream_error',
+        message: (body.message as string) ?? `Upstream error (HTTP ${status})`,
+      });
   }
 }

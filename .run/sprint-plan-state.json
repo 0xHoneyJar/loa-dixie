@@ -1,29 +1,31 @@
 {
-  "plan_id": "plan-20260222-deeparch",
+  "plan_id": "plan-20260223-hounfour-l4",
   "branch": "feature/dixie-phase2",
   "state": "JACKED_OUT",
   "timestamps": {
-    "started": "2026-02-22T20:00:00Z",
-    "last_activity": "2026-02-22T21:00:00Z"
+    "started": "2026-02-23T13:30:00Z",
+    "last_activity": "2026-02-23T23:22:00Z"
   },
   "sprints": {
-    "total": 2,
-    "completed": 2,
+    "total": 4,
+    "completed": 4,
     "current": null,
     "list": [
-      {"id": "sprint-16", "status": "completed", "cycles": 1, "files_changed": 10},
-      {"id": "sprint-17", "status": "completed", "cycles": 1, "files_changed": 8}
+      {"id": "sprint-1", "global_id": 43, "status": "completed", "cycles": 1, "files_changed": 6},
+      {"id": "sprint-2", "global_id": 44, "status": "completed", "cycles": 1, "files_changed": 11},
+      {"id": "sprint-3", "global_id": 45, "status": "completed", "cycles": 1, "files_changed": 9},
+      {"id": "sprint-4", "global_id": 46, "status": "completed", "cycles": 1, "files_changed": 5}
     ]
   },
   "options": {
-    "from": 16,
-    "to": 17,
+    "from": 1,
+    "to": 4,
     "max_cycles": 20,
     "timeout_hours": 8
   },
   "metrics": {
-    "total_cycles": 2,
-    "total_files_changed": 18,
+    "total_cycles": 4,
+    "total_files_changed": 31,
     "total_findings_fixed": 0
   }
 }

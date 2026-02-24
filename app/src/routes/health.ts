@@ -4,6 +4,7 @@ import type { HealthResponse, ServiceHealth } from '../types.js';
 import type { DbPool } from '../db/client.js';
 import type { RedisClient } from '../services/redis-client.js';
 import type { SignalEmitter } from '../services/signal-emitter.js';
+import type { ReputationService } from '../services/reputation-service.js';
 import { getCorpusMeta, resetCorpusMetaCache } from '../services/corpus-meta.js';
 import { governorRegistry } from '../services/governor-registry.js';
 import { safeEqual } from '../utils/crypto.js';
@@ -22,6 +23,8 @@ export interface HealthDependencies {
   signalEmitter?: SignalEmitter | null;
   /** Admin key for gated endpoints (e.g., /governance). Task 22.3 */
   adminKey?: string;
+  /** Reputation service for aggregate health reporting. @since Sprint 6 — Task 6.2 */
+  reputationService?: ReputationService | null;
 }
 
 export function createHealthRoutes(deps: HealthDependencies): Hono {
@@ -48,6 +51,12 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
 
     const corpusMeta = getCorpusMeta();
 
+    // Sprint 6 — Task 6.2: Reputation service health reporting
+    const reputationStatus = deps.reputationService ? {
+      initialized: true,
+      aggregate_count: await deps.reputationService.store.count(),
+    } : undefined;
+
     const services: HealthResponse['services'] = {
       dixie: { status: 'healthy' },
       loa_finn: finnHealth,
@@ -60,12 +69,13 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     if (redisHealth) infraServices.redis = redisHealth;
     if (natsHealth) infraServices.nats = natsHealth;
 
-    const response: HealthResponse = {
+    const response: HealthResponse & { reputation_service?: { initialized: boolean; aggregate_count: number } } = {
       status: overallStatus,
       version: VERSION,
       uptime_seconds: Math.floor((Date.now() - startedAt) / 1000),
       services,
       infrastructure: Object.keys(infraServices).length > 0 ? infraServices : undefined,
+      reputation_service: reputationStatus,
       timestamp: new Date().toISOString(),
     };
 
