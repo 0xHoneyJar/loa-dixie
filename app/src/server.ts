@@ -40,6 +40,7 @@ import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
 import { KnowledgePriorityStore } from './services/knowledge-priority-store.js';
 import { ReputationService, InMemoryReputationStore } from './services/reputation-service.js';
+import { PostgresReputationStore } from './db/pg-reputation-store.js';
 import { EnrichmentService } from './services/enrichment-service.js';
 import { createEnrichmentRoutes } from './routes/enrich.js';
 import type { TBAVerification } from './types/agent-api.js';
@@ -187,9 +188,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Phase 2: Compound learning engine (batch processing every 10 interactions)
   const learningEngine = new CompoundLearningEngine();
 
-  // Phase 2: Reputation service with in-memory store (Sprint 6, Task 6.2)
-  // TODO: Replace InMemoryReputationStore with PostgreSQL adapter when available
-  const reputationService = new ReputationService(new InMemoryReputationStore());
+  // Phase 3: Reputation service — PostgreSQL when DB available, InMemory fallback
+  const reputationStore = dbPool
+    ? new PostgresReputationStore(dbPool)
+    : new InMemoryReputationStore();
+  const reputationService = new ReputationService(reputationStore);
 
   // Phase 2: Enrichment service for autopoietic loop (Sprint 11, Task 11.1)
   // Assembles governance context from in-memory caches for review prompt enrichment.
