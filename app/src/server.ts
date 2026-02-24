@@ -13,6 +13,7 @@ import { createPaymentGate } from './middleware/payment.js';
 import { createWalletBridge } from './middleware/wallet-bridge.js';
 import { createHealthRoutes } from './routes/health.js';
 import { createAuthRoutes } from './routes/auth.js';
+import { createJwksRoutes } from './routes/jwks.js';
 import { createAdminRoutes } from './routes/admin.js';
 import { createChatRoutes } from './routes/chat.js';
 import { createSessionRoutes } from './routes/sessions.js';
@@ -272,7 +273,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.use('*', loggerMiddleware);
 
   // --- Auth middleware (extract wallet from JWT, set on context) ---
-  app.use('/api/*', createJwtMiddleware(config.jwtPrivateKey, 'dixie-bff'));
+  app.use('/api/*', createJwtMiddleware(config.jwtPrivateKey, 'dixie-bff', config.isEs256));
 
   // --- Wallet bridge (SEC-003: copy wallet from context to request header) ---
   // JWT middleware stores wallet via c.set('wallet'), but Hono sub-app boundaries
@@ -336,6 +337,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     jwtPrivateKey: config.jwtPrivateKey,
     issuer: 'dixie-bff',
     expiresIn: '1h',
+    isEs256: config.isEs256,
+  }));
+  app.route('/api/auth', createJwksRoutes({
+    jwtPrivateKey: config.jwtPrivateKey,
+    isEs256: config.isEs256,
   }));
   app.route('/api/admin', createAdminRoutes(allowlistStore, config.adminKey));
   app.route('/api/ws/ticket', createWsTicketRoutes(ticketStore));

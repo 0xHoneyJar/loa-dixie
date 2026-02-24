@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { SiweMessage } from 'siwe';
+import { createPrivateKey, createPublicKey, type KeyObject } from 'node:crypto';
 import * as jose from 'jose';
 import type { AllowlistStore } from '../middleware/allowlist.js';
 
@@ -8,6 +9,7 @@ export interface AuthConfig {
   jwtPrivateKey: string;
   issuer: string;
   expiresIn: string;
+  isEs256?: boolean;
 }
 
 // ARCH-002: Runtime body validation — TypeScript generics are erased at compile time.
@@ -86,10 +88,18 @@ export function createAuthRoutes(
 
     const token = authHeader.slice(7);
     try {
-      const secret = new TextEncoder().encode(config.jwtPrivateKey);
-      const { payload } = await jose.jwtVerify(token, secret, {
-        issuer: config.issuer,
-      });
+      let payload: jose.JWTPayload;
+      if (config.isEs256) {
+        const publicKey = getEs256PublicKey(config.jwtPrivateKey);
+        ({ payload } = await jose.jwtVerify(token, publicKey, {
+          issuer: config.issuer,
+        }));
+      } else {
+        const secret = new TextEncoder().encode(config.jwtPrivateKey);
+        ({ payload } = await jose.jwtVerify(token, secret, {
+          issuer: config.issuer,
+        }));
+      }
       return c.json({
         wallet: payload.sub,
         role: payload.role,
@@ -106,15 +116,45 @@ export function createAuthRoutes(
   return app;
 }
 
-// ADR: HS256 token issuance — see jwt.ts for full ES256 migration plan.
-// When migrating, this function changes to:
-//   1. Import PEM private key via jose.importPKCS8(config.jwtPrivateKey, 'ES256')
-//   2. Set alg to 'ES256' in protected header
-//   3. Add 'kid' header for key rotation support
+// Lazy-cached ES256 key material — avoids PEM parsing on every request.
+// Uses Node.js crypto KeyObject (always extractable) instead of Web Crypto CryptoKey.
+let cachedEs256PrivateKey: KeyObject | null = null;
+let cachedEs256PublicKey: KeyObject | null = null;
+
+function getEs256PrivateKey(pem: string): KeyObject {
+  if (!cachedEs256PrivateKey) {
+    cachedEs256PrivateKey = createPrivateKey(pem);
+  }
+  return cachedEs256PrivateKey;
+}
+
+function getEs256PublicKey(pem: string): KeyObject {
+  if (!cachedEs256PublicKey) {
+    cachedEs256PublicKey = createPublicKey(getEs256PrivateKey(pem));
+  }
+  return cachedEs256PublicKey;
+}
+
+/** Reset cached keys — useful for testing */
+export function resetAuthKeyCache(): void {
+  cachedEs256PrivateKey = null;
+  cachedEs256PublicKey = null;
+}
+
 async function issueJwt(
   wallet: string,
   config: AuthConfig,
 ): Promise<string> {
+  if (config.isEs256) {
+    const privateKey = getEs256PrivateKey(config.jwtPrivateKey);
+    return new jose.SignJWT({ role: 'team' })
+      .setProtectedHeader({ alg: 'ES256', kid: 'dixie-es256-v1' })
+      .setSubject(wallet)
+      .setIssuer(config.issuer)
+      .setIssuedAt()
+      .setExpirationTime(config.expiresIn)
+      .sign(privateKey);
+  }
   const secret = new TextEncoder().encode(config.jwtPrivateKey);
   return new jose.SignJWT({ role: 'team' })
     .setProtectedHeader({ alg: 'HS256' })

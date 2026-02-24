@@ -41,6 +41,14 @@ export interface DixieConfig {
 
   // Phase 2: Schedule callback HMAC secret (Bridge high-2)
   scheduleCallbackSecret: string;
+
+  // Phase 3: ES256 JWT detection
+  /** True when jwtPrivateKey is PEM-encoded (ES256 mode). */
+  isEs256: boolean;
+
+  // Phase 3: x402 payment scaffold
+  /** When true, payment scaffold is active (sets X-Payment-Status header). Default false. */
+  x402Enabled: boolean;
 }
 
 /**
@@ -84,11 +92,15 @@ export function loadConfig(): DixieConfig {
   // For ES256, update validation to check for '-----BEGIN EC PRIVATE KEY-----' prefix.
   const jwtPrivateKey = process.env.DIXIE_JWT_PRIVATE_KEY ?? '';
 
+  // Phase 3: ES256 auto-detection — PEM prefix indicates asymmetric key
+  const isEs256 = jwtPrivateKey.startsWith('-----BEGIN');
+
   // Validate JWT key — an empty or short key allows trivial token forgery.
   // In test mode, allow empty key for convenience but warn.
+  // For ES256 (PEM keys), skip the length check — PEM format is self-validating.
   if (nodeEnv === 'test' && !jwtPrivateKey) {
     process.stderr.write('WARNING: DIXIE_JWT_PRIVATE_KEY is empty (test mode)\n');
-  } else if (jwtPrivateKey.length < 32) {
+  } else if (!isEs256 && jwtPrivateKey.length < 32) {
     throw new Error(
       `DIXIE_JWT_PRIVATE_KEY must be at least 32 characters (got ${jwtPrivateKey.length})`,
     );
@@ -156,5 +168,11 @@ export function loadConfig(): DixieConfig {
 
     // Phase 2: Schedule callback HMAC
     scheduleCallbackSecret: process.env.DIXIE_SCHEDULE_CALLBACK_SECRET ?? '',
+
+    // Phase 3: ES256 detection
+    isEs256,
+
+    // Phase 3: x402 payment scaffold
+    x402Enabled: process.env.DIXIE_X402_ENABLED === 'true',
   };
 }

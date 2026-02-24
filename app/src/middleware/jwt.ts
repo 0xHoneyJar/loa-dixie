@@ -1,35 +1,27 @@
 import { createMiddleware } from 'hono/factory';
+import { createPrivateKey, createPublicKey, type KeyObject } from 'node:crypto';
 import * as jose from 'jose';
-
-// ADR: HS256 JWT — Phase 1 single-service auth
-//
-// Current: HS256 (symmetric HMAC). The same secret signs and verifies.
-// This is correct for Phase 1 where only dixie-bff issues and verifies tokens.
-//
-// Phase 2 migration to ES256 (asymmetric ECDSA) is required when loa-finn
-// needs to verify dixie-issued tokens without being able to forge them.
-//
-// Migration steps (ref: SDD §7.1):
-// 1. Generate EC P-256 keypair: openssl ecparam -genkey -name prime256v1 -noout -out private.pem
-// 2. Extract public key: openssl ec -in private.pem -pubout -out public.pem
-// 3. Update DIXIE_JWT_PRIVATE_KEY to PEM-encoded EC private key
-// 4. Deploy public.pem to loa-finn for verification
-// 5. Update this middleware: alg 'ES256', use importPKCS8/importSPKI
-// 6. Add GET /api/auth/.well-known/jwks.json endpoint
-// 7. Transition period: accept both HS256 and ES256 tokens for 1 release cycle
 
 /**
  * JWT verification middleware.
  * Extracts wallet from JWT sub claim and sets it on the context.
  * Does not reject requests without JWT — that's the allowlist middleware's job.
  *
- * @security Uses HS256 (symmetric HMAC) — both signing and verification use the
- * same secret. This is acceptable for Phase 1 (single-service) but MUST migrate
- * to ES256 (asymmetric ECDSA) before loa-finn verifies dixie-issued tokens.
- * See ADR comment block above for migration steps.
+ * Supports both HS256 (symmetric) and ES256 (asymmetric) algorithms.
+ * When isEs256 is true, the jwtSecret is a PEM-encoded EC private key
+ * and verification uses the derived public key.
  */
-export function createJwtMiddleware(jwtSecret: string, issuer: string) {
-  const secret = new TextEncoder().encode(jwtSecret);
+export function createJwtMiddleware(jwtSecret: string, issuer: string, isEs256?: boolean) {
+  const hs256Secret = isEs256 ? null : new TextEncoder().encode(jwtSecret);
+
+  // Lazy-cached ES256 public key — derived from PEM private key on first use.
+  let es256PublicKey: KeyObject | null = null;
+  function getPublicKey(): KeyObject {
+    if (!es256PublicKey) {
+      es256PublicKey = createPublicKey(createPrivateKey(jwtSecret));
+    }
+    return es256PublicKey;
+  }
 
   return createMiddleware(async (c, next) => {
     const authHeader = c.req.header('authorization');
@@ -37,7 +29,8 @@ export function createJwtMiddleware(jwtSecret: string, issuer: string) {
     if (authHeader?.startsWith('Bearer ') && !authHeader.startsWith('Bearer dxk_')) {
       const token = authHeader.slice(7);
       try {
-        const { payload } = await jose.jwtVerify(token, secret, { issuer });
+        const key = isEs256 ? getPublicKey() : hs256Secret!;
+        const { payload } = await jose.jwtVerify(token, key, { issuer });
         if (payload.sub) {
           c.set('wallet', payload.sub);
         }
