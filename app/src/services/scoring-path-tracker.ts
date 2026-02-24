@@ -76,6 +76,9 @@ export interface RecordOptions {
 export class ScoringPathTracker {
   private lastHash: string = SCORING_PATH_GENESIS_HASH;
   private entryCount: number = 0;
+  /** Metadata from the most recent record() call. Single-caller assumption:
+   *  this tracker is used sequentially (one record() completes before the next).
+   *  If concurrent usage is ever needed, return metadata alongside the result instead. */
   private _lastRecordOptions?: RecordOptions;
 
   /**
