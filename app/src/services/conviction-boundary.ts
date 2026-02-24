@@ -202,12 +202,12 @@ export function evaluateEconomicBoundaryForWallet(
   let reputationAggregate: ReputationAggregate | null | undefined;
 
   if (criteriaOrOpts) {
-    // Discriminate by checking for fields unique to EconomicBoundaryOptions.
-    // Using 'criteria' or 'reputationAggregate' avoids fragility: if
-    // EconomicBoundaryOptions ever gained 'min_trust_score', the old
-    // check would misclassify it as QualificationCriteria. These fields
-    // are structurally unique to each type.
-    if ('criteria' in criteriaOrOpts || 'reputationAggregate' in criteriaOrOpts || 'budgetPeriodDays' in criteriaOrOpts || 'taskType' in criteriaOrOpts || 'scoringPathTracker' in criteriaOrOpts) {
+    // Discriminate via negative check: QualificationCriteria always has
+    // 'min_trust_score', so its absence definitively indicates
+    // EconomicBoundaryOptions. This single check scales regardless of
+    // how many fields are added to EconomicBoundaryOptions.
+    // (Bridge iter1 LOW-2: replaces growing 5-field OR chain)
+    if (!('min_trust_score' in criteriaOrOpts)) {
       // New: EconomicBoundaryOptions
       const opts = criteriaOrOpts as EconomicBoundaryOptions;
       criteria = opts.criteria ?? DEFAULT_CRITERIA;

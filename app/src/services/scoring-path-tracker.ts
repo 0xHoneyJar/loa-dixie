@@ -34,6 +34,27 @@ import type { ScoringPathLog } from '../types/reputation-evolution.js';
  */
 export class ScoringPathTracker {
   private lastHash: string = SCORING_PATH_GENESIS_HASH;
+  private entryCount: number = 0;
+
+  /**
+   * Build the content fields shared between hash input and return value.
+   * Single source of truth: guarantees the hash always covers exactly
+   * the fields present in the returned entry.
+   *
+   * @since cycle-005 — Sprint 62, Task 3.1 (Bridge iter1 MEDIUM-1)
+   */
+  private buildContentFields(
+    entry: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'>,
+    scored_at: string,
+  ): Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason' | 'scored_at'> {
+    return {
+      path: entry.path,
+      ...(entry.model_id !== undefined && { model_id: entry.model_id }),
+      ...(entry.task_type !== undefined && { task_type: entry.task_type }),
+      ...(entry.reason !== undefined && { reason: entry.reason }),
+      scored_at,
+    };
+  }
 
   /**
    * Record a scoring path entry, computing its hash and linking to the chain.
@@ -43,24 +64,15 @@ export class ScoringPathTracker {
    */
   record(entry: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'>): ScoringPathLog {
     const scored_at = new Date().toISOString();
-    const hashInput = {
-      path: entry.path,
-      ...(entry.model_id !== undefined && { model_id: entry.model_id }),
-      ...(entry.task_type !== undefined && { task_type: entry.task_type }),
-      ...(entry.reason !== undefined && { reason: entry.reason }),
-      scored_at,
-    };
+    const contentFields = this.buildContentFields(entry, scored_at);
 
-    const entry_hash = computeScoringPathHash(hashInput);
+    const entry_hash = computeScoringPathHash(contentFields);
     const previous_hash = this.lastHash;
     this.lastHash = entry_hash;
+    this.entryCount++;
 
     return {
-      path: entry.path,
-      ...(entry.model_id !== undefined && { model_id: entry.model_id }),
-      ...(entry.task_type !== undefined && { task_type: entry.task_type }),
-      ...(entry.reason !== undefined && { reason: entry.reason }),
-      scored_at,
+      ...contentFields,
       entry_hash,
       previous_hash,
     };
@@ -69,10 +81,19 @@ export class ScoringPathTracker {
   /** Reset the chain to genesis state. */
   reset(): void {
     this.lastHash = SCORING_PATH_GENESIS_HASH;
+    this.entryCount = 0;
   }
 
   /** Get the current chain tip hash. */
   get tipHash(): string {
     return this.lastHash;
+  }
+
+  /**
+   * Get the number of entries recorded in the current chain.
+   * @since cycle-005 — Sprint 62, Task 3.2 (Bridge iter1 LOW-1)
+   */
+  get length(): number {
+    return this.entryCount;
   }
 }

@@ -130,6 +130,23 @@ describe('ScoringPathTracker', () => {
     expect(minimal.scored_at).toBeDefined();
   });
 
+  it('length tracks entry count and resets correctly', () => {
+    expect(tracker.length).toBe(0);
+
+    tracker.record({ path: 'tier_default' });
+    expect(tracker.length).toBe(1);
+
+    tracker.record({ path: 'aggregate' });
+    tracker.record({ path: 'task_cohort', model_id: 'gpt-4o', task_type: 'code_review' });
+    expect(tracker.length).toBe(3);
+
+    tracker.reset();
+    expect(tracker.length).toBe(0);
+
+    tracker.record({ path: 'tier_default' });
+    expect(tracker.length).toBe(1);
+  });
+
   it('hash pair constraint: both entry_hash and previous_hash always present', () => {
     const e1 = tracker.record({ path: 'tier_default' });
     const e2 = tracker.record({ path: 'aggregate', model_id: 'gpt-4o' });
