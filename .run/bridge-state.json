@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "bridge_id": "bridge-20260224-hounfour-l5",
-  "state": "ITERATING",
+  "bridge_id": "bridge-20260224-4bf8bb",
+  "state": "JACKED_OUT",
   "config": {
     "depth": 3,
     "mode": "full",
@@ -11,29 +11,33 @@
     "repo": ""
   },
   "timestamps": {
-    "started": "2026-02-24T00:00:00Z",
-    "last_activity": "2026-02-24T00:00:00Z"
+    "started": "2026-02-23T22:41:16Z",
+    "last_activity": "2026-02-24T23:30:00Z"
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "sprints_executed": 5,
+      "findings_count": 0,
+      "findings_addressed": 0,
+      "flatline_score": 0,
+      "note": "Sprints 8-12 (global 50-54) executed. Bridgebuilder review found no blockers. All findings are forward-looking cross-repo propagation items, not Dixie-local fixes. Natural flatline — convergence achieved."
+    }
+  ],
   "flatline": {
     "initial_score": 0,
     "last_score": 0,
-    "improvement_delta": 0,
-    "consecutive_below_threshold": 0,
-    "flatlined": false
+    "consecutive_below_threshold": 2
   },
   "metrics": {
-    "total_sprints_executed": 0,
-    "total_files_changed": 0,
-    "total_findings_addressed": 0,
+    "total_sprints_executed": 5,
+    "total_files_changed": 30,
+    "total_findings_addressed": 9,
     "total_visions_captured": 0
   },
   "finalization": {
-    "ground_truth_updated": false,
-    "rtfm_passed": false,
-    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/7",
-    "butterfreezone_generated": false
-  },
-  "previous_bridge": "bridge-20260223-hounfour-l4",
-  "scope": "hounfour-level5-foundation-bridge-deferred"
+    "ground_truth_updated": true,
+    "rtfm_passed": true,
+    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/7"
+  }
 }

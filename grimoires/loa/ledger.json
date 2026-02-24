@@ -327,7 +327,8 @@
       "id": "cycle-003",
       "label": "Hounfour v7.9.2 Full Adoption — Civilizational Protocol Compliance",
       "started": "2026-02-23",
-      "status": "active",
+      "status": "archived",
+      "completed": "2026-02-24",
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
@@ -421,8 +422,24 @@
       ]
     }
   ],
-  "active_cycle": "cycle-003",
+  "active_cycle": "cycle-004",
   "active_bugfix": null,
   "global_sprint_counter": 54,
-  "bugfix_cycles": []
+  "bugfix_cycles": [],
+  "release_cycles": [
+    {
+      "id": "cycle-004",
+      "label": "Tag Release v2.0.0 — Constitutional Architecture",
+      "started": "2026-02-24",
+      "status": "active",
+      "prd": "grimoires/loa/prd.md",
+      "sdd": null,
+      "sprint_plan": "grimoires/loa/sprint.md",
+      "target_version": "2.0.0",
+      "semver_justification": "MAJOR — constitutional architecture, Level 6 protocol evolution, autopoietic loop, breaking API additions (enrichment endpoint, reputation evolution types)",
+      "source_cycles": ["cycle-002", "cycle-003"],
+      "source_pr": "#7",
+      "sprints": []
+    }
+  ]
 }
