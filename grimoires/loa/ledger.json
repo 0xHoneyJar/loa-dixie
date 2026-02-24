@@ -522,7 +522,7 @@
           "global_id": 70,
           "label": "Cryptographic Operations Hardening",
           "tasks": 5,
-          "status": "planned"
+          "status": "completed"
         },
         {
           "id": "sprint-7",

@@ -196,12 +196,13 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-## Sprint 6 (Global 70): Cryptographic Operations Hardening
+## Sprint 6 (Global 70): Cryptographic Operations Hardening -- COMPLETED
 
 **Theme**: JWKS cache TTL, key rotation infrastructure, community-scoped key readiness
 **Goal**: Make the cryptographic infrastructure production-resilient with TTL-based cache invalidation, multi-key JWKS support, and the groundwork for community-scoped signing authorities.
+**Review**: APPROVED (2 cycles -- Cycle 1: 3 findings, Cycle 2: all resolved)
 
-### Task 6.1: Add TTL-based JWKS in-process cache invalidation
+### Task 6.1: Add TTL-based JWKS in-process cache invalidation [DONE]
 
 **Finding**: Iter 1 MEDIUM-1
 **Files**:
@@ -241,7 +242,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 6.2: Refactor JWKS to support multiple keys in the key set
+### Task 6.2: Refactor JWKS to support multiple keys in the key set [DONE]
 
 **Finding**: Iter 1 SPECULATION-2, Meditation §IV
 **Files**:
@@ -278,7 +279,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 6.3: Add key rotation runbook documentation
+### Task 6.3: Add key rotation runbook documentation [DONE]
 
 **Finding**: Iter 1 MEDIUM-1 suggestion, SPECULATION-2
 **Files**:
@@ -308,7 +309,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 6.4: Wire previous key for JWT verification fallback chain
+### Task 6.4: Wire previous key for JWT verification fallback chain [DONE]
 
 **Finding**: Iter 1 SPECULATION-2
 **Files**:
@@ -335,7 +336,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 6.5: Apply asymmetric cache TTLs to all health probes
+### Task 6.5: Apply asymmetric cache TTLs to all health probes [DONE]
 
 **Finding**: Iter 1 LOW-2 (extended from Task 5.3 to all probes)
 **Files**:
