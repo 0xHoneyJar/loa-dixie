@@ -1,12 +1,12 @@
 {
   "simstim_id": "simstim-20260224-hounfour711",
   "schema_version": 1,
-  "state": "RUNNING",
+  "state": "COMPLETED",
   "phase": "complete",
   "cycle": "cycle-005",
   "timestamps": {
     "started": "2026-02-24T10:20:00Z",
-    "last_activity": "2026-02-24T13:00:00Z"
+    "last_activity": "2026-02-24T13:05:00Z"
   },
   "phases": {
     "preflight": "completed",
@@ -18,7 +18,7 @@
     "flatline_sprint": "skipped",
     "flatline_beads": "skipped",
     "implementation": "completed",
-    "complete": "in_progress"
+    "complete": "completed"
   },
   "artifacts": {
     "prd": {

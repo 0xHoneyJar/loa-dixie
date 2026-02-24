@@ -1,65 +1,65 @@
 {
   "schema_version": 1,
-  "bridge_id": "bridge-20260224-v200exc",
-  "state": "JACKED_OUT",
+  "bridge_id": "bridge-20260224-hf711adopt",
+  "state": "FLATLINED",
   "config": {
     "depth": 3,
     "mode": "full",
     "flatline_threshold": 0.05,
     "per_sprint": false,
-    "branch": "feature/v2.0.0-excellence",
+    "branch": "feature/hounfour-v7.11.0-adoption",
     "repo": "0xHoneyJar/loa-dixie"
   },
   "timestamps": {
-    "started": "2026-02-24T23:55:00Z",
-    "last_activity": "2026-02-25T14:15:00Z"
+    "started": "2026-02-24T21:55:00Z",
+    "last_activity": "2026-02-24T22:45:00Z"
   },
   "iterations": [
     {
       "iteration": 1,
-      "sprints": ["sprint-55", "sprint-56", "sprint-57"],
-      "global_sprints": [55, 56, 57],
+      "sprints": ["sprint-60", "sprint-61"],
+      "global_sprints": [60, 61],
       "findings": {
-        "high": 2,
-        "medium": 4,
+        "high": 0,
+        "medium": 1,
         "low": 2,
-        "praise": 4,
-        "score": 16
+        "praise": 3,
+        "score": 6
       },
-      "tests_after": 1076,
-      "files_changed": 27
+      "tests_after": 1121,
+      "files_changed": 11
     },
     {
       "iteration": 2,
-      "sprints": ["sprint-58", "sprint-59"],
-      "global_sprints": [58, 59],
+      "sprints": ["sprint-62"],
+      "global_sprints": [62],
       "findings": {
         "high": 0,
         "medium": 0,
-        "low": 2,
-        "praise": 0,
-        "score": 2
+        "low": 0,
+        "praise": 2,
+        "score": 0
       },
-      "tests_after": 1090,
-      "files_changed": 12,
-      "flatline": true
+      "tests_after": 1122,
+      "files_changed": 3
     }
   ],
   "flatline": {
-    "initial_score": 16,
-    "last_score": 2,
+    "initial_score": 6,
+    "last_score": 0,
     "consecutive_below_threshold": 1,
-    "delta_pct": -87.5
+    "delta_pct": 1.0,
+    "reason": "Score reached 0 — no actionable findings remain. All iteration 1 findings resolved."
   },
   "metrics": {
-    "total_sprints_executed": 5,
-    "total_files_changed": 39,
-    "total_findings_addressed": 20,
+    "total_sprints_executed": 3,
+    "total_files_changed": 14,
+    "total_findings_addressed": 3,
     "total_visions_captured": 0
   },
   "finalization": {
     "ground_truth_updated": false,
     "rtfm_passed": false,
-    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/8"
+    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/9"
   }
 }
