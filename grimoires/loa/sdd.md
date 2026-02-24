@@ -1,431 +1,567 @@
-# SDD: Hounfour v7.11.0 Full Adoption — Task-Dimensional Protocol Compliance
+# SDD: Dixie Phase 3 — Production Wiring & Live Integration
 
-**Version**: 5.0.0
-**Date**: 2026-02-24
+**Version**: 6.0.0
+**Date**: 2026-02-25
 **Author**: Merlin (Product), Claude (Architecture)
-**Cycle**: cycle-005
+**Cycle**: cycle-006
 **Status**: Draft
-**PRD Reference**: `grimoires/loa/prd.md` v5.0.0
-**Predecessor**: SDD v3.0.0 (cycle-003, Hounfour v7.9.2 Full Adoption)
+**PRD Reference**: `grimoires/loa/prd.md` v6.0.0
+**Predecessor**: SDD v5.0.0 (cycle-005, Hounfour v7.11.0 Adoption)
 
----
+## 1. System Overview
 
-## 1. Executive Summary
+Dixie Phase 3 wires the existing Phase 2 architecture to production infrastructure.
+The key principle is **zero behavioral change for existing consumers** — all modifications
+are additive (new store implementation, algorithm detection, config fields) with automatic
+fallback to current behavior when new configuration is absent.
 
-This SDD designs the migration of 4 local type definitions to canonical Hounfour v7.11.0 imports, plus the implementation of a scoring path hash chain audit trail. The architecture is a **type replacement pattern** — no new modules, no new routes, no structural changes. Five existing files are modified, one new service module is added (scoring path tracker), and the conformance suite is extended.
+### Scope Boundary
 
-The design follows the precedent set in cycle-003 (v7.9.2 adoption): replace local stubs with protocol imports, update consumers, extend conformance coverage, and verify zero regressions.
+| In Scope | Out of Scope |
+|----------|-------------|
+| PostgresReputationStore implementation | Full x402 payment processing |
+| ES256 JWT migration with JWKS | Multi-NFT resolution |
+| Payment scaffold (config-gated) | NATS event streaming activation |
+| NFT resolver extraction | Database migration tooling |
+| Terraform env vars | Monitoring dashboard creation |
+| E2E test infrastructure | Load testing |
 
-## 2. Architecture Overview
+## 2. New File Specifications
 
-### 2.1 Change Topology
+### 2.1 `app/src/db/pg-reputation-store.ts` — PostgresReputationStore
 
-```
-                    @0xhoneyjar/loa-hounfour v7.11.0
-                    ┌──────────────────────────────────┐
-                    │  /governance barrel               │
-                    │  ├── TaskType, TASK_TYPES         │
-                    │  ├── TaskTypeCohort               │
-                    │  ├── validateTaskCohortUniqueness  │
-                    │  ├── ReputationEvent (union)      │
-                    │  │   ├── QualitySignalEvent       │
-                    │  │   ├── TaskCompletedEvent       │
-                    │  │   └── CredentialUpdateEvent    │
-                    │  ├── ScoringPath, ScoringPathLog  │
-                    │  ├── computeScoringPathHash       │
-                    │  └── SCORING_PATH_GENESIS_HASH    │
-                    └──────────┬───────────────────────┘
-                               │
-          ┌────────────────────┼────────────────────┐
-          │                    │                     │
-          ▼                    ▼                     ▼
-┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-│ reputation-      │ │ conviction-      │ │ conformance-     │
-│ evolution.ts     │ │ boundary.ts      │ │ suite.ts         │
-│ (type source)    │ │ (hash chain)     │ │ (validation)     │
-│                  │ │                  │ │                  │
-│ REMOVES local    │ │ ADDS hash chain  │ │ EXTENDS schema   │
-│ definitions,     │ │ tracking via     │ │ coverage with    │
-│ RE-EXPORTS from  │ │ ScoringPath      │ │ governance       │
-│ hounfour         │ │ Tracker          │ │ types            │
-└────────┬─────────┘ └────────┬─────────┘ └──────────────────┘
-         │                    │
-         ▼                    ▼
-┌──────────────────┐ ┌──────────────────┐
-│ reputation-      │ │ scoring-path-    │
-│ service.ts       │ │ tracker.ts       │
-│ (consumers)      │ │ (NEW module)     │
-│                  │ │                  │
-│ UPDATE imports   │ │ Hash chain state │
-│ to use hounfour  │ │ management +     │
-│ typed events     │ │ computation      │
-└──────────────────┘ └──────────────────┘
-```
+**Implements**: `ReputationStore` interface (8 methods)
+**Dependencies**: `pg.Pool` (injected via constructor)
 
-### 2.2 Files Modified
-
-| File | Change Type | FR |
-|---|---|---|
-| `app/src/types/reputation-evolution.ts` | **Major**: Remove 4 local definitions, re-export from hounfour | FR-1,2,3,4 |
-| `app/src/services/reputation-service.ts` | **Medium**: Update imports, typed event handling | FR-3 |
-| `app/src/services/conviction-boundary.ts` | **Medium**: Add hash chain tracking, update ScoringPathLog usage | FR-4,5 |
-| `app/src/services/scoring-path-tracker.ts` | **New**: Hash chain state management | FR-5 |
-| `app/src/services/conformance-suite.ts` | **Medium**: Extend with governance schemas | FR-6 |
-| `app/src/types.ts` | **Minor**: Update type audit documentation | FR-7 |
-
-## 3. Component Design
-
-### 3.1 Type Migration — reputation-evolution.ts (FR-1, FR-2, FR-3, FR-4)
-
-**Strategy**: Replace local definitions with re-exports from hounfour. Preserve `DixieReputationAggregate` as the one Dixie-specific extension type.
-
-**Before** (current):
 ```typescript
-// Local definitions
-export const TASK_TYPES = ['code_review', ...] as const;
-export type TaskType = (typeof TASK_TYPES)[number];
-export type TaskTypeCohort = ModelCohort & { readonly task_type: TaskType };
-export interface ReputationEvent { type: string; timestamp: string; payload: unknown; }
-export interface ScoringPathLog { path: ...; model?: string; task_type?: TaskType; }
-```
-
-**After** (target):
-```typescript
-// Canonical protocol imports — re-exported for consumer convenience
-export {
-  TASK_TYPES,
-  type TaskType,
-  type TaskTypeCohort,
-  validateTaskCohortUniqueness,
-} from '@0xhoneyjar/loa-hounfour/governance';
-
-export type {
-  ReputationEvent,
-  QualitySignalEvent,
-  TaskCompletedEvent,
-  CredentialUpdateEvent,
-} from '@0xhoneyjar/loa-hounfour/governance';
-
-export type {
-  ScoringPath,
-  ScoringPathLog,
-} from '@0xhoneyjar/loa-hounfour/governance';
-
-// Dixie-specific extension — extends Hounfour's ReputationAggregate
-// with task-type cohort tracking
+import type { Pool } from 'pg';
+import type { ReputationStore } from '../services/reputation-service.js';
 import type { ReputationAggregate } from '@0xhoneyjar/loa-hounfour/governance';
-import type { TaskTypeCohort } from '@0xhoneyjar/loa-hounfour/governance';
+import type { TaskTypeCohort, ReputationEvent } from '../types/reputation-evolution.js';
 
-export type DixieReputationAggregate = ReputationAggregate & {
-  readonly task_cohorts?: TaskTypeCohort[];
-};
+export class PostgresReputationStore implements ReputationStore {
+  constructor(private readonly pool: Pool) {}
+
+  async get(nftId: string): Promise<ReputationAggregate | undefined> { ... }
+  async put(nftId: string, aggregate: ReputationAggregate): Promise<void> { ... }
+  async listCold(): Promise<Array<{ nftId: string; aggregate: ReputationAggregate }>> { ... }
+  async count(): Promise<number> { ... }
+  async listAll(): Promise<Array<{ nftId: string; aggregate: ReputationAggregate }>> { ... }
+  async getTaskCohort(nftId: string, model: string, taskType: string): Promise<TaskTypeCohort | undefined> { ... }
+  async putTaskCohort(nftId: string, cohort: TaskTypeCohort): Promise<void> { ... }
+  async appendEvent(nftId: string, event: ReputationEvent): Promise<void> { ... }
+  async getEventHistory(nftId: string): Promise<ReputationEvent[]> { ... }
+}
 ```
 
-**Key design decisions**:
+**SQL patterns**:
+- `get`: `SELECT aggregate FROM reputation_aggregates WHERE nft_id = $1`
+- `put`: `INSERT INTO reputation_aggregates (nft_id, state, aggregate) VALUES ($1, $2, $3) ON CONFLICT (nft_id) DO UPDATE SET state = $2, aggregate = $3, updated_at = now()`
+- `listCold`: `SELECT nft_id, aggregate FROM reputation_aggregates WHERE state = 'cold'`
+- `count`: `SELECT COUNT(*) FROM reputation_aggregates`
+- `listAll`: `SELECT nft_id, aggregate FROM reputation_aggregates`
+- `getTaskCohort`: `SELECT cohort FROM reputation_task_cohorts WHERE nft_id = $1 AND model_id = $2 AND task_type = $3`
+- `putTaskCohort`: `INSERT INTO reputation_task_cohorts (nft_id, model_id, task_type, cohort) VALUES ($1, $2, $3, $4) ON CONFLICT (nft_id, model_id, task_type) DO UPDATE SET cohort = $4, updated_at = now()`
+- `appendEvent`: `INSERT INTO reputation_events (nft_id, event_type, event) VALUES ($1, $2, $3)`
+- `getEventHistory`: `SELECT event FROM reputation_events WHERE nft_id = $1 ORDER BY created_at ASC`
 
-1. **Re-export pattern**: `reputation-evolution.ts` becomes a re-export barrel rather than a definition file. This preserves the existing import paths for all consumers — no files outside this module need import path changes.
+**JSONB serialization**: The full `ReputationAggregate` and `TaskTypeCohort` objects are
+stored as JSONB. The `state` field is extracted to a dedicated column for indexing.
+The `event_type` is extracted from the discriminated union's `type` field.
 
-2. **DixieReputationAggregate stays local**: This type extends hounfour's `ReputationAggregate` with Dixie-specific `task_cohorts`. It is NOT in hounfour and should remain local.
+### 2.2 `app/src/db/migrations/005_reputation.sql`
 
-3. **Field name migration**: Hounfour's `ScoringPathLog` uses `model_id` where Dixie used `model`. The conviction-boundary.ts code at line 259 (`model: activeCohort.model_id`) already assigns from `model_id` — the field name change in the type definition aligns with existing usage.
+Three tables + indexes. See PRD FR-7 for schema.
 
-### 3.2 Reputation Service Updates (FR-3)
+Additional indexes beyond FR-7:
+```sql
+CREATE INDEX IF NOT EXISTS idx_reputation_aggregates_state
+  ON reputation_aggregates(state);
+CREATE INDEX IF NOT EXISTS idx_reputation_events_nft_date
+  ON reputation_events(nft_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_reputation_task_cohorts_nft
+  ON reputation_task_cohorts(nft_id);
+```
 
-**Scope**: Import path changes + typed event handling in the store interface.
+### 2.3 `app/src/services/nft-ownership-resolver.ts` — NftOwnershipResolver
 
-**Changes**:
-
-1. **Import source**: Change `from '../types/reputation-evolution.js'` to use the re-export barrel (no path change needed since reputation-evolution.ts will re-export from hounfour).
-
-2. **Store interface**: `appendEvent()` and `getEventHistory()` signatures remain the same — they accept/return `ReputationEvent`. The type becomes more specific (discriminated union instead of generic interface), which is backward-compatible.
-
-3. **reconstructAggregateFromEvents()**: Update `contract_version` from `'7.9.2'` to `'7.11.0'`. The function remains a stub per PRD scope (event sourcing deferred).
-
-4. **Re-exports at bottom**: Update to re-export the new types (`QualitySignalEvent`, `TaskCompletedEvent`, `CredentialUpdateEvent`, `ScoringPath`).
-
-### 3.3 Scoring Path Tracker — NEW (FR-5)
-
-**Purpose**: Manage hash chain state for scoring path audit entries. Each evaluation produces a `ScoringPathLog` entry with `entry_hash` and `previous_hash` linking to the prior entry.
-
-**Module**: `app/src/services/scoring-path-tracker.ts`
+**Dependencies**: `FinnClient` (injected via constructor)
 
 ```typescript
-import type { ScoringPathLog } from '@0xhoneyjar/loa-hounfour/governance';
-import {
-  computeScoringPathHash,
-  SCORING_PATH_GENESIS_HASH,
-} from '@0xhoneyjar/loa-hounfour/governance';
+import type { FinnClient } from '../proxy/finn-client.js';
 
-export class ScoringPathTracker {
-  private lastHash: string;
+export interface OwnershipResult {
+  nftId: string;
+  ownerWallet: string;
+  delegatedWallets: string[];
+}
 
-  constructor() {
-    this.lastHash = SCORING_PATH_GENESIS_HASH;
+export class NftOwnershipResolver {
+  constructor(private readonly finnClient: FinnClient) {}
+
+  /** Resolve wallet → nftId (simple lookup, returns null if no dNFT) */
+  async resolveNftId(wallet: string): Promise<string | null> {
+    try {
+      const result = await this.finnClient.request<{ nftId: string }>(
+        'GET',
+        `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
+      );
+      return result.nftId;
+    } catch {
+      return null;
+    }
   }
 
-  /**
-   * Record a scoring path decision with hash chain linking.
-   *
-   * Computes entry_hash from content fields via RFC 8785 canonical JSON,
-   * and links to the previous entry via previous_hash.
-   */
-  record(entry: {
-    path: 'task_cohort' | 'aggregate' | 'tier_default';
-    model_id?: string;
-    task_type?: string;
-    reason?: string;
-  }): ScoringPathLog {
-    const scored_at = new Date().toISOString();
-    const previous_hash = this.lastHash;
-
-    const entry_hash = computeScoringPathHash({
-      path: entry.path,
-      model_id: entry.model_id,
-      task_type: entry.task_type,
-      reason: entry.reason,
-      scored_at,
-    });
-
-    this.lastHash = entry_hash;
-
-    return {
-      ...entry,
-      scored_at,
-      entry_hash,
-      previous_hash,
-    };
-  }
-
-  /** Reset the chain (e.g., for a new session). */
-  reset(): void {
-    this.lastHash = SCORING_PATH_GENESIS_HASH;
-  }
-
-  /** Get the current chain tip hash. */
-  get tipHash(): string {
-    return this.lastHash;
+  /** Resolve wallet → full ownership (nftId + owner + delegated wallets) */
+  async resolveOwnership(wallet: string): Promise<OwnershipResult | null> {
+    try {
+      return await this.finnClient.request<OwnershipResult>(
+        'GET',
+        `/api/identity/wallet/${encodeURIComponent(wallet)}/ownership`,
+      );
+    } catch {
+      return null;
+    }
   }
 }
 ```
 
-**Design decisions**:
+### 2.4 `app/src/routes/jwks.ts` — JWKS Endpoint
 
-1. **Class with mutable state**: The tracker holds `lastHash` as mutable state because hash chains are inherently sequential — each entry depends on the previous. A per-request instance or per-session singleton are both valid usage patterns.
-
-2. **Injection into conviction-boundary**: The tracker will be passed as an optional parameter to `evaluateEconomicBoundaryForWallet()` via the `EconomicBoundaryOptions` interface. When absent, no hash chain is computed (backward compatible).
-
-3. **No persistence**: Hash chain entries are logged via `console.debug` (matching existing scoring path logging at conviction-boundary.ts:282). Persistence is a future concern — the chain provides in-memory audit trail and can be serialized to the event log later.
-
-### 3.4 Conviction Boundary Integration (FR-4, FR-5)
-
-**Changes to `evaluateEconomicBoundaryForWallet()`**:
-
-1. **Import update**: Replace `ScoringPathLog` import from local types with hounfour governance.
-
-2. **ScoringPathLog field alignment**: Change `model:` to `model_id:` at the construction site (line 259). Add `reason` field with descriptive text.
-
-3. **Hash chain integration**: When a `ScoringPathTracker` is provided in options, use it to produce hash-linked entries instead of plain objects.
-
-**Options extension**:
 ```typescript
-export interface EconomicBoundaryOptions {
-  criteria?: QualificationCriteria;
-  budgetPeriodDays?: number;
-  reputationAggregate?: ReputationAggregate | DixieReputationAggregate | null;
-  taskType?: TaskType;
-  /** Optional scoring path tracker for hash chain audit trail. */
-  scoringPathTracker?: ScoringPathTracker;
+import { Hono } from 'hono';
+import * as jose from 'jose';
+
+export function createJwksRoutes(publicKey: jose.KeyLike | null): Hono {
+  const app = new Hono();
+
+  // GET /.well-known/jwks.json
+  app.get('/.well-known/jwks.json', async (c) => {
+    if (!publicKey) {
+      // HS256 mode — no public key to expose
+      return c.json({ keys: [] });
+    }
+    const jwk = await jose.exportJWK(publicKey);
+    jwk.alg = 'ES256';
+    jwk.use = 'sig';
+    jwk.kid = 'dixie-es256-v1';
+    return c.json({ keys: [jwk] });
+  });
+
+  return app;
 }
 ```
 
-**Scoring path construction** (replaces lines 228-277):
-```typescript
-// Build the scoring path entry
-let scoringEntry: { path: ...; model_id?: string; task_type?: string; reason?: string };
+### 2.5 `app/tests/e2e/live-integration.test.ts`
 
-if (usedTaskCohort) {
-  scoringEntry = {
-    path: 'task_cohort' as const,
-    model_id: activeCohort.model_id,
-    task_type: taskType,
-    reason: `Task cohort match: ${activeCohort.model_id}/${taskType}`,
-  };
-} else if (reputationAggregate?.personal_score !== null) {
-  scoringEntry = {
-    path: 'aggregate' as const,
-    reason: 'Aggregate personal score available',
-  };
-} else {
-  scoringEntry = {
-    path: 'tier_default' as const,
-    reason: `Cold start: tier ${tier}`,
-  };
+E2E smoke tests designed to run against `docker-compose.integration.yml`.
+Skipped when `INTEGRATION_TEST_URL` env var is not set.
+
+```typescript
+import { describe, it, expect } from 'vitest';
+
+const BASE_URL = process.env.INTEGRATION_TEST_URL;
+
+describe.skipIf(!BASE_URL)('E2E: Live Integration', () => {
+  it('health endpoint reports PostgreSQL', async () => { ... });
+  it('auth flow issues valid JWT', async () => { ... });
+  it('chat proxy round-trip', async () => { ... });
+  it('reputation persists across requests', async () => { ... });
+});
+```
+
+## 3. File Modification Specifications
+
+### 3.1 `app/src/server.ts` — Wiring Changes
+
+**Line 192**: Replace InMemoryReputationStore with conditional PostgresReputationStore:
+
+```typescript
+// Before:
+const reputationService = new ReputationService(new InMemoryReputationStore());
+
+// After:
+import { PostgresReputationStore } from './db/pg-reputation-store.js';
+
+const reputationStore = dbPool
+  ? new PostgresReputationStore(dbPool)
+  : new InMemoryReputationStore();
+const reputationService = new ReputationService(reputationStore);
+```
+
+**Lines 302-427**: Replace 4 NFT lambdas with NftOwnershipResolver:
+
+```typescript
+import { NftOwnershipResolver } from './services/nft-ownership-resolver.js';
+
+const nftResolver = new NftOwnershipResolver(finnClient);
+
+// createMemoryContext (was lines 302-315):
+app.use('/api/*', createMemoryContext({
+  memoryStore,
+  resolveNftId: (wallet) => nftResolver.resolveNftId(wallet),
+}));
+
+// createScheduleRoutes (was lines 350-361):
+app.route('/api/schedule', createScheduleRoutes({
+  ...
+  resolveNftOwnership: (wallet) => nftResolver.resolveNftId(wallet).then(nftId => nftId ? { nftId } : null),
+}));
+
+// createLearningRoutes (was lines 397-408):
+app.route('/api/learning', createLearningRoutes({
+  ...
+  resolveNftOwnership: (wallet) => nftResolver.resolveNftId(wallet).then(nftId => nftId ? { nftId } : null),
+}));
+
+// createMemoryRoutes (was lines 414-427):
+app.route('/api/memory', createMemoryRoutes({
+  ...
+  resolveNftOwnership: (wallet) => nftResolver.resolveOwnership(wallet),
+}));
+```
+
+**New route**: Wire JWKS endpoint:
+
+```typescript
+import { createJwksRoutes } from './routes/jwks.js';
+
+app.route('/api/auth', createJwksRoutes(publicKey));
+```
+
+### 3.2 `app/src/middleware/jwt.ts` — ES256 Verification
+
+```typescript
+// Dual-algorithm verification:
+// 1. If ES256 key available: try ES256 first
+// 2. Fallback to HS256 (backward compatibility)
+
+export function createJwtMiddleware(
+  jwtKey: string,
+  issuer: string,
+  es256PublicKey?: jose.KeyLike,
+) {
+  const hs256Secret = new TextEncoder().encode(jwtKey);
+
+  return createMiddleware(async (c, next) => {
+    const authHeader = c.req.header('authorization');
+    if (authHeader?.startsWith('Bearer ') && !authHeader.startsWith('Bearer dxk_')) {
+      const token = authHeader.slice(7);
+      try {
+        // Try ES256 first if public key available
+        if (es256PublicKey) {
+          try {
+            const { payload } = await jose.jwtVerify(token, es256PublicKey, { issuer });
+            if (payload.sub) c.set('wallet', payload.sub);
+            return await next();
+          } catch {
+            // Fall through to HS256
+          }
+        }
+        // HS256 fallback
+        const { payload } = await jose.jwtVerify(token, hs256Secret, { issuer });
+        if (payload.sub) c.set('wallet', payload.sub);
+      } catch (err) {
+        // existing error logging...
+      }
+    }
+    await next();
+  });
+}
+```
+
+### 3.3 `app/src/routes/auth.ts` — ES256 Token Issuance
+
+```typescript
+// issueJwt updated for dual-algorithm:
+async function issueJwt(
+  wallet: string,
+  config: AuthConfig,
+): Promise<string> {
+  if (config.es256PrivateKey) {
+    // ES256 issuance
+    return new jose.SignJWT({ role: 'team' })
+      .setProtectedHeader({ alg: 'ES256', kid: 'dixie-es256-v1' })
+      .setSubject(wallet)
+      .setIssuer(config.issuer)
+      .setIssuedAt()
+      .setExpirationTime(config.expiresIn)
+      .sign(config.es256PrivateKey);
+  }
+  // HS256 fallback
+  const secret = new TextEncoder().encode(config.jwtPrivateKey);
+  return new jose.SignJWT({ role: 'team' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(wallet)
+    .setIssuer(config.issuer)
+    .setIssuedAt()
+    .setExpirationTime(config.expiresIn)
+    .sign(secret);
+}
+```
+
+`AuthConfig` extended:
+```typescript
+export interface AuthConfig {
+  jwtPrivateKey: string;
+  issuer: string;
+  expiresIn: string;
+  es256PrivateKey?: jose.KeyLike;  // Parsed PEM key (if ES256 mode)
+}
+```
+
+### 3.4 `app/src/middleware/payment.ts` — Config-Gated Scaffold
+
+```typescript
+export interface PaymentGateOptions {
+  enabled: boolean;
 }
 
-// Produce hash-linked entry when tracker is available, plain entry otherwise
-const scoringPath: ScoringPathLog = opts?.scoringPathTracker
-  ? opts.scoringPathTracker.record(scoringEntry)
-  : scoringEntry;
+export function createPaymentGate(options?: PaymentGateOptions) {
+  const enabled = options?.enabled ?? false;
+
+  return createMiddleware(async (c, next) => {
+    if (enabled) {
+      // Scaffold: set payment context headers for future x402 integration
+      const wallet = c.get('wallet') as string | undefined;
+      c.header('X-Payment-Status', 'scaffold');
+      if (wallet) {
+        c.header('X-Payment-Wallet', wallet);
+      }
+    }
+    await next();
+  });
+}
 ```
 
-### 3.5 Conformance Suite Extension (FR-6)
+### 3.5 `app/src/config.ts` — New Config Fields
 
-**Strategy**: Add governance schema validation alongside existing core schema validation.
-
-**New schema names** added to `ConformanceSchemaName`:
+Add to `DixieConfig` interface:
 ```typescript
-export type ConformanceSchemaName =
-  | 'accessPolicy'
-  | 'conversationSealingPolicy'
-  | 'streamEvent'
-  | 'billingEntry'
-  | 'domainEvent'
-  | 'agentDescriptor'
-  | 'healthStatus'
-  // v7.11.0 governance schemas
-  | 'taskType'
-  | 'taskTypeCohort'
-  | 'reputationEvent'
-  | 'scoringPathLog';
+/** x402 payment gate enabled (default: false). When true, payment scaffold is active. */
+x402Enabled: boolean;
+/** Parsed ES256 private key (null when using HS256). Derived from jwtPrivateKey PEM format. */
+es256PrivateKey: jose.KeyLike | null;
+/** Parsed ES256 public key for verification (null when using HS256). */
+es256PublicKey: jose.KeyLike | null;
 ```
 
-**New imports**:
+Update `loadConfig()`:
 ```typescript
-import {
-  TaskTypeSchema,
-  TaskTypeCohortSchema,
-  ReputationEventSchema,
-  ScoringPathLogSchema,
-} from '@0xhoneyjar/loa-hounfour/governance';
+// ES256 auto-detection: PEM prefix indicates asymmetric key
+let es256PrivateKey: jose.KeyLike | null = null;
+let es256PublicKey: jose.KeyLike | null = null;
+if (jwtPrivateKey.startsWith('-----BEGIN')) {
+  es256PrivateKey = await jose.importPKCS8(jwtPrivateKey, 'ES256');
+  // Derive public key from private for JWKS and verification
+  const jwk = await jose.exportJWK(es256PrivateKey);
+  es256PublicKey = await jose.importJWK({ ...jwk, d: undefined }, 'ES256');
+} else if (nodeEnv !== 'test' && jwtPrivateKey.length < 32) {
+  throw new Error(...); // existing validation
+}
 ```
 
-**New sample payloads** added to `getSamplePayloads()`:
+Add environment variable:
+```typescript
+x402Enabled: process.env.DIXIE_X402_ENABLED === 'true',
+```
 
-| Schema | Sample | Description |
-|---|---|---|
-| `taskType` | `'code_review'` | Protocol-defined literal |
-| `taskType` | `'legal-guild:contract_review'` | Community namespace:type |
-| `taskTypeCohort` | Full cohort with confidence_threshold | Validates all fields |
-| `reputationEvent` (quality_signal) | Score 0.85, with task_type | Quality observation |
-| `reputationEvent` (task_completed) | Success, 1500ms duration | Task completion |
-| `reputationEvent` (credential_update) | Action: 'issued' | Credential event |
-| `scoringPathLog` | task_cohort path with hash chain | Full audit entry |
-| `scoringPathLog` | tier_default path without hash chain | Backward-compatible entry |
+Note: `loadConfig()` becomes `async` to support `jose.importPKCS8`.
 
-### 3.6 Type Audit Update (FR-7)
+### 3.6 `app/src/routes/health.ts` — Store Type Reporting
 
-Update the header comment in `app/src/types.ts` to document v7.11.0 imports:
+Extend the reputation status object:
+```typescript
+const reputationStatus = deps.reputationService ? {
+  initialized: true,
+  aggregate_count: await deps.reputationService.store.count(),
+  store_type: deps.reputationService.store instanceof PostgresReputationStore
+    ? 'postgres' : 'memory',
+  ...(deps.reputationService.store instanceof PostgresReputationStore && deps.dbPool ? {
+    pool_total: deps.dbPool.totalCount,
+    pool_idle: deps.dbPool.idleCount,
+    pool_waiting: deps.dbPool.waitingCount,
+  } : {}),
+} : undefined;
+```
 
-**New rows in the import table**:
+### 3.7 `deploy/terraform/dixie.tf` — Environment Variables
 
-| File | Import | Barrel |
-|---|---|---|
-| types/reputation-evolution | TaskType, TASK_TYPES, TaskTypeCohort, validateTaskCohortUniqueness | governance |
-| types/reputation-evolution | ReputationEvent, QualitySignalEvent, TaskCompletedEvent, CredentialUpdateEvent | governance |
-| types/reputation-evolution | ScoringPath, ScoringPathLog | governance |
-| services/scoring-path-tracker | computeScoringPathHash, SCORING_PATH_GENESIS_HASH | governance |
-| services/conformance-suite | TaskTypeSchema, TaskTypeCohortSchema, ReputationEventSchema, ScoringPathLogSchema | governance |
+Add to `environment` array (line 284):
+```hcl
+{ name = "REDIS_URL", value = "redis://redis.freeside.local:6379" },
+{ name = "NATS_URL", value = "nats://nats.freeside.local:4222" },
+```
 
-**Protocol maturity update**: Level 6 → Level 6+ (task-dimensional vocabulary adopted from protocol).
+Add to `secrets` array:
+```hcl
+{
+  name      = "DATABASE_URL"
+  valueFrom = data.aws_secretsmanager_secret.dixie_database_url.arn
+}
+```
 
-## 4. Data Architecture
+Add Secrets Manager reference:
+```hcl
+data "aws_secretsmanager_secret" "dixie_database_url" {
+  name = "dixie/database-url"
+}
+```
 
-No database changes. No new tables. No migration files.
+Update IAM policy to include the new secret ARN.
 
-The hash chain is in-memory only — `ScoringPathTracker` holds `lastHash` as instance state. Hash chain entries are logged via `console.debug` for observability.
+Add security group egress rules:
+```hcl
+egress {
+  from_port   = 5432
+  to_port     = 5432
+  protocol    = "tcp"
+  description = "PostgreSQL"
+  cidr_blocks = ["10.0.0.0/8"]
+}
 
-**Future consideration**: When event sourcing is implemented (out of scope), `ScoringPathLog` entries with hash chain fields can be persisted to the reputation event log for tamper-evident audit trails.
+egress {
+  from_port   = 4222
+  to_port     = 4222
+  protocol    = "tcp"
+  description = "NATS"
+  cidr_blocks = ["10.0.0.0/8"]
+}
+```
 
-## 5. API Design
+### 3.8 `deploy/docker-compose.integration.yml` — PostgreSQL Service
 
-No API changes. No new endpoints. No changed response shapes. All changes are internal type migrations.
+Add PostgreSQL service:
+```yaml
+postgres:
+  image: postgres:16-alpine
+  ports:
+    - "5632:5432"
+  environment:
+    POSTGRES_DB: dixie_test
+    POSTGRES_USER: dixie
+    POSTGRES_PASSWORD: dixie_test_pass
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U dixie -d dixie_test"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+```
 
-## 6. Security Architecture
+Add to dixie-bff service environment:
+```yaml
+DATABASE_URL: "postgresql://dixie:dixie_test_pass@postgres:5432/dixie_test"
+```
 
-### 6.1 Hash Chain Integrity
+Add dependency:
+```yaml
+depends_on:
+  postgres:
+    condition: service_healthy
+```
 
-The scoring path hash chain uses:
-- **SHA-256** via `@noble/hashes` (constant-time, browser-compatible)
-- **RFC 8785** canonical JSON for deterministic serialization
-- **Runtime field stripping** prevents structural subtyping leakage into hash input
+## 4. Data Flow Diagrams
 
-**Threat model**: The hash chain provides tamper evidence, not tamper prevention. If an attacker can modify the tracker's memory, they can forge entries. This is acceptable for the current use case (observability/audit) — production tamper prevention requires persistence to an append-only store (deferred).
+### 4.1 Reputation Persistence Flow
 
-### 6.2 Open Enum Safety
+```
+PUT /api/chat → chat route → reputationService.store.put()
+                                    │
+                    ┌────────────────┼────────────────┐
+                    │ DATABASE_URL?  │                 │
+                    ▼ yes            ▼ no              │
+          PostgresReputationStore  InMemoryReputationStore
+          INSERT ... ON CONFLICT   Map.set()
+          reputation_aggregates
+```
 
-Hounfour's `TaskType` open enum accepts community-defined patterns (`namespace:type`). Dixie validates task types via schema validation (TypeBox) which enforces:
-- Protocol types: exact literal match
-- Community types: regex pattern `^[a-z][a-z0-9_-]+:[a-z][a-z0-9_]+$`
+### 4.2 JWT Authentication Flow (ES256)
 
-No injection risk — task types are used as classification labels, never as executable code or SQL parameters.
+```
+Client                     Dixie                    Finn
+  │                          │                       │
+  ├─ POST /api/auth/siwe ──→│                       │
+  │                          ├── verify SIWE sig     │
+  │                          ├── detect key format   │
+  │                          │   PEM? → ES256 sign   │
+  │                          │   raw? → HS256 sign   │
+  │←── { token, wallet } ───┤                       │
+  │                          │                       │
+  ├─ GET /api/chat ──────────┤                       │
+  │  Authorization: Bearer   ├── try ES256 verify    │
+  │                          ├── fallback HS256      │
+  │                          ├── c.set('wallet')     │
+  │                          ├── proxy to finn ──────→│
+  │←── chat response ────────┤←── response ──────────┤
+  │                          │                       │
+  │                    GET /api/auth/.well-known/jwks.json
+  │                          │←──────────────────────┤
+  │                          ├── return ES256 JWK    │
+```
 
-### 6.3 ADR-004 Compliance
+## 5. Test Strategy
 
-Task types are assigned exogenously by Dixie's routing layer, not by scored models. This is already the case in the current architecture (conviction-boundary.ts receives `taskType` from the request context, not from model output). No changes needed.
+### 5.1 Unit Tests (No External Dependencies)
 
-## 7. Testing Strategy
+| Test File | FR | Coverage |
+|-----------|------|---------|
+| `pg-reputation-store.test.ts` | FR-1 | All 8 methods with mock pg.Pool |
+| `nft-ownership-resolver.test.ts` | FR-4 | resolveNftId, resolveOwnership with mock FinnClient |
+| `jwt-es256.test.ts` | FR-2 | ES256 sign/verify round-trip, HS256 fallback, dual-algo |
+| `jwks.test.ts` | FR-2 | JWKS endpoint returns valid JWK, empty when HS256 |
+| `payment-scaffold.test.ts` | FR-3 | Enabled/disabled config gating, header behavior |
+| `health-enhanced.test.ts` | FR-8 | Store type reporting, pool metrics |
+| `config-es256.test.ts` | FR-2 | PEM detection, async loadConfig |
 
-### 7.1 Type Migration Tests
+### 5.2 Integration Tests (Docker-based)
 
-Existing tests (1011+) serve as regression suite. No test file changes expected — the re-export pattern preserves import paths.
+| Test | FRs | Requires |
+|------|-----|----------|
+| Reputation round-trip via PostgreSQL | FR-1, FR-7 | postgres container |
+| SIWE → ES256 JWT → protected endpoint | FR-2 | dixie-bff + loa-finn containers |
+| Health reports postgres store type | FR-8 | postgres container |
 
-### 7.2 New Tests
+### 5.3 Backward Compatibility
 
-| Test File | Scope | Scenarios (min 3 per EDD) |
-|---|---|---|
-| `scoring-path-tracker.test.ts` | Hash chain computation | Genesis hash, chain linking, determinism, reset, field stripping |
-| `hounfour-v711-conformance.test.ts` | Governance schema validation | All 8 new sample payloads (protocol types, community types, event variants, hash chain) |
-| `conviction-boundary-hashchain.test.ts` | Integration: boundary eval + hash chain | Tier default with hash, task cohort with hash, aggregate with hash, no tracker (backward compat) |
+All 1,146 existing tests run against InMemoryReputationStore (no DATABASE_URL in test env).
+HS256 JWT secrets remain valid. Payment middleware defaults to noop.
 
-### 7.3 Test Execution
+## 6. Migration Plan
+
+### 6.1 Database Migration
 
 ```bash
-cd app && npx vitest run
+# Run against target database:
+psql -f app/src/db/migrations/005_reputation.sql $DATABASE_URL
 ```
 
-All tests in `app/tests/` directory, executed via vitest.
+Migration is idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`).
 
-## 8. Migration Safety
+### 6.2 ES256 Key Generation
 
-### 8.1 Re-export Compatibility
+```bash
+# Generate EC P-256 keypair:
+openssl ecparam -genkey -name prime256v1 -noout -out private.pem
+openssl ec -in private.pem -pubout -out public.pem
 
-The re-export pattern (`reputation-evolution.ts` re-exports from hounfour) ensures **zero import path changes** for consumers. Files importing from `'../types/reputation-evolution.js'` continue to work.
+# Store in Secrets Manager:
+aws secretsmanager update-secret --secret-id dixie/jwt-private-key \
+  --secret-string "$(cat private.pem)"
+```
 
-**Verification**: After migration, search for all imports from `reputation-evolution` and confirm they resolve.
+### 6.3 Deployment Sequence
 
-### 8.2 Type Compatibility
+1. Run 005_reputation.sql migration
+2. Store ES256 private key in Secrets Manager
+3. Deploy with new Terraform (adds env vars + secrets)
+4. Verify health endpoint shows `store_type: "postgres"`
+5. Verify JWKS endpoint returns ES256 key
+6. Optional: Enable x402 scaffold (`DIXIE_X402_ENABLED=true`)
 
-| Local Type | Hounfour Type | Compatible? | Notes |
-|---|---|---|---|
-| `TaskType` (string union) | `TaskType` (string union + pattern) | Yes — superset | Open enum accepts all previous values plus community types |
-| `TaskTypeCohort` (ModelCohort &) | `TaskTypeCohort` (base fields + task_type + confidence_threshold) | Yes — superset | Adds optional `confidence_threshold` (default 30) |
-| `ReputationEvent` (generic) | `ReputationEvent` (discriminated union) | Yes — narrowing | More specific types are assignable where generic was expected |
-| `ScoringPathLog` (3 fields) | `ScoringPathLog` (7 fields) | Yes — superset | New fields are all optional |
+## 7. Security Considerations
 
-### 8.3 Rollback
-
-If issues are discovered post-migration:
-1. Revert the re-export in `reputation-evolution.ts` to local definitions
-2. All consumers continue working (import paths unchanged)
-3. No database migration to revert, no API contract changes
-
-## 9. Technical Risks
-
-| Risk | Mitigation |
-|---|---|
-| Hounfour governance barrel not exporting expected symbols | Verified: dist/governance/ contains all .d.ts files; checked exports manually |
-| `computeScoringPathHash` relies on `@noble/hashes` not in Dixie's direct deps | Verified: transitive via hounfour; also `@noble/hashes` is a pure-JS package with no native addons |
-| TypeBox schema validation differs from TypeScript type checking | Conformance suite validates runtime shapes; TypeScript validates compile-time types. Both must pass. |
-
-## 10. Deployment
-
-No deployment changes. No infrastructure changes. No environment variable changes. No Docker changes.
-
-The `file:../../loa-hounfour` dependency already points to v7.11.0 on disk. After implementation:
-1. Run `npm install` in `app/` to refresh the symlink
-2. TypeScript compilation validates all imports resolve
-3. Tests verify runtime behavior
-
----
-
-*This SDD designs a focused type migration from local stubs to canonical Hounfour v7.11.0 protocol imports, plus a scoring path hash chain audit trail. The architecture preserves all existing import paths via re-export, adds one new module (ScoringPathTracker), and extends conformance coverage. Zero API changes, zero database changes, zero deployment changes.*
+- DATABASE_URL contains credentials — must be in Secrets Manager (never plaintext Terraform)
+- ES256 private key in Secrets Manager — public key exposed only via JWKS
+- `kid` header enables future key rotation without service disruption
+- x402 scaffold sets informational headers only — no payment processing without `@x402/hono`
+- New security group rules follow principle of least privilege (specific ports, VPC CIDR only)

@@ -1,269 +1,310 @@
-# PRD: Hounfour v7.11.0 Full Adoption — Task-Dimensional Protocol Compliance
+# PRD: Dixie Phase 3 — Production Wiring & Live Integration
 
-**Version**: 5.0.0
-**Date**: 2026-02-24
+**Version**: 6.0.0
+**Date**: 2026-02-25
 **Author**: Merlin (Product), Claude (Synthesis)
-**Cycle**: cycle-005
+**Cycle**: cycle-006
 **Status**: Draft
-**Predecessor**: cycle-004 PRD v4.0.0 (Tag Release v2.0.0)
+**Predecessor**: cycle-005 PRD v5.0.0 (Hounfour v7.11.0 Adoption)
 
-> Sources: loa-finn#66 §6 Sprint A (Protocol Adoption), loa-hounfour CHANGELOG v7.10.0–v7.11.0,
-> cycle-003 (Hounfour v7.9.2 Full Adoption, 12 sprints — Level 6 foundation),
-> Migration surface analysis (5 files, 3 critical replacements, 1 new feature)
-
----
+> Sources: loa-finn#66 §7 (Command Deck — Dixie Phase 3), loa-dixie#6 (Phase 3 epic),
+> loa-freeside#88 (production stack merged), codebase reality analysis 2026-02-25.
 
 ## 1. Problem Statement
 
-Dixie achieved Hounfour Level 6 protocol compliance in cycle-003 against v7.9.2. Since then, Hounfour has advanced through three releases (v7.10.0, v7.10.1, v7.11.0) totaling **261 files changed, +4671/-685 lines**. These releases upstream Dixie's own task-dimensional reputation types into the shared protocol — the exact types Dixie defined locally in Sprint 52.
+Dixie has 15 API endpoints, 30+ services, 1,146 passing tests, and full Hounfour v7.11.0
+compliance — but it cannot launch to production. Four critical gaps remain:
 
-**The gap**: Dixie has **local stub definitions** for types that now exist as **canonical protocol exports** in Hounfour. Specifically:
+1. **Volatile reputation**: InMemoryReputationStore loses all reputation data on restart.
+   Production requires PostgreSQL persistence with the existing ReputationStore interface.
 
-| Local Type | File | Hounfour Canonical | Gap |
-|---|---|---|---|
-| `TaskType` (fixed 5-type array) | `types/reputation-evolution.ts:36-45` | `TaskTypeSchema` (open enum + namespace:type) | Local is subset of protocol |
-| `TaskTypeCohort` (ModelCohort &) | `types/reputation-evolution.ts:62-65` | `TaskTypeCohortSchema` (+confidence_threshold) | Missing protocol field |
-| `ReputationEvent` (generic payload) | `types/reputation-evolution.ts:104-111` | `ReputationEventSchema` (3-variant discriminated union) | Underspecified stub |
-| `ScoringPathLog` (3 fields) | `types/reputation-evolution.ts:122-129` | `ScoringPathLogSchema` (+hash chain, +reason, +scored_at) | Missing audit trail |
+2. **Symmetric JWT auth**: HS256 means loa-finn must share Dixie's signing secret to verify
+   tokens. ES256 (asymmetric) lets Finn verify without being able to forge — required for
+   multi-service trust.
 
-Additionally, Hounfour v7.11.0 introduces **hash chain infrastructure** (`computeScoringPathHash()`, `SCORING_PATH_GENESIS_HASH`) for scoring path audit trails — a feature Dixie should implement to complete its economic boundary observability.
+3. **Payment noop**: The x402 payment middleware is a pass-through. A config-gated scaffold
+   is needed so the payment gate can be activated with a flag when loa-finn #85 ships.
 
-**Why this matters**: Running local stubs alongside canonical protocol exports creates **drift risk**. Hounfour's types include validation schemas, conformance vectors, and constitutional constraints that local stubs lack. Every release widens the gap. The types were upstreamed *from* Dixie — adopting them back closes the loop.
+4. **Missing infrastructure wiring**: Terraform lacks DATABASE_URL/REDIS_URL/NATS_URL
+   environment variables, and the integration test environment lacks PostgreSQL.
 
-> Sources: loa-hounfour CHANGELOG v7.10.0 ("upstream shared vocabulary from Dixie"),
-> types/reputation-evolution.ts (local definitions), migration surface analysis
+## 2. Goals
 
-## 2. Product Vision
+- **G-1**: Persist reputation aggregates, task cohorts, and events in PostgreSQL with zero
+  breaking changes (InMemory fallback when DATABASE_URL is absent).
+- **G-2**: Migrate JWT issuance and verification to ES256 with JWKS endpoint for
+  cross-service verification. Dual-algorithm transition period (ES256 primary, HS256 fallback).
+- **G-3**: Build config-gated payment scaffold (`DIXIE_X402_ENABLED`) without requiring
+  `@x402/hono` package dependency.
+- **G-4**: Centralize 4 duplicated NFT ownership resolution lambdas into a shared service.
+- **G-5**: Wire production Terraform with infrastructure connection env vars.
+- **G-6**: Add PostgreSQL to integration test environment and create E2E smoke tests.
 
-**Replace Dixie's local reputation type stubs with canonical Hounfour v7.11.0 protocol imports, and implement the scoring path hash chain audit trail.**
+## 3. Non-Goals
 
-This is a **protocol adoption cycle** (like cycle-003), not a feature cycle. The types already exist on both sides — the work is replacing local definitions with shared contract imports, gaining schema validation, conformance vectors, and constitutional constraints for free.
-
-The hash chain implementation is the one genuinely new feature: each scoring path decision in `conviction-boundary.ts` will produce a hash-linked audit entry, enabling tamper-evident scoring audit trails.
-
-## 3. Success Metrics
-
-| ID | Metric | Target |
-|----|--------|--------|
-| H-1 | Local type stubs eliminated | 0 local definitions for types available in Hounfour v7.11.0 |
-| H-2 | Hounfour import coverage | All 4 type families imported from `@0xhoneyjar/loa-hounfour/governance` |
-| H-3 | Open enum adoption | TaskType accepts community namespace:type pattern per ADR-003 |
-| H-4 | Hash chain operational | Scoring path decisions produce hash-linked ScoringPathLog entries |
-| H-5 | Conformance vectors | New v7.10.0–v7.11.0 vectors pass in Dixie's conformance suite |
-| H-6 | Zero regressions | All existing tests pass (1011+ baseline) |
-| H-7 | Type audit updated | `types.ts` header comment reflects v7.11.0 import surface |
+- Full x402 payment processing (awaits loa-finn #85)
+- Multi-NFT resolution (awaits loa-finn #93)
+- NATS event streaming activation (infrastructure exists, activation deferred)
+- Database migration tooling (manual `psql -f` is sufficient for now)
 
 ## 4. Functional Requirements
 
-### FR-1: Replace Local TaskType with Hounfour Open Enum
+### FR-1: Persistent Reputation Storage (PostgresReputationStore) — P0
 
-**Current**: `types/reputation-evolution.ts:36-45` defines `TASK_TYPES` as a fixed 5-element const array and `TaskType` as a derived union type.
+**Description**: Implement `PostgresReputationStore` class that fulfills the existing
+`ReputationStore` interface (8 methods) using PostgreSQL as the backing store.
 
-**Target**: Import `TaskTypeSchema`, `TASK_TYPES`, and `type TaskType` from `@0xhoneyjar/loa-hounfour/governance`. The Hounfour version is an **open enum** (ADR-003) that accepts:
-- 5 protocol-defined literals: `code_review`, `creative_writing`, `analysis`, `summarization`, `general`
-- Community-defined pattern: `namespace:type` (e.g., `legal-guild:contract_review`)
+**Interface to implement** (from `app/src/services/reputation-service.ts:75-131`):
 
-**Acceptance Criteria**:
-- [ ] Local `TASK_TYPES` const removed from `reputation-evolution.ts`
-- [ ] Local `TaskType` type removed from `reputation-evolution.ts`
-- [ ] `TaskType` and `TASK_TYPES` imported from hounfour governance barrel
-- [ ] All files that import from `reputation-evolution.ts` updated if needed
-- [ ] Community namespace:type pattern accepted by type system
+| Method | Signature | SQL Pattern |
+|--------|-----------|-------------|
+| `get` | `(nftId: string) => Promise<ReputationAggregate \| undefined>` | `SELECT FROM reputation_aggregates WHERE nft_id = $1` |
+| `put` | `(nftId: string, aggregate: ReputationAggregate) => Promise<void>` | `INSERT ... ON CONFLICT (nft_id) DO UPDATE` |
+| `listCold` | `() => Promise<Array<{nftId, aggregate}>>` | `SELECT WHERE state = 'cold'` |
+| `count` | `() => Promise<number>` | `SELECT COUNT(*)` |
+| `listAll` | `() => Promise<Array<{nftId, aggregate}>>` | `SELECT *` |
+| `getTaskCohort` | `(nftId, model, taskType) => Promise<TaskTypeCohort \| undefined>` | `SELECT FROM reputation_task_cohorts WHERE ...` |
+| `putTaskCohort` | `(nftId, cohort) => Promise<void>` | `INSERT ... ON CONFLICT DO UPDATE` |
+| `appendEvent` | `(nftId, event) => Promise<void>` | `INSERT INTO reputation_events` |
+| `getEventHistory` | `(nftId) => Promise<ReputationEvent[]>` | `SELECT ... ORDER BY created_at ASC` |
 
-> Sources: loa-hounfour src/governance/task-type.ts:42-76, ADR-003
+**Acceptance criteria**:
+- Implements all 8 ReputationStore interface methods
+- Round-trip test: put → get returns identical aggregate (JSONB serialization)
+- `listCold()` correctly filters by state
+- `putTaskCohort` upserts on `(nft_id, model_id, task_type)` composite key
+- `appendEvent` preserves chronological insertion order
+- `getEventHistory` returns events oldest-first
+- Constructor accepts a `pg.Pool` instance (dependency injection)
 
-### FR-2: Replace Local TaskTypeCohort with Hounfour Schema
+### FR-2: ES256 JWT Migration + JWKS Endpoint — P0
 
-**Current**: `types/reputation-evolution.ts:62-65` defines `TaskTypeCohort` as `ModelCohort & { readonly task_type: TaskType }`.
+**Description**: Migrate JWT signing from HS256 (symmetric) to ES256 (asymmetric ECDSA P-256).
+Provide a JWKS endpoint for cross-service key discovery.
 
-**Target**: Import `type TaskTypeCohort` from hounfour governance. The Hounfour version adds:
-- `confidence_threshold` (integer, optional, default 30) — cold-start blending threshold
-- Uses `COHORT_BASE_FIELDS` (shared leaf module, v7.10.1)
-- `validateTaskCohortUniqueness()` helper for composite key validation
+**Dual-algorithm transition**:
+1. **Detection**: If `DIXIE_JWT_PRIVATE_KEY` starts with `-----BEGIN`, treat as PEM (ES256).
+   Otherwise, treat as raw secret (HS256 — backward compatible).
+2. **Issuance** (`auth.ts:issueJwt`): Use ES256 when PEM detected, HS256 otherwise.
+3. **Verification** (`jwt.ts`): Try ES256 first, fall back to HS256.
+4. **JWKS** (`routes/jwks.ts`): `GET /api/auth/.well-known/jwks.json` serves the public key.
 
-**Acceptance Criteria**:
-- [ ] Local `TaskTypeCohort` removed from `reputation-evolution.ts`
-- [ ] Imported from `@0xhoneyjar/loa-hounfour/governance`
-- [ ] `DixieReputationAggregate` updated to use hounfour's `TaskTypeCohort`
-- [ ] `validateTaskCohortUniqueness()` imported and used where task cohorts are constructed
+**Acceptance criteria**:
+- ES256 sign → ES256 verify round-trip works
+- HS256 existing tokens still verify (backward compatibility)
+- Config auto-detects PEM vs raw secret (no new env var needed)
+- JWKS endpoint returns valid JWK with `alg: "ES256"`, `use: "sig"`, `kid` header
+- All existing 1,146 tests pass unchanged (they use short HS256 secrets)
+- `config.ts` validation updated: ≥32 chars for HS256, PEM prefix check for ES256
 
-> Sources: loa-hounfour src/governance/task-type-cohort.ts:26-74
+### FR-3: Payment Middleware Scaffold (config-gated x402) — P1
 
-### FR-3: Replace Local ReputationEvent with Hounfour Discriminated Union
+**Description**: Replace the noop payment middleware with a config-gated scaffold that
+prepares request/response context for x402 integration.
 
-**Current**: `types/reputation-evolution.ts:104-111` defines `ReputationEvent` as a generic interface with `type` discriminator and `payload: unknown`.
+**Behavior**:
+- When `DIXIE_X402_ENABLED=false` (default): Pass-through (current behavior)
+- When `DIXIE_X402_ENABLED=true`: Set payment context headers, log payment checkpoint,
+  but still pass-through (no actual payment processing until `@x402/hono` is available)
 
-**Target**: Import the full discriminated union from hounfour governance:
-- `ReputationEvent` (union of 3 variants)
-- `QualitySignalEvent` — score (0-1), optional dimensions record, optional task_type
-- `TaskCompletedEvent` — required task_type, success boolean, optional duration_ms
-- `CredentialUpdateEvent` — credential_id (UUID), action enum
+**Acceptance criteria**:
+- Default behavior unchanged (all existing tests pass)
+- `DIXIE_X402_ENABLED=true` sets `X-Payment-Status: scaffold` response header
+- Config field `x402Enabled: boolean` added to `DixieConfig`
+- Payment middleware reads wallet from context (set by JWT middleware)
+- No dependency on `@x402/hono` package
 
-All variants share an envelope: `event_id` (UUID), `agent_id`, `collection_id`, `timestamp`, optional `sequence`.
+### FR-4: NFT Ownership Resolution Centralization — P1
 
-**Acceptance Criteria**:
-- [ ] Local `ReputationEvent` interface removed from `reputation-evolution.ts`
-- [ ] All 4 types imported from hounfour governance barrel
-- [ ] `reputation-service.ts` updated to use typed event variants (not `payload: unknown`)
-- [ ] Event construction sites produce well-typed events with required envelope fields
-- [ ] `reconstructAggregateFromEvents()` stub updated with typed event handling
+**Description**: Extract 4 duplicated NFT ownership resolution lambdas from `server.ts`
+(lines 302-315, 350-361, 397-408, 414-427) into a shared `NftOwnershipResolver` service.
 
-> Sources: loa-hounfour src/governance/reputation-event.ts:133-145
+**Current duplication** (all in `server.ts`):
+1. `createMemoryContext` — `resolveNftId: async (wallet) => { ... finnClient.request(...'/nft') }`
+2. `createScheduleRoutes` — `resolveNftOwnership: async (wallet) => { ... finnClient.request(...'/nft') }`
+3. `createLearningRoutes` — `resolveNftOwnership: async (wallet) => { ... finnClient.request(...'/nft') }`
+4. `createMemoryRoutes` — `resolveNftOwnership: async (wallet) => { ... finnClient.request(...'/ownership') }`
 
-### FR-4: Replace Local ScoringPathLog with Hounfour Schema
+**Target**: Single `NftOwnershipResolver` class that provides:
+- `resolveNftId(wallet: string): Promise<string | null>` — returns nftId only
+- `resolveOwnership(wallet: string): Promise<OwnershipResult | null>` — returns full ownership
 
-**Current**: `types/reputation-evolution.ts:122-129` defines `ScoringPathLog` with 3 fields (path, model?, task_type?).
+**Acceptance criteria**:
+- All 4 inline lambdas replaced with method references to shared resolver
+- FinnClient is injected into resolver constructor
+- No behavioral change (all existing tests pass)
+- Resolver class is independently testable
 
-**Target**: Import `ScoringPath` and `ScoringPathLog` from hounfour governance. The Hounfour version adds:
-- `model_id` (replaces `model`) — field name alignment
-- `reason` (string, max 500 chars) — human explanation
-- `scored_at` (ISO 8601) — timestamp
-- `entry_hash` (sha256: format) — content hash
-- `previous_hash` (sha256: format) — chain link
+### FR-5: Production Environment Configuration (Terraform) — P0
 
-**Acceptance Criteria**:
-- [ ] Local `ScoringPathLog` interface removed from `reputation-evolution.ts`
-- [ ] `ScoringPath` and `ScoringPathLog` imported from hounfour governance
-- [ ] Field name `model` updated to `model_id` at all usage sites
-- [ ] `conviction-boundary.ts` produces ScoringPathLog entries with all required fields
+**Description**: Add missing infrastructure connection environment variables to the ECS
+task definition in `deploy/terraform/dixie.tf`.
 
-> Sources: loa-hounfour src/governance/scoring-path-log.ts:26-81
+**Missing environment variables** (lines 284-289):
+- `DATABASE_URL` — PostgreSQL connection string (from Secrets Manager)
+- `REDIS_URL` — Redis connection string (from freeside shared Redis)
+- `NATS_URL` — NATS server URL (from freeside shared NATS)
 
-### FR-5: Implement Scoring Path Hash Chain
+**Also needed**:
+- Security group egress rules for PostgreSQL (5432) and NATS (4222)
+- Secrets Manager reference for DATABASE_URL
 
-**Current**: No hash chain implementation exists. Scoring path decisions are not hash-linked.
+**Acceptance criteria**:
+- `terraform plan` shows additive changes only (no destructive modifications)
+- DATABASE_URL sourced from Secrets Manager (contains credentials)
+- REDIS_URL and NATS_URL set as plain environment variables (no credentials)
+- New security group egress rules for ports 5432 and 4222
 
-**Target**: Implement hash chain audit trail using hounfour's `computeScoringPathHash()` and `SCORING_PATH_GENESIS_HASH`:
+### FR-6: E2E Integration Test Infrastructure — P1
 
-1. Each scoring path decision in `conviction-boundary.ts` produces a `ScoringPathLog` entry
-2. `entry_hash` is computed via `computeScoringPathHash()` (RFC 8785 canonical JSON + SHA-256)
-3. `previous_hash` chains to the prior entry's `entry_hash` (or `SCORING_PATH_GENESIS_HASH` for first entry)
-4. `scored_at` timestamp records evaluation time
-5. Hash pair constraint: both `entry_hash` and `previous_hash` present or both absent
+**Description**: Add PostgreSQL service to `docker-compose.integration.yml` and create
+E2E smoke tests that validate the full SIWE → JWT → protected endpoint flow.
 
-**Acceptance Criteria**:
-- [ ] `computeScoringPathHash` and `SCORING_PATH_GENESIS_HASH` imported from hounfour governance
-- [ ] Scoring path hash computed for each economic boundary evaluation
-- [ ] Hash chain links consecutive scoring decisions (previous_hash → prior entry_hash)
-- [ ] Genesis hash used for first entry in a chain
-- [ ] Hash chain entries include `scored_at` timestamp
-- [ ] Tests verify hash chain integrity (determinism, chain linking, genesis sentinel)
+**Acceptance criteria**:
+- `docker-compose.integration.yml` includes PostgreSQL 16 service with health check
+- `DATABASE_URL` wired to dixie-bff service in compose
+- E2E test file at `app/tests/e2e/live-integration.test.ts`
+- Tests cover: health endpoint reports PostgreSQL, auth flow issues JWT, chat proxy round-trip
+- Tests are tagged/skippable for CI (they require Docker)
 
-> Sources: loa-hounfour src/governance/scoring-path-hash.ts:49-65,
-> constraints/ScoringPathLog.constraints.json (scoring-path-hash-pair, scoring-path-chain-integrity)
+### FR-7: Reputation Database Migration (005_reputation.sql) — P0
 
-### FR-6: Update Conformance Suite
+**Description**: Create SQL migration that defines the 3 reputation tables.
 
-**Current**: Conformance suite validates against v7.9.2 schemas (7 schema types).
+**Tables**:
 
-**Target**: Extend conformance coverage to include v7.11.0 governance schemas:
-- TaskType validation (protocol + community patterns)
-- TaskTypeCohort validation (including uniqueness constraint)
-- ReputationEvent validation (all 3 variants)
-- ScoringPathLog validation (including hash chain constraints)
+```sql
+-- Table 1: reputation_aggregates
+-- Stores the main ReputationAggregate (JSONB for complex nested types)
+CREATE TABLE reputation_aggregates (
+  nft_id TEXT PRIMARY KEY,
+  state TEXT NOT NULL DEFAULT 'cold',
+  aggregate JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
-**Acceptance Criteria**:
-- [ ] Conformance suite schema enum extended with governance types
-- [ ] Sample payloads added for new schema types
-- [ ] v7.10.0–v7.11.0 conformance vectors referenced in test assertions
-- [ ] `runFullSuite()` includes governance schema validation
+-- Table 2: reputation_task_cohorts
+-- Per-model per-task reputation (composite key for uniqueness)
+CREATE TABLE reputation_task_cohorts (
+  nft_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  task_type TEXT NOT NULL,
+  cohort JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (nft_id, model_id, task_type)
+);
 
-> Sources: services/conformance-suite.ts:24-204
+-- Table 3: reputation_events (append-only event log)
+CREATE TABLE reputation_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nft_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  event JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
 
-### FR-7: Update Type Audit Documentation
+**Acceptance criteria**:
+- Migration file at `app/src/db/migrations/005_reputation.sql`
+- All three tables created with appropriate indexes
+- Index on `reputation_events(nft_id, created_at)` for chronological queries
+- Index on `reputation_aggregates(state)` for `listCold()` queries
+- JSONB storage for complex types (ReputationAggregate, TaskTypeCohort, ReputationEvent)
 
-**Current**: `types.ts` header comment documents v7.9.2 import surface (12 imports across 8 files).
+### FR-8: Health Endpoint Enhancement — P2
 
-**Target**: Update the type audit table to reflect v7.11.0 imports, including:
-- New governance barrel imports (TaskType, TaskTypeCohort, ReputationEvent variants, ScoringPathLog)
-- Hash chain utilities (computeScoringPathHash, SCORING_PATH_GENESIS_HASH)
-- ADR-001 aliasing note (GovernanceTaskType vs core TaskType)
+**Description**: Enhance the health endpoint to report reputation store type (in-memory vs
+postgres) and pool health metrics when PostgreSQL is active.
 
-**Acceptance Criteria**:
-- [ ] Type audit table in `types.ts` updated with all v7.11.0 imports
-- [ ] Protocol maturity level updated (Level 6 → Level 6+ with task-dimensional vocabulary)
-- [ ] ADR-001 collision resolution documented
+**Acceptance criteria**:
+- Health response includes `reputation_service.store_type: "memory" | "postgres"`
+- When PostgreSQL store active: include `pool_total`, `pool_idle`, `pool_waiting` counts
+- No change when using InMemoryReputationStore (backward compatible)
 
 ## 5. Non-Functional Requirements
 
-### NFR-1: Zero Breaking Changes
+| NFR | Description | Target |
+|-----|-------------|--------|
+| NFR-1 | Zero breaking API changes | All existing endpoints return identical responses |
+| NFR-2 | Backward compatibility | InMemory fallback when DATABASE_URL absent |
+| NFR-3 | Test stability | All 1,146 existing tests pass unchanged |
+| NFR-4 | New test coverage | Minimum 1 test per FR acceptance criterion |
+| NFR-5 | Migration safety | SQL migration is idempotent (`IF NOT EXISTS`) |
+| NFR-6 | Performance | PostgresReputationStore operations < 10ms p95 |
+| NFR-7 | Security | No secrets in Terraform plaintext; PEM keys via Secrets Manager |
 
-All changes are internal type replacements. No public API surface changes. No new routes, no changed response shapes. External consumers see identical behavior.
+## 6. Architecture Decisions
 
-### NFR-2: Backward Compatibility
+### AD-1: JSONB Storage for Reputation Aggregates
 
-- `DixieReputationAggregate.task_cohorts` remains optional (backward compatible with pre-task-type aggregates)
-- Hash chain fields on `ScoringPathLog` are optional per Hounfour schema (existing logs without hashes remain valid)
-- `confidence_threshold` on `TaskTypeCohort` has a default value (30) — existing cohorts without it are valid
+Store the full `ReputationAggregate` object as JSONB rather than flattening to columns.
 
-### NFR-3: Test Coverage
+**Rationale**: The aggregate contains nested arrays (`model_cohorts`, `transition_history`)
+and evolving schema (Hounfour protocol upgrades add fields). JSONB accommodates schema
+evolution without migrations. The `state` and `nft_id` columns are extracted for indexing.
 
-- All existing 1011+ tests must pass unchanged
-- New tests for: hash chain computation, chain integrity, typed event construction, open enum validation
-- Minimum 3 test scenarios per new feature per EDD policy
+**Trade-off**: Slightly more expensive queries for field-level filtering, but reputation
+queries are always by `nft_id` (point lookup) or `state` (indexed).
 
-## 6. Technical Constraints
+### AD-2: Dual-Algorithm JWT Transition
 
-| Constraint | Detail |
-|---|---|
-| Hounfour version | v7.11.0 (local: `file:../../loa-hounfour`) |
-| Import barrels | `@0xhoneyjar/loa-hounfour/governance` (primary), root barrel for aliased exports |
-| ADR-001 compliance | Use `GovernanceTaskType` alias when importing from root barrel; unaliased from governance sub-package |
-| ADR-004 compliance | TaskType assigned exogenously by routing layer — Dixie already compliant (no changes needed) |
-| Hash algorithm | SHA-256 via `@noble/hashes` (browser-compatible, not `node:crypto`) |
-| Canonicalization | RFC 8785 (JSON Canonicalization Scheme) for deterministic hash inputs |
-| Native enforcement | Constraints with `expression: "true"` sentinel require runtime validation per ADR-002 |
+Auto-detect algorithm from key format rather than adding a new config variable.
 
-## 7. Scope
+**Rationale**: PEM keys have an unambiguous `-----BEGIN` prefix. This avoids config
+proliferation and makes the transition transparent — operators just swap the secret value
+from a raw string to a PEM key. Existing deployments with HS256 secrets work unchanged.
 
-### In Scope
+### AD-3: Config-Gated Payment (No Package Dependency)
 
-- Replace 4 local type definitions with canonical hounfour imports
-- Implement scoring path hash chain audit trail
-- Extend conformance suite with governance schemas
-- Update type audit documentation
-- Add tests for all new functionality
+Build the payment scaffold without importing `@x402/hono`.
 
-### Out of Scope
+**Rationale**: The package may not be published yet (depends on loa-finn #85). The scaffold
+prepares the middleware context (wallet extraction, payment status headers) so that activating
+x402 is a single-file change when the package is ready.
 
-- E2E cross-system integration (loa-finn#66 Sprint B — separate cycle)
-- Production deployment (loa-finn#66 Sprint C — separate cycle)
-- NFT personality surfacing (loa-finn#66 Sprint D — separate cycle)
-- Event sourcing full implementation (`reconstructAggregateFromEvents()` remains stub — requires persistence layer design)
-- Community TaskType registry infrastructure (ADR-003 Tier 2 — future governance feature)
-- New API endpoints or route changes
+### AD-4: NftOwnershipResolver as Service Class
 
-## 8. Risks & Mitigations
+Extract to a class rather than a utility function.
 
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| Type shape mismatch between local stubs and hounfour schemas | Low | Medium | Migration analysis confirmed compatibility; hounfour types are supersets |
-| Hash chain performance overhead | Low | Low | Hash is computed once per scoring decision (~1ms); not on hot path |
-| `@noble/hashes` dependency | Low | Low | Already a transitive dependency of hounfour; no new dep for Dixie |
-| Open enum allowing unexpected community types | Medium | Low | Protocol types validated at schema level; community pattern validated by regex |
-| Conformance suite expansion increases test time | Low | Low | Governance schemas are small; marginal test time increase |
+**Rationale**: The resolver needs `FinnClient` injection and will gain caching/multi-NFT
+support in future phases. A class provides the right abstraction boundary.
 
-## 9. Dependencies
+## 7. Dependencies
 
-| Dependency | Type | Status |
-|---|---|---|
-| `@0xhoneyjar/loa-hounfour` v7.11.0 | Local package | Available at `../../loa-hounfour` |
-| `@noble/hashes` | Transitive (via hounfour) | Already installed |
-| Hounfour ADR-001 (barrel precedence) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-002 (native enforcement sentinel) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-003 (TaskType governance) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-004 (exogenous task type) | Meta-constraint | Already compliant |
-| Hounfour ADR-005 (enum governance) | Convention | Published in hounfour docs/adr/ |
+| Dependency | Type | Status | Impact if Unavailable |
+|------------|------|--------|----------------------|
+| loa-hounfour v7.11.0 | Package | Adopted (PR #9) | N/A — already integrated |
+| loa-finn #85 (x402 payments) | External | In progress | FR-3 scaffold-only (no actual payment) |
+| loa-finn #84 (E2E contracts) | External | In progress | FR-6 tests use existing API shape |
+| Freeside shared PostgreSQL | Infra | Available (PR #88) | FR-5 terraform references it |
+| Freeside shared Redis | Infra | Available | Already wired in Phase 2 |
 
-## 10. Estimated Effort
+## 8. Success Metrics
 
-| Sprint | Focus | Tasks (est.) |
-|---|---|---|
-| Sprint 1 | Type migration (FR-1 through FR-4) + type audit (FR-7) | 5-7 |
-| Sprint 2 | Hash chain implementation (FR-5) + conformance (FR-6) + hardening | 5-7 |
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Test count | ≥1,200 (current 1,146 + new) | `vitest --run` |
+| Reputation round-trip | < 10ms p95 | Integration test benchmarks |
+| ES256 verify latency | < 5ms | Unit test timing |
+| Zero regression | 1,146/1,146 pass | CI pipeline |
+| Terraform additive | 0 destroy/modify | `terraform plan` |
 
-**Estimated: 2 sprints.** This is a focused adoption cycle — all types are already designed and tested in hounfour. The work is mechanical replacement plus one new feature (hash chain).
+## 9. Risks
 
----
+| Risk | Probability | Impact | Mitigation |
+|------|-------------|--------|------------|
+| JSONB serialization loses type precision | Medium | High | Round-trip tests with real Hounfour types |
+| ES256 key rotation complexity | Low | Medium | Single kid, rotation support deferred |
+| x402 package API changes | Medium | Low | Scaffold is config-gated, easy to adapt |
+| PostgreSQL pool exhaustion under load | Low | High | Conservative pool size (max 10), health monitoring |
 
-*This PRD scopes the narrow adoption of loa-hounfour v7.11.0 into loa-dixie, replacing local type stubs with canonical protocol imports and implementing the scoring path hash chain audit trail. Broader launch readiness items from loa-finn#66 are deferred to subsequent cycles.*
+## 10. Sprint Decomposition (Preview)
+
+| Sprint | Focus | FRs | Est. Tasks |
+|--------|-------|-----|-----------|
+| Sprint 1 (G-65) | Persistent Reputation | FR-1, FR-7 | 5-7 |
+| Sprint 2 (G-66) | Auth Hardening | FR-2 | 5-6 |
+| Sprint 3 (G-67) | Payment & Refactor | FR-3, FR-4, FR-5 | 5-7 |
+| Sprint 4 (G-68) | E2E & Polish | FR-6, FR-8 | 4-6 |
