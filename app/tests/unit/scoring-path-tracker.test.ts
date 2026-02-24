@@ -147,6 +147,47 @@ describe('ScoringPathTracker', () => {
     expect(tracker.length).toBe(1);
   });
 
+  it('stores reputation_freshness metadata without affecting hash', () => {
+    const freshness = { sample_count: 500, newest_event_at: '2026-02-24T10:00:00Z' };
+    const entryWithMeta = tracker.record(
+      { path: 'aggregate', reason: 'With freshness' },
+      { reputation_freshness: freshness },
+    );
+
+    // Metadata is accessible via lastRecordOptions
+    expect(tracker.lastRecordOptions).toEqual({ reputation_freshness: freshness });
+    expect(tracker.lastRecordOptions?.reputation_freshness?.sample_count).toBe(500);
+
+    // Hash is NOT affected by metadata — compare with a tracker without metadata
+    tracker.reset();
+    const originalNow = Date.now;
+    const OriginalDate = globalThis.Date;
+    const fixedTime = new Date('2026-02-24T12:00:00.000Z');
+    globalThis.Date = class extends OriginalDate {
+      constructor(...args: ConstructorParameters<typeof OriginalDate>) {
+        if (args.length === 0) { super(fixedTime.getTime()); } else {
+          // @ts-expect-error -- spread into overloaded constructor
+          super(...args);
+        }
+      }
+    } as DateConstructor;
+    Date.now = () => fixedTime.getTime();
+    try {
+      const t1 = new ScoringPathTracker();
+      const t2 = new ScoringPathTracker();
+      const withMeta = t1.record({ path: 'tier_default' }, { reputation_freshness: freshness });
+      const withoutMeta = t2.record({ path: 'tier_default' });
+      expect(withMeta.entry_hash).toBe(withoutMeta.entry_hash);
+    } finally {
+      Date.now = originalNow;
+      globalThis.Date = OriginalDate;
+    }
+
+    // Reset clears metadata
+    tracker.reset();
+    expect(tracker.lastRecordOptions).toBeUndefined();
+  });
+
   it('hash pair constraint: both entry_hash and previous_hash always present', () => {
     const e1 = tracker.record({ path: 'tier_default' });
     const e2 = tracker.record({ path: 'aggregate', model_id: 'gpt-4o' });

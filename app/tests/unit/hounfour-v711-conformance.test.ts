@@ -1,9 +1,13 @@
 /**
  * Hounfour v7.11.0 Governance Conformance Tests
  * @since cycle-005 — Sprint 61 (Task 2.3)
+ * @since cycle-005 — Sprint 63 (Task 4.1 production patterns, Task 4.3 self-conformance)
  */
 import { describe, it, expect } from 'vitest';
 import { validatePayload, runFullSuite } from '../../src/services/conformance-suite.js';
+import { ScoringPathTracker } from '../../src/services/scoring-path-tracker.js';
+import { ScoringPathLogSchema, TaskTypeCohortSchema } from '@0xhoneyjar/loa-hounfour/governance';
+import { validate } from '@0xhoneyjar/loa-hounfour';
 
 describe('Hounfour v7.11.0 Governance Conformance', () => {
   describe('TaskType schema', () => {
@@ -149,6 +153,80 @@ describe('Hounfour v7.11.0 Governance Conformance', () => {
       expect(suite.failed_count).toBe(0);
       // Original 5 + 8 governance samples = 13 total
       expect(suite.total).toBeGreaterThanOrEqual(13);
+    });
+  });
+
+  // ─── Production Pattern Conformance (Sprint 63 — Task 4.1) ──────────────
+  // Validates that objects produced by actual code paths (not hand-written
+  // samples) conform to hounfour schemas. This catches edge cases in field
+  // construction, optional field handling, and type coercion that only
+  // manifest in production code paths.
+  describe('Production pattern conformance', () => {
+    it('ScoringPathTracker.record() output validates against ScoringPathLogSchema (tier_default)', () => {
+      const tracker = new ScoringPathTracker();
+      const entry = tracker.record({ path: 'tier_default', reason: 'Cold start: tier observer' });
+      const result = validatePayload('scoringPathLog', entry);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('ScoringPathTracker.record() output validates against ScoringPathLogSchema (aggregate)', () => {
+      const tracker = new ScoringPathTracker();
+      const entry = tracker.record({ path: 'aggregate', reason: 'Using aggregate personal score' });
+      const result = validatePayload('scoringPathLog', entry);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('ScoringPathTracker.record() output validates against ScoringPathLogSchema (task_cohort)', () => {
+      const tracker = new ScoringPathTracker();
+      const entry = tracker.record({
+        path: 'task_cohort',
+        model_id: 'gpt-4o',
+        task_type: 'code_review',
+        reason: 'Task-specific cohort found for gpt-4o:code_review',
+      });
+      const result = validatePayload('scoringPathLog', entry);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+  });
+
+  // ─── Re-export Barrel Self-Conformance (Sprint 63 — Task 4.3) ───────────
+  // Verifies that objects constructed through Dixie's re-export barrel types
+  // validate against the direct hounfour schemas. This is the foundation for
+  // the cross-repo conformance contract (Build-Next Proposal 1).
+  describe('Re-export barrel self-conformance', () => {
+    it('ScoringPathLog constructed via barrel type validates against direct hounfour schema', () => {
+      // Construct via the re-export barrel code path (ScoringPathTracker uses
+      // types from reputation-evolution.ts which re-exports from hounfour)
+      const tracker = new ScoringPathTracker();
+      const entry = tracker.record({
+        path: 'task_cohort',
+        model_id: 'native',
+        task_type: 'analysis',
+        reason: 'Self-conformance test',
+      });
+
+      // Validate against the DIRECT hounfour schema import
+      const result = validate(ScoringPathLogSchema, entry);
+      expect(result.valid).toBe(true);
+    });
+
+    it('TaskTypeCohort constructed from barrel types validates against direct hounfour schema', () => {
+      // Construct a TaskTypeCohort object matching the barrel-exported type shape
+      const cohort = {
+        model_id: 'gpt-4o',
+        personal_score: 0.87,
+        sample_count: 150,
+        last_updated: new Date().toISOString(),
+        task_type: 'code_review' as const,
+        confidence_threshold: 30,
+      };
+
+      // Validate against the DIRECT hounfour schema import
+      const result = validate(TaskTypeCohortSchema, cohort);
+      expect(result.valid).toBe(true);
     });
   });
 });

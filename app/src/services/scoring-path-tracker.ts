@@ -21,6 +21,32 @@ import {
 import type { ScoringPathLog } from '../types/reputation-evolution.js';
 
 /**
+ * Temporal context for reputation data used in a scoring decision.
+ * Answers: "how fresh was the reputation data that informed this access decision?"
+ *
+ * A score of 0.87 from 500 recent samples is very different from 0.87 from
+ * 50 ancient samples — but without freshness metadata, the scoring path
+ * records both identically. This interface closes that gap.
+ *
+ * @since cycle-005 — Sprint 63, Task 4.2 (Bridge deep review Q3: temporal blindness)
+ */
+export interface ReputationFreshness {
+  readonly sample_count: number;
+  readonly newest_event_at?: string;
+}
+
+/**
+ * Options for recording a scoring path entry with additional metadata.
+ * Metadata is stored alongside the entry but NOT included in the hash input
+ * (freshness is observational, not part of the audit commitment).
+ *
+ * @since cycle-005 — Sprint 63, Task 4.2
+ */
+export interface RecordOptions {
+  reputation_freshness?: ReputationFreshness;
+}
+
+/**
  * ScoringPathTracker — stateful hash chain manager.
  *
  * Usage:
@@ -35,6 +61,7 @@ import type { ScoringPathLog } from '../types/reputation-evolution.js';
 export class ScoringPathTracker {
   private lastHash: string = SCORING_PATH_GENESIS_HASH;
   private entryCount: number = 0;
+  private _lastRecordOptions?: RecordOptions;
 
   /**
    * Build the content fields shared between hash input and return value.
@@ -60,9 +87,13 @@ export class ScoringPathTracker {
    * Record a scoring path entry, computing its hash and linking to the chain.
    *
    * @param entry - Partial ScoringPathLog with content fields (path, model_id, task_type, reason)
+   * @param options - Optional metadata (reputation_freshness). Stored alongside entry, not hashed.
    * @returns Complete ScoringPathLog with entry_hash, previous_hash, and scored_at
    */
-  record(entry: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'>): ScoringPathLog {
+  record(
+    entry: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'>,
+    options?: RecordOptions,
+  ): ScoringPathLog {
     const scored_at = new Date().toISOString();
     const contentFields = this.buildContentFields(entry, scored_at);
 
@@ -70,6 +101,7 @@ export class ScoringPathTracker {
     const previous_hash = this.lastHash;
     this.lastHash = entry_hash;
     this.entryCount++;
+    this._lastRecordOptions = options;
 
     return {
       ...contentFields,
@@ -82,6 +114,7 @@ export class ScoringPathTracker {
   reset(): void {
     this.lastHash = SCORING_PATH_GENESIS_HASH;
     this.entryCount = 0;
+    this._lastRecordOptions = undefined;
   }
 
   /** Get the current chain tip hash. */
@@ -95,5 +128,14 @@ export class ScoringPathTracker {
    */
   get length(): number {
     return this.entryCount;
+  }
+
+  /**
+   * Get the metadata from the most recent record() call.
+   * Returns undefined if no record has been made or if no options were passed.
+   * @since cycle-005 — Sprint 63, Task 4.2 (Bridge deep review Q3)
+   */
+  get lastRecordOptions(): RecordOptions | undefined {
+    return this._lastRecordOptions;
   }
 }

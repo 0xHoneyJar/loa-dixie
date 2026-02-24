@@ -294,12 +294,25 @@ export function evaluateEconomicBoundaryForWallet(
     }
   }
 
-  // Record scoring path — with hash chain when tracker is provided, plain object otherwise
-  const scoringPath: ScoringPathLog = tracker ? tracker.record(scoringPathInput) : scoringPathInput;
+  // Compute reputation freshness when aggregate is available (Sprint 63 — Q3 temporal blindness)
+  const reputationFreshness = reputationAggregate
+    ? { sample_count: reputationAggregate.sample_count, newest_event_at: reputationAggregate.last_updated }
+    : undefined;
 
-  // Log the scoring path for observability (Sprint 10 — Task 10.4)
-  // Using console.debug for minimal overhead; structured logging in production.
-  console.debug('[conviction-boundary] scoring_path:', JSON.stringify(scoringPath));
+  // Record scoring path — with hash chain when tracker is provided, plain object otherwise
+  const scoringPath: ScoringPathLog = tracker
+    ? tracker.record(scoringPathInput, { reputation_freshness: reputationFreshness })
+    : scoringPathInput;
+
+  // Structured provenance log: what happened, with what data, and how fresh
+  // (Sprint 63 — Task 4.4, Bridge deep review Q3)
+  console.debug('[conviction-boundary] scoring_path:', JSON.stringify({
+    ...scoringPath,
+    wallet,
+    tier,
+    blending_used: !!reputationAggregate,
+    reputation_freshness: reputationFreshness,
+  }));
 
   const trustSnapshot: TrustLayerSnapshot = {
     reputation_state: reputationState,
