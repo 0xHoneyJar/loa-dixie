@@ -1,31 +1,31 @@
 import { createMiddleware } from 'hono/factory';
 
-// DECISION: x402 as the Conway-Ostrom bridge (economic plumbing under community governance)
-// The payment middleware is positioned after allowlist (community gate), making economic
-// flows subordinate to community membership. This is the architectural bridge between
-// Conway's autonomous economic agency and Ostrom's community governance: x402 provides
-// the economic plumbing, but community governance decides who uses it.
-// See: grimoires/loa/context/adr-conway-positioning.md
-
 /**
- * x402 Payment Gate — Micropayment Middleware Hook Point
+ * x402 Payment Gate — Config-gated micropayment middleware.
  *
- * This middleware slot is reserved for `@x402/hono` integration (loa-freeside #62).
- * Currently a pass-through noop. When activated, it will:
- *
- * 1. Read the wallet address from the JWT context (set by jwt.ts)
- * 2. Check the x402 payment status for the request
- * 3. Return 402 Payment Required if the user's balance is insufficient
- * 4. Attach payment receipt to the response on success
+ * When x402Enabled is false (default): pass-through noop.
+ * When x402Enabled is true: sets X-Payment-Status header on responses.
+ * Full payment enforcement requires @x402/hono integration (loa-freeside #62).
  *
  * Pipeline position: ... → rateLimit → allowlist → **payment** → routes
  * This MUST be after JWT extraction (needs wallet) and after allowlist (don't bill denied requests).
  *
- * See: https://github.com/0xHoneyJar/loa-freeside/issues/62
+ * @since cycle-006 Sprint 3 — FR-3 Payment Middleware Scaffold
  */
-export function createPaymentGate() {
-  // HOOK: x402/hono — replace this noop with @x402/hono middleware when ready
-  return createMiddleware(async (_c, next) => {
+export function createPaymentGate(options?: { x402Enabled?: boolean }) {
+  const enabled = options?.x402Enabled ?? false;
+
+  if (!enabled) {
+    return createMiddleware(async (_c, next) => {
+      await next();
+    });
+  }
+
+  return createMiddleware(async (c, next) => {
     await next();
+    // Scaffold: set header indicating payment scaffold is active.
+    // When @x402/hono is integrated, this middleware will enforce payment
+    // and return 402 Payment Required for insufficient balance.
+    c.header('X-Payment-Status', 'scaffold');
   });
 }

@@ -53,6 +53,18 @@ variable "environment" {
   default     = "production"
 }
 
+variable "redis_url" {
+  description = "Redis connection string (Phase 2: rate limiting, caching)"
+  type        = string
+  default     = ""
+}
+
+variable "nats_url" {
+  description = "NATS server URL (Phase 2: signal emitter)"
+  type        = string
+  default     = ""
+}
+
 # -------------------------------------------------------------------
 # CloudWatch Log Group
 # -------------------------------------------------------------------
@@ -105,6 +117,10 @@ data "aws_secretsmanager_secret" "dixie_jwt_key" {
 
 data "aws_secretsmanager_secret" "dixie_admin_key" {
   name = "dixie/admin-key"
+}
+
+data "aws_secretsmanager_secret" "dixie_database_url" {
+  name = "dixie/database-url"
 }
 
 # -------------------------------------------------------------------
@@ -286,7 +302,9 @@ resource "aws_ecs_task_definition" "dixie" {
         { name = "FINN_URL", value = var.finn_service_url },
         { name = "NODE_ENV", value = var.environment },
         { name = "DIXIE_ALLOWLIST_PATH", value = "/data/allowlist.json" },
-        { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://tempo.freeside.local:4317" }
+        { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://tempo.freeside.local:4317" },
+        { name = "REDIS_URL", value = var.redis_url },
+        { name = "NATS_URL", value = var.nats_url }
       ]
 
       secrets = [
@@ -297,6 +315,10 @@ resource "aws_ecs_task_definition" "dixie" {
         {
           name      = "DIXIE_ADMIN_KEY"
           valueFrom = data.aws_secretsmanager_secret.dixie_admin_key.arn
+        },
+        {
+          name      = "DATABASE_URL"
+          valueFrom = data.aws_secretsmanager_secret.dixie_database_url.arn
         }
       ]
 

@@ -44,6 +44,7 @@ import { ReputationService, InMemoryReputationStore } from './services/reputatio
 import { PostgresReputationStore } from './db/pg-reputation-store.js';
 import { EnrichmentService } from './services/enrichment-service.js';
 import { createEnrichmentRoutes } from './routes/enrich.js';
+import { NftOwnershipResolver } from './services/nft-ownership-resolver.js';
 import type { TBAVerification } from './types/agent-api.js';
 import { createDbPool, type DbPool } from './db/client.js';
 import { createRedisClient, type RedisClient } from './services/redis-client.js';
@@ -195,6 +196,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     : new InMemoryReputationStore();
   const reputationService = new ReputationService(reputationStore);
 
+  // Phase 3: Centralized NFT identity resolution (replaces 4 inline lambdas)
+  const nftResolver = new NftOwnershipResolver(finnClient);
+
   // Phase 2: Enrichment service for autopoietic loop (Sprint 11, Task 11.1)
   // Assembles governance context from in-memory caches for review prompt enrichment.
   // All data sourced from in-memory caches — no database calls in the hot path.
@@ -290,8 +294,8 @@ export function createDixieApp(config: DixieConfig): DixieApp {
 
   // HOOK: x402 payment gate — micropayment middleware slot (loa-freeside #62)
   // Position: after allowlist (don't bill denied requests), before routes
-  // Replace with @x402/hono when ready. See: app/src/middleware/payment.ts
-  app.use('/api/*', createPaymentGate());
+  // Config-gated: sets X-Payment-Status header when DIXIE_X402_ENABLED=true
+  app.use('/api/*', createPaymentGate({ x402Enabled: config.x402Enabled }));
 
   // --- Phase 2 Position 13: Conviction tier resolution ---
   // Resolves wallet → BGT staking → conviction tier (5-tier commons governance)
@@ -303,19 +307,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Graceful degradation: failure doesn't block request
   app.use('/api/*', createMemoryContext({
     memoryStore,
-    resolveNftId: async (wallet: string) => {
-      // Resolve nftId from wallet via loa-finn identity graph
-      // Returns null if wallet has no associated dNFT
-      try {
-        const result = await finnClient.request<{ nftId: string }>(
-          'GET',
-          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
-        );
-        return result.nftId;
-      } catch {
-        return null;
-      }
-    },
+    resolveNftId: (wallet) => nftResolver.resolveNftId(wallet),
   }));
 
   // --- Phase 2 Position 15: Economic metadata ---
@@ -354,20 +346,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     scheduleStore,
     convictionResolver,
     callbackSecret: config.scheduleCallbackSecret,
-    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
-    // resolve the primary. Multi-NFT support tracked in loa-finn issue
-    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
-    resolveNftOwnership: async (wallet: string) => {
-      try {
-        const result = await finnClient.request<{ nftId: string }>(
-          'GET',
-          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
-        );
-        return result;
-      } catch {
-        return null;
-      }
-    },
+    resolveNftOwnership: (wallet) => nftResolver.resolveOwnership(wallet),
   }));
 
   // --- Phase 2: Enrichment API — autopoietic loop activation (Sprint 11) ---
@@ -401,38 +380,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   }));
   app.route('/api/learning', createLearningRoutes({
     learningEngine,
-    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
-    // resolve the primary. Multi-NFT support tracked in loa-finn issue
-    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
-    resolveNftOwnership: async (wallet: string) => {
-      try {
-        const result = await finnClient.request<{ nftId: string }>(
-          'GET',
-          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
-        );
-        return result;
-      } catch {
-        return null;
-      }
-    },
+    resolveNftOwnership: (wallet) => nftResolver.resolveOwnership(wallet),
   }));
   app.route('/api/memory', createMemoryRoutes({
     memoryStore,
-    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
-    // resolve the primary. Multi-NFT support tracked in loa-finn issue
-    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
-    resolveNftOwnership: async (wallet: string) => {
-      try {
-        const result = await finnClient.request<{
-          nftId: string;
-          ownerWallet: string;
-          delegatedWallets: string[];
-        }>('GET', `/api/identity/wallet/${encodeURIComponent(wallet)}/ownership`);
-        return result;
-      } catch {
-        return null;
-      }
-    },
+    resolveNftOwnership: (wallet) => nftResolver.resolveFullOwnership(wallet),
   }));
 
   // --- Resource governance registration (Task 20.5) ---
