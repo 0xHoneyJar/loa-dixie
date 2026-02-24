@@ -74,6 +74,8 @@ export interface ServiceHealth {
   status: 'healthy' | 'degraded' | 'unreachable';
   latency_ms?: number;
   error?: string;
+  /** Protocol-compatible circuit state (snake_case: 'half_open', not 'half-open') */
+  circuit_state?: HounfourCircuitState;
 }
 
 /** Aggregated health response */
@@ -142,6 +144,10 @@ export function toProtocolCircuitState(state: CircuitState): _HounfourCircuitSta
  * back to Dixie's kebab-case 'half-open'.
  *
  * Use this when ingesting circuit state from protocol-level sources.
+ *
+ * **Intended consumers**: Protocol conformance tests (verifying round-trip mapping),
+ * future webhook handlers that receive circuit state from Hounfour-aware services,
+ * and any inbound protocol integration that delivers snake_case state values.
  *
  * @since Sprint 5 — LOW-1 (Bridge iter1 deferred finding)
  */

@@ -114,7 +114,18 @@ export function enrichStream(
     }
   }
 
-  // INJECT AFTER 'done': economic metadata
+  // INJECT AFTER 'done': economic metadata (incomplete when usage missing)
+  if (doneEvent && !usageData) {
+    console.warn('[stream-enricher] incomplete economic event — usage data missing');
+    enriched.push({
+      type: 'economic',
+      cost_micro_usd: 0,
+      model: context.model ?? 'unknown',
+      tokens: { prompt: 0, completion: 0, memory_context: 0, knowledge: 0, total: 0 },
+      incomplete: true,
+    });
+  }
+
   if (doneEvent && usageData) {
     const model = context.model ?? 'unknown';
     const promptTokens = usageData.prompt_tokens;
@@ -159,7 +170,9 @@ export function enrichStream(
       };
 
       // Fire-and-forget — never blocks the response
-      signalEmitter.publish('dixie.signal.interaction', signal as unknown as Record<string, unknown>).catch(() => {});
+      signalEmitter.publish('dixie.signal.interaction', signal as unknown as Record<string, unknown>).catch((err) => {
+        console.warn('[signal-loss]', { event: 'stream_interaction', error: String(err) });
+      });
     }
   }
 

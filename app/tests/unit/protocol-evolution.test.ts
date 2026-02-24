@@ -404,6 +404,180 @@ describe('Task 12.2: Migration Proposal Generator', () => {
   });
 });
 
+// ─── Sprint 56 — Task 2.3: Protocol Evolution Edge Cases ────────────
+
+describe('Task 2.3: Protocol Evolution Edge Cases', () => {
+  it('generates empty proposal for empty manifest', () => {
+    const manifest: ProtocolChangeManifest = {
+      from_version: '7.9.2',
+      to_version: '7.9.3',
+      computed_at: new Date().toISOString(),
+      new_validators: [],
+      deprecated_validators: [],
+      new_evaluators: [],
+      removed_evaluators: [],
+      new_fields: [],
+      removed_fields: [],
+      breaking_changes: [],
+      total_changes: 0,
+    };
+
+    const proposal = generateMigrationProposal(manifest);
+
+    expect(proposal.items).toHaveLength(0);
+    expect(proposal.summary.total_items).toBe(0);
+    expect(proposal.summary.required_count).toBe(0);
+    expect(proposal.summary.recommended_count).toBe(0);
+    expect(proposal.summary.optional_count).toBe(0);
+    expect(proposal.summary.has_breaking_changes).toBe(false);
+    expect(proposal.summary.estimated_total_effort).toBe('< 1 hour');
+  });
+
+  it('handles manifest with only breaking changes', () => {
+    const manifest: ProtocolChangeManifest = {
+      from_version: '7.9.2',
+      to_version: '8.0.0',
+      computed_at: new Date().toISOString(),
+      new_validators: [],
+      deprecated_validators: [
+        { category: 'deprecated_validator', description: 'Removed: oldValidator', affected: 'oldValidator', severity: 'breaking' },
+        { category: 'deprecated_validator', description: 'Removed: legacyAuth', affected: 'legacyAuth', severity: 'breaking' },
+      ],
+      new_evaluators: [],
+      removed_evaluators: [],
+      new_fields: [],
+      removed_fields: [
+        { category: 'removed_field', description: 'Removed: OldSchema', affected: 'OldSchema', severity: 'breaking' },
+      ],
+      breaking_changes: [
+        { category: 'breaking_change', description: 'Breaking!', affected: 'oldValidator', severity: 'breaking' },
+        { category: 'breaking_change', description: 'Breaking!', affected: 'legacyAuth', severity: 'breaking' },
+        { category: 'breaking_change', description: 'Breaking!', affected: 'OldSchema', severity: 'breaking' },
+      ],
+      total_changes: 3,
+    };
+
+    const proposal = generateMigrationProposal(manifest);
+
+    expect(proposal.summary.has_breaking_changes).toBe(true);
+    expect(proposal.summary.required_count).toBe(3); // 2 deprecated + 1 removed_field
+    expect(proposal.summary.recommended_count).toBe(0);
+    expect(proposal.summary.optional_count).toBe(0);
+    // All items should be required
+    for (const item of proposal.items) {
+      expect(item.priority).toBe('required');
+    }
+  });
+
+  it('handles manifest with mixed priorities and sorts correctly', () => {
+    const manifest: ProtocolChangeManifest = {
+      from_version: '7.9.2',
+      to_version: '7.10.0',
+      computed_at: new Date().toISOString(),
+      new_validators: [
+        { category: 'new_validator', description: 'New: alpha', affected: 'alpha', severity: 'informational' },
+      ],
+      deprecated_validators: [
+        { category: 'deprecated_validator', description: 'Removed: beta', affected: 'beta', severity: 'breaking' },
+      ],
+      new_evaluators: [
+        { category: 'new_evaluator', description: 'New eval: Gamma', affected: 'Gamma', severity: 'advisory' },
+      ],
+      removed_evaluators: [
+        { category: 'removed_evaluator', description: 'Removed eval: Delta', affected: 'Delta', severity: 'advisory' },
+      ],
+      new_fields: [
+        { category: 'new_field', description: 'New schema: Epsilon', affected: 'Epsilon', severity: 'informational' },
+      ],
+      removed_fields: [],
+      breaking_changes: [],
+      total_changes: 5,
+    };
+
+    const proposal = generateMigrationProposal(manifest);
+
+    expect(proposal.items).toHaveLength(5);
+    // First: required (deprecated_validator beta)
+    expect(proposal.items[0].priority).toBe('required');
+    expect(proposal.items[0].affected).toBe('beta');
+    // Then: recommended (new_evaluator + removed_evaluator)
+    expect(proposal.items[1].priority).toBe('recommended');
+    expect(proposal.items[2].priority).toBe('recommended');
+    // Then: optional (new_validator + new_field)
+    expect(proposal.items[3].priority).toBe('optional');
+    expect(proposal.items[4].priority).toBe('optional');
+  });
+
+  it('generateMigrationProposal assigns unique MIG IDs', () => {
+    const manifest: ProtocolChangeManifest = {
+      from_version: '7.9.2',
+      to_version: '7.10.0',
+      computed_at: new Date().toISOString(),
+      new_validators: [
+        { category: 'new_validator', description: 'A', affected: 'a', severity: 'informational' },
+        { category: 'new_validator', description: 'B', affected: 'b', severity: 'informational' },
+        { category: 'new_validator', description: 'C', affected: 'c', severity: 'informational' },
+      ],
+      deprecated_validators: [],
+      new_evaluators: [],
+      removed_evaluators: [],
+      new_fields: [],
+      removed_fields: [],
+      breaking_changes: [],
+      total_changes: 3,
+    };
+
+    const proposal = generateMigrationProposal(manifest);
+    const ids = proposal.items.map(i => i.id);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+  });
+
+  it('ProtocolDiffEngine handles snapshot with no validators', () => {
+    const engine = new ProtocolDiffEngine();
+    const emptySnap: SchemaRegistrySnapshot = {
+      version: '0.0.0',
+      snapshot_at: new Date().toISOString(),
+      validator_names: [],
+      cross_field_schemas: [],
+      schema_ids: [],
+    };
+    engine.registerSnapshot(emptySnap);
+
+    const currentSnap = engine.snapshotCurrentVersion();
+    const manifest = engine.diffVersions('0.0.0', currentSnap.version);
+
+    // All current validators should show as "new"
+    expect(manifest.new_validators.length).toBe(currentSnap.validator_names.length);
+    expect(manifest.deprecated_validators).toHaveLength(0);
+  });
+
+  it('effort estimation handles edge cases', () => {
+    // Many large items → multi-day estimate
+    const manifest: ProtocolChangeManifest = {
+      from_version: '7.0.0',
+      to_version: '8.0.0',
+      computed_at: new Date().toISOString(),
+      new_validators: [],
+      deprecated_validators: [],
+      new_evaluators: [],
+      removed_evaluators: [],
+      new_fields: [],
+      removed_fields: [
+        { category: 'removed_field', description: 'R1', affected: 'A', severity: 'breaking' },
+        { category: 'removed_field', description: 'R2', affected: 'B', severity: 'breaking' },
+        { category: 'removed_field', description: 'R3', affected: 'C', severity: 'breaking' },
+      ],
+      breaking_changes: [],
+      total_changes: 3,
+    };
+
+    const proposal = generateMigrationProposal(manifest);
+    // 3 large items × 16 hours = 48 hours → ~6 days
+    expect(proposal.summary.estimated_total_effort).toMatch(/~\d+ days/);
+  });
+});
+
 // ─── Task 12.3: translateReason Sunset Phase 2 ──────────────────────
 
 describe('Task 12.3: translateReason sunset — code map completeness', () => {

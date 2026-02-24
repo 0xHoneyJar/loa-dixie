@@ -78,6 +78,8 @@ export interface ReputationStore {
   listCold(): Promise<Array<{ nftId: string; aggregate: ReputationAggregate }>>;
   /** Return the total number of stored aggregates. */
   count(): Promise<number>;
+  /** List all aggregates. Used for tier distribution scans. */
+  listAll(): Promise<Array<{ nftId: string; aggregate: ReputationAggregate }>>;
 
   /**
    * Retrieve a task-type cohort for a specific NFT, model, and task type.
@@ -173,6 +175,10 @@ export class InMemoryReputationStore implements ReputationStore {
 
   async count(): Promise<number> {
     return this.store.size;
+  }
+
+  async listAll(): Promise<Array<{ nftId: string; aggregate: ReputationAggregate }>> {
+    return Array.from(this.store.entries()).map(([nftId, aggregate]) => ({ nftId, aggregate }));
   }
 
   /**

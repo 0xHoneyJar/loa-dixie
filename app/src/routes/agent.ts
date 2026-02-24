@@ -2,7 +2,15 @@ import { Hono } from 'hono';
 import type { FinnClient } from '../proxy/finn-client.js';
 import type { ConvictionResolver } from '../services/conviction-resolver.js';
 import type { MemoryStore } from '../services/memory-store.js';
-import { getRequestContext } from '../validation.js';
+import {
+  isValidPathParam,
+  getRequestContext,
+  AGENT_QUERY_MAX_LENGTH,
+  AGENT_MAX_TOKENS_MIN,
+  AGENT_MAX_TOKENS_MAX,
+  AGENT_KNOWLEDGE_DOMAIN_MAX_LENGTH,
+} from '../validation.js';
+import { handleRouteError } from '../utils/error-handler.js';
 import { getCorpusMeta, corpusMeta } from '../services/corpus-meta.js';
 import { generateDisclaimer } from '../services/freshness-disclaimer.js';
 import { tierMeetsRequirement } from '../types/conviction.js';
@@ -46,18 +54,17 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
   const agentRequestCounts = new Map<string, { timestamps: number[]; lastAccess: number }>();
   // Daily request counts — keyed by `${agentTba}:${YYYY-MM-DD}` for auto-rollover (Bridge iter2-low-1)
   const agentDailyCounts = new Map<string, number>();
-  let lastCleanup = Date.now();
 
-  const cleanupStaleEntries = (now: number) => {
-    // Run cleanup every 60 seconds
-    if (now - lastCleanup < 60_000) return;
-    lastCleanup = now;
-    const windowStart = now - 60_000;
-    const today = new Date(now).toISOString().split('T')[0]!;
+  const cleanupStaleEntries = () => {
+    const start = Date.now();
+    const windowStart = start - 60_000;
+    const today = new Date(start).toISOString().split('T')[0]!;
+    let evicted = 0;
     for (const [key, entry] of agentRequestCounts) {
       entry.timestamps = entry.timestamps.filter((t) => t > windowStart);
       if (entry.timestamps.length === 0) {
         agentRequestCounts.delete(key);
+        evicted++;
       }
     }
     // Evict LRU if still over limit
@@ -66,12 +73,14 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       const evictCount = agentRequestCounts.size - MAX_TRACKED_AGENTS;
       for (let i = 0; i < evictCount; i++) {
         agentRequestCounts.delete(sorted[i]![0]);
+        evicted++;
       }
     }
     // Evict stale daily entries (past dates) and enforce MAX_TRACKED cap
     for (const key of agentDailyCounts.keys()) {
       if (!key.endsWith(today)) {
         agentDailyCounts.delete(key);
+        evicted++;
       }
     }
     if (agentDailyCounts.size > MAX_TRACKED_AGENTS) {
@@ -80,15 +89,27 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
       const evictCount = agentDailyCounts.size - MAX_TRACKED_AGENTS;
       for (let i = 0; i < evictCount; i++) {
         agentDailyCounts.delete(entries[i]![0]);
+        evicted++;
       }
     }
+    const durationMs = Date.now() - start;
+    if (evicted > 0) {
+      console.debug('[rate-limit] cleanup', { evicted, durationMs });
+    }
   };
+
+  // Lazy expiration: cleanup runs on a 60s interval instead of the request path
+  // (moved off-path in Sprint 56 — Task 2.2 for latency improvement).
+  // The 60s lag is intentional — stale entries persist up to one minute past their
+  // window, which is conservative and correct for a security boundary (rate limiting
+  // should over-count, not under-count). `.unref()` ensures this interval doesn't
+  // prevent graceful Node.js process shutdown.
+  const cleanupInterval = setInterval(cleanupStaleEntries, 60_000);
+  cleanupInterval.unref();
 
   const agentRateLimit = async (agentTba: string): Promise<{ allowed: boolean; retryAfter?: number }> => {
     const now = Date.now();
     const windowStart = now - 60_000;
-
-    cleanupStaleEntries(now);
 
     let entry = agentRequestCounts.get(agentTba);
     if (!entry) {
@@ -155,6 +176,21 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     const body = await c.req.json<AgentQueryRequest>().catch(() => null);
     if (!body || !body.query) {
       return c.json({ error: 'invalid_request', message: 'query field required' }, 400);
+    }
+
+    // Input validation (Sprint 56 — Task 2.1: match chat.ts validation patterns)
+    // Constants extracted to validation.ts (Sprint 58 — Task 1.4: Bridgebuilder finding #4)
+    if (body.query.length > AGENT_QUERY_MAX_LENGTH) {
+      return c.json({ error: 'invalid_request', message: `query exceeds maximum length of ${AGENT_QUERY_MAX_LENGTH} characters` }, 400);
+    }
+    if (body.maxTokens !== undefined && (!Number.isInteger(body.maxTokens) || body.maxTokens < AGENT_MAX_TOKENS_MIN || body.maxTokens > AGENT_MAX_TOKENS_MAX)) {
+      return c.json({ error: 'invalid_request', message: `maxTokens must be an integer between ${AGENT_MAX_TOKENS_MIN} and ${AGENT_MAX_TOKENS_MAX}` }, 400);
+    }
+    if (body.sessionId !== undefined && !isValidPathParam(body.sessionId)) {
+      return c.json({ error: 'invalid_request', message: 'Invalid sessionId format' }, 400);
+    }
+    if (body.knowledgeDomain !== undefined && body.knowledgeDomain.length > AGENT_KNOWLEDGE_DOMAIN_MAX_LENGTH) {
+      return c.json({ error: 'invalid_request', message: `knowledgeDomain exceeds maximum length of ${AGENT_KNOWLEDGE_DOMAIN_MAX_LENGTH} characters` }, 400);
     }
 
     // Pre-flight budget check BEFORE incurring cost (Bridge medium-8)
@@ -255,11 +291,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
 
       return c.json(response);
     } catch (err) {
-      if (err instanceof Object && 'status' in err && 'body' in err) {
-        const bffErr = err as { status: number; body: unknown };
-        return c.json(bffErr.body, bffErr.status as 400);
-      }
-      return c.json({ error: 'internal_error', message: 'Agent query failed' }, 500);
+      return handleRouteError(c, err, 'Agent query failed');
     }
   });
 
@@ -560,11 +592,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
 
       return c.json(result, 201);
     } catch (err) {
-      if (err instanceof Object && 'status' in err && 'body' in err) {
-        const bffErr = err as { status: number; body: unknown };
-        return c.json(bffErr.body, bffErr.status as 400);
-      }
-      return c.json({ error: 'internal_error', message: 'Agent schedule creation failed' }, 500);
+      return handleRouteError(c, err, 'Agent schedule creation failed');
     }
   });
 

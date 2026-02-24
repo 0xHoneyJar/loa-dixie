@@ -1,32 +1,29 @@
 {
-  "plan_id": "plan-20260224-excellence",
-  "branch": "feature/dixie-phase2",
+  "plan_id": "plan-20260224-v200exc-bridge-iter2",
+  "branch": "feature/v2.0.0-excellence",
   "state": "JACKED_OUT",
   "timestamps": {
-    "started": "2026-02-24T15:00:00Z",
-    "last_activity": "2026-02-24T22:00:00Z"
+    "started": "2026-02-25T14:06:00Z",
+    "last_activity": "2026-02-25T14:13:00Z"
   },
   "sprints": {
-    "total": 5,
-    "completed": 5,
+    "total": 2,
+    "completed": 2,
     "current": null,
     "list": [
-      {"id": "sprint-8", "status": "completed", "cycles": 1},
-      {"id": "sprint-9", "status": "completed", "cycles": 1},
-      {"id": "sprint-10", "status": "completed", "cycles": 1},
-      {"id": "sprint-11", "status": "completed", "cycles": 1},
-      {"id": "sprint-12", "status": "completed", "cycles": 1}
+      {"id": "sprint-4", "global_id": 58, "status": "completed", "cycles": 1, "files_changed": 6},
+      {"id": "sprint-5", "global_id": 59, "status": "completed", "cycles": 1, "files_changed": 6}
     ]
   },
   "options": {
-    "from": 8,
-    "to": 12,
+    "from": 4,
+    "to": 5,
     "max_cycles": 20,
     "timeout_hours": 8
   },
   "metrics": {
-    "total_cycles": 5,
-    "total_files_changed": 30,
-    "total_findings_fixed": 9
+    "total_cycles": 2,
+    "total_files_changed": 12,
+    "total_findings_fixed": 8
   }
 }

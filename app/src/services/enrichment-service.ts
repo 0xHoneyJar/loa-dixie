@@ -195,14 +195,41 @@ export class EnrichmentService {
   // Private Assembly Methods
   // -----------------------------------------------------------------------
 
+  /** Cached tier distribution — refreshed every 5 minutes */
+  private tierDistCache: { distribution: Record<ConvictionTier, number>; expiresAt: number } | null = null;
+  private static readonly TIER_DIST_TTL_MS = 5 * 60 * 1000;
+  /** Maximum aggregates to scan before falling back to percentage estimation.
+   *  Prevents O(n) memory duplication at scale. See: Bridgebuilder finding #3. */
+  static readonly MAX_SCAN_SIZE = 10_000;
+
   /**
    * Assemble conviction tier distribution from reputation store.
    *
-   * Since we don't have a global conviction registry in-memory,
-   * we derive distribution from reputation aggregates as a proxy.
-   * Each aggregate's reputation state maps approximately to a tier.
+   * Scans all aggregates and maps reputation state to tier:
+   * - cold → observer
+   * - warming → participant
+   * - established → builder (default) or architect (blended_score >= 0.7)
+   * - authoritative → sovereign
+   *
+   * Results are cached in-memory for 5 minutes to avoid repeated scans.
+   * Falls back to hardcoded estimate if store is empty.
    */
   private async assembleConvictionContext(now: string): Promise<ConvictionContext> {
+    const distribution = await this.getTierDistribution();
+
+    return {
+      tier_distribution: distribution,
+      total_bgt_staked: 0, // Not available from in-memory caches; requires freeside aggregation
+      snapshot_at: now,
+    };
+  }
+
+  private async getTierDistribution(): Promise<Record<ConvictionTier, number>> {
+    const nowMs = Date.now();
+    if (this.tierDistCache && nowMs < this.tierDistCache.expiresAt) {
+      return this.tierDistCache.distribution;
+    }
+
     const distribution: Record<ConvictionTier, number> = {
       observer: 0,
       participant: 0,
@@ -211,24 +238,55 @@ export class EnrichmentService {
       sovereign: 0,
     };
 
-    // Count aggregates by reputation state as a proxy for tier distribution.
-    // Cold = observer, warming = participant, established = builder/architect, authoritative = sovereign
-    const count = await this.reputationService.store.count();
+    const aggregates = await this.reputationService.store.listAll();
 
-    // For the in-memory case, we approximate based on total count.
-    // A more precise implementation would scan all aggregates and map states.
-    // This keeps the hot path allocation-free.
-    distribution.observer = count > 0 ? Math.max(1, Math.floor(count * 0.3)) : 0;
-    distribution.participant = count > 0 ? Math.max(1, Math.floor(count * 0.3)) : 0;
-    distribution.builder = count > 0 ? Math.max(1, Math.floor(count * 0.25)) : 0;
-    distribution.architect = count > 0 ? Math.floor(count * 0.1) : 0;
-    distribution.sovereign = count > 0 ? Math.floor(count * 0.05) : 0;
+    if (aggregates.length === 0) {
+      // No data — use hardcoded estimate based on total count
+      const count = await this.reputationService.store.count();
+      if (count > 0) {
+        distribution.observer = Math.max(1, Math.floor(count * 0.3));
+        distribution.participant = Math.max(1, Math.floor(count * 0.3));
+        distribution.builder = Math.max(1, Math.floor(count * 0.25));
+        distribution.architect = Math.floor(count * 0.1);
+        distribution.sovereign = Math.floor(count * 0.05);
+      }
+    } else if (aggregates.length > EnrichmentService.MAX_SCAN_SIZE) {
+      // Cardinality guard — fall back to estimation to avoid O(n) memory duplication
+      console.warn('[enrichment] tier-distribution scan exceeds cardinality limit', { count: aggregates.length });
+      const count = aggregates.length;
+      distribution.observer = Math.max(1, Math.floor(count * 0.3));
+      distribution.participant = Math.max(1, Math.floor(count * 0.3));
+      distribution.builder = Math.max(1, Math.floor(count * 0.25));
+      distribution.architect = Math.floor(count * 0.1);
+      distribution.sovereign = Math.floor(count * 0.05);
+    } else {
+      for (const { aggregate } of aggregates) {
+        switch (aggregate.state) {
+          case 'cold':
+            distribution.observer++;
+            break;
+          case 'warming':
+            distribution.participant++;
+            break;
+          case 'established':
+            // Differentiate builder/architect by blended score
+            if (aggregate.blended_score !== null && aggregate.blended_score >= 0.7) {
+              distribution.architect++;
+            } else {
+              distribution.builder++;
+            }
+            break;
+          case 'authoritative':
+            distribution.sovereign++;
+            break;
+          default:
+            distribution.observer++;
+        }
+      }
+    }
 
-    return {
-      tier_distribution: distribution,
-      total_bgt_staked: 0, // Not available from in-memory caches; requires freeside aggregation
-      snapshot_at: now,
-    };
+    this.tierDistCache = { distribution, expiresAt: nowMs + EnrichmentService.TIER_DIST_TTL_MS };
+    return distribution;
   }
 
   /**

@@ -202,8 +202,8 @@ export class AutonomousEngine {
         `/api/autonomous/${encodeURIComponent(nftId)}/permissions`,
         { body: updated },
       );
-    } catch {
-      // Store locally if finn unavailable
+    } catch (err) {
+      console.warn('[signal-loss]', { event: 'autonomous_permission_write', nftId, error: String(err) });
     }
 
     // Update cache

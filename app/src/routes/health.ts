@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { FinnClient } from '../proxy/finn-client.js';
 import type { HealthResponse, ServiceHealth } from '../types.js';
+import { toProtocolCircuitState } from '../types.js';
 import type { DbPool } from '../db/client.js';
 import type { RedisClient } from '../services/redis-client.js';
 import type { SignalEmitter } from '../services/signal-emitter.js';
@@ -59,7 +60,10 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
 
     const services: HealthResponse['services'] = {
       dixie: { status: 'healthy' },
-      loa_finn: finnHealth,
+      loa_finn: {
+        ...finnHealth,
+        circuit_state: toProtocolCircuitState(deps.finnClient.circuit),
+      },
       knowledge_corpus: corpusMeta ?? undefined,
     };
 

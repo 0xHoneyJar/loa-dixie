@@ -1,43 +1,65 @@
 {
   "schema_version": 1,
-  "bridge_id": "bridge-20260224-4bf8bb",
+  "bridge_id": "bridge-20260224-v200exc",
   "state": "JACKED_OUT",
   "config": {
     "depth": 3,
     "mode": "full",
     "flatline_threshold": 0.05,
     "per_sprint": false,
-    "branch": "feature/dixie-phase2",
-    "repo": ""
+    "branch": "feature/v2.0.0-excellence",
+    "repo": "0xHoneyJar/loa-dixie"
   },
   "timestamps": {
-    "started": "2026-02-23T22:41:16Z",
-    "last_activity": "2026-02-24T23:30:00Z"
+    "started": "2026-02-24T23:55:00Z",
+    "last_activity": "2026-02-25T14:15:00Z"
   },
   "iterations": [
     {
       "iteration": 1,
-      "sprints_executed": 5,
-      "findings_count": 0,
-      "findings_addressed": 0,
-      "flatline_score": 0,
-      "note": "Sprints 8-12 (global 50-54) executed. Bridgebuilder review found no blockers. All findings are forward-looking cross-repo propagation items, not Dixie-local fixes. Natural flatline — convergence achieved."
+      "sprints": ["sprint-55", "sprint-56", "sprint-57"],
+      "global_sprints": [55, 56, 57],
+      "findings": {
+        "high": 2,
+        "medium": 4,
+        "low": 2,
+        "praise": 4,
+        "score": 16
+      },
+      "tests_after": 1076,
+      "files_changed": 27
+    },
+    {
+      "iteration": 2,
+      "sprints": ["sprint-58", "sprint-59"],
+      "global_sprints": [58, 59],
+      "findings": {
+        "high": 0,
+        "medium": 0,
+        "low": 2,
+        "praise": 0,
+        "score": 2
+      },
+      "tests_after": 1090,
+      "files_changed": 12,
+      "flatline": true
     }
   ],
   "flatline": {
-    "initial_score": 0,
-    "last_score": 0,
-    "consecutive_below_threshold": 2
+    "initial_score": 16,
+    "last_score": 2,
+    "consecutive_below_threshold": 1,
+    "delta_pct": -87.5
   },
   "metrics": {
     "total_sprints_executed": 5,
-    "total_files_changed": 30,
-    "total_findings_addressed": 9,
+    "total_files_changed": 39,
+    "total_findings_addressed": 20,
     "total_visions_captured": 0
   },
   "finalization": {
-    "ground_truth_updated": true,
-    "rtfm_passed": true,
-    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/7"
+    "ground_truth_updated": false,
+    "rtfm_passed": false,
+    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/8"
   }
 }
