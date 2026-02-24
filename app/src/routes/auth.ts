@@ -12,6 +12,8 @@ export interface AuthConfig {
   isEs256?: boolean;
   /** HS256 secret for transition-period fallback when isEs256 is true. */
   hs256FallbackSecret?: string;
+  /** Previous ES256 PEM key for key rotation fallback chain. */
+  previousEs256Key?: string;
 }
 
 // ARCH-002: Runtime body validation — TypeScript generics are erased at compile time.
@@ -92,7 +94,10 @@ export function createAuthRoutes(
     try {
       let payload: jose.JWTPayload;
       if (config.isEs256) {
-        // ES256 primary — try asymmetric first
+        // Three-step verification chain:
+        // 1. Current ES256 key (primary)
+        // 2. Previous ES256 key (rotation grace period)
+        // 3. HS256 fallback (migration transition)
         try {
           const publicKey = getEs256PublicKey(config.jwtPrivateKey);
           ({ payload } = await jose.jwtVerify(token, publicKey, {
@@ -100,7 +105,19 @@ export function createAuthRoutes(
           }));
           return c.json({ wallet: payload.sub, role: payload.role, exp: payload.exp });
         } catch {
-          // Transition fallback: try HS256 for pre-migration tokens still in flight
+          // Step 2: Try previous ES256 key if configured
+          if (config.previousEs256Key) {
+            try {
+              const prevPublicKey = createPublicKey(createPrivateKey(config.previousEs256Key));
+              ({ payload } = await jose.jwtVerify(token, prevPublicKey, {
+                issuer: config.issuer,
+              }));
+              return c.json({ wallet: payload.sub, role: payload.role, exp: payload.exp });
+            } catch {
+              // Fall through to HS256
+            }
+          }
+          // Step 3: HS256 fallback
           if (config.hs256FallbackSecret) {
             const secret = new TextEncoder().encode(config.hs256FallbackSecret);
             ({ payload } = await jose.jwtVerify(token, secret, {
@@ -108,7 +125,7 @@ export function createAuthRoutes(
             }));
             return c.json({ wallet: payload.sub, role: payload.role, exp: payload.exp });
           }
-          throw new Error('ES256 verification failed, no HS256 fallback configured');
+          throw new Error('ES256 verification failed, no fallback configured');
         }
       }
       // HS256 primary
@@ -137,6 +154,10 @@ export function createAuthRoutes(
 // NOTE: Single-PEM assumption — cache ignores the `pem` parameter after first call.
 // Call resetAuthKeyCache() between tests with different keys.
 // In production, createDixieApp is called once, so this is safe.
+//
+// KEY ROTATION: During key rotation, the process is redeployed (ECS blue-green),
+// so the cache is naturally invalidated. The new process starts with the new PEM
+// and caches the new KeyObject on first request. No explicit cache-bust needed.
 let cachedEs256PrivateKey: KeyObject | null = null;
 let cachedEs256PublicKey: KeyObject | null = null;
 

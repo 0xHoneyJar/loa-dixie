@@ -17,16 +17,27 @@ export function createJwtMiddleware(
   isEs256?: boolean,
   /** HS256 secret for transition-period fallback when isEs256 is true. */
   hs256FallbackSecret?: string,
+  /** Previous ES256 PEM key for key rotation fallback chain. */
+  previousEs256Key?: string,
 ) {
   const hs256Secret = new TextEncoder().encode(hs256FallbackSecret ?? jwtSecret);
 
-  // Lazy-cached ES256 public key — derived from PEM private key on first use.
+  // Lazy-cached ES256 public keys — derived from PEM private key on first use.
   let es256PublicKey: KeyObject | null = null;
   function getPublicKey(): KeyObject {
     if (!es256PublicKey) {
       es256PublicKey = createPublicKey(createPrivateKey(jwtSecret));
     }
     return es256PublicKey;
+  }
+
+  let es256PreviousPublicKey: KeyObject | null = null;
+  function getPreviousPublicKey(): KeyObject | null {
+    if (!previousEs256Key) return null;
+    if (!es256PreviousPublicKey) {
+      es256PreviousPublicKey = createPublicKey(createPrivateKey(previousEs256Key));
+    }
+    return es256PreviousPublicKey;
   }
 
   return createMiddleware(async (c, next) => {
@@ -36,14 +47,28 @@ export function createJwtMiddleware(
       const token = authHeader.slice(7);
       try {
         if (isEs256) {
-          // ES256 primary — try asymmetric first
+          // Three-step verification chain:
+          // 1. Current ES256 key (primary)
+          // 2. Previous ES256 key (rotation grace period)
+          // 3. HS256 fallback (migration transition)
           try {
             const { payload } = await jose.jwtVerify(token, getPublicKey(), { issuer });
             if (payload.sub) c.set('wallet', payload.sub);
             await next();
             return;
           } catch {
-            // Transition fallback: try HS256 for pre-migration tokens still in flight
+            // Step 2: Try previous ES256 key if configured
+            const prevKey = getPreviousPublicKey();
+            if (prevKey) {
+              try {
+                const { payload } = await jose.jwtVerify(token, prevKey, { issuer });
+                if (payload.sub) c.set('wallet', payload.sub);
+                await next();
+                return;
+              } catch {
+                // Fall through to HS256
+              }
+            }
           }
         }
         // HS256 verification (primary when !isEs256, fallback when isEs256)

@@ -24,6 +24,16 @@ let cachedFinnHealth: { data: ServiceHealth; expiresAt: number } | null = null;
 const HEALTHY_CACHE_TTL_MS = 30_000;
 const UNHEALTHY_CACHE_TTL_MS = 5_000;
 
+function cacheTtl(status: string): number {
+  return status === 'healthy' ? HEALTHY_CACHE_TTL_MS : UNHEALTHY_CACHE_TTL_MS;
+}
+
+/** Cached DB health probe */
+let cachedDbHealth: { data: ServiceHealth; expiresAt: number } | null = null;
+
+/** Cached Redis health probe */
+let cachedRedisHealth: { data: ServiceHealth; expiresAt: number } | null = null;
+
 export interface HealthDependencies {
   finnClient: FinnClient;
   dbPool?: DbPool | null;
@@ -160,7 +170,7 @@ async function getFinnHealth(client: FinnClient): Promise<ServiceHealth> {
       status: 'healthy',
       latency_ms: Date.now() - start,
     };
-    cachedFinnHealth = { data: result, expiresAt: now + HEALTHY_CACHE_TTL_MS };
+    cachedFinnHealth = { data: result, expiresAt: now + cacheTtl(result.status) };
     return result;
   } catch {
     const result: ServiceHealth = {
@@ -168,13 +178,18 @@ async function getFinnHealth(client: FinnClient): Promise<ServiceHealth> {
       latency_ms: Date.now() - start,
       error: 'Failed to reach loa-finn',
     };
-    cachedFinnHealth = { data: result, expiresAt: now + UNHEALTHY_CACHE_TTL_MS };
+    cachedFinnHealth = { data: result, expiresAt: now + cacheTtl(result.status) };
     return result;
   }
 }
 
 async function getDbHealth(pool: DbPool): Promise<ServiceHealth> {
-  const start = Date.now();
+  const now = Date.now();
+  if (cachedDbHealth && now < cachedDbHealth.expiresAt) {
+    return cachedDbHealth.data;
+  }
+
+  const start = now;
   try {
     const client = await pool.connect();
     try {
@@ -182,30 +197,45 @@ async function getDbHealth(pool: DbPool): Promise<ServiceHealth> {
     } finally {
       client.release();
     }
-    return { status: 'healthy', latency_ms: Date.now() - start };
+    const result: ServiceHealth = { status: 'healthy', latency_ms: Date.now() - start };
+    cachedDbHealth = { data: result, expiresAt: now + cacheTtl(result.status) };
+    return result;
   } catch (err) {
-    return {
+    const result: ServiceHealth = {
       status: 'unreachable',
       latency_ms: Date.now() - start,
       error: err instanceof Error ? err.message : 'PostgreSQL health check failed',
     };
+    cachedDbHealth = { data: result, expiresAt: now + cacheTtl(result.status) };
+    return result;
   }
 }
 
 async function getRedisHealth(client: RedisClient): Promise<ServiceHealth> {
-  const start = Date.now();
+  const now = Date.now();
+  if (cachedRedisHealth && now < cachedRedisHealth.expiresAt) {
+    return cachedRedisHealth.data;
+  }
+
+  const start = now;
   try {
     const result = await client.ping();
     if (result !== 'PONG') {
-      return { status: 'degraded', latency_ms: Date.now() - start, error: `Unexpected PING response: ${result}` };
+      const health: ServiceHealth = { status: 'degraded', latency_ms: Date.now() - start, error: `Unexpected PING response: ${result}` };
+      cachedRedisHealth = { data: health, expiresAt: now + cacheTtl(health.status) };
+      return health;
     }
-    return { status: 'healthy', latency_ms: Date.now() - start };
+    const health: ServiceHealth = { status: 'healthy', latency_ms: Date.now() - start };
+    cachedRedisHealth = { data: health, expiresAt: now + cacheTtl(health.status) };
+    return health;
   } catch (err) {
-    return {
+    const health: ServiceHealth = {
       status: 'unreachable',
       latency_ms: Date.now() - start,
       error: err instanceof Error ? err.message : 'Redis health check failed',
     };
+    cachedRedisHealth = { data: health, expiresAt: now + cacheTtl(health.status) };
+    return health;
   }
 }
 
@@ -222,5 +252,7 @@ export { getCorpusMeta } from '../services/corpus-meta.js';
 /** Reset cache — useful for testing */
 export function resetHealthCache(): void {
   cachedFinnHealth = null;
+  cachedDbHealth = null;
+  cachedRedisHealth = null;
   resetCorpusMetaCache();
 }

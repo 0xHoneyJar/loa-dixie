@@ -280,6 +280,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.use('/api/*', createJwtMiddleware(
     config.jwtPrivateKey, 'dixie-bff', config.isEs256,
     config.hs256FallbackSecret ?? undefined,
+    config.jwtPreviousKey ?? undefined,
   ));
 
   // --- Wallet bridge (SEC-003: copy wallet from context to request header) ---
@@ -334,10 +335,12 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     expiresIn: '1h',
     isEs256: config.isEs256,
     hs256FallbackSecret: config.hs256FallbackSecret ?? undefined,
+    previousEs256Key: config.jwtPreviousKey ?? undefined,
   }));
   app.route('/api/auth', createJwksRoutes({
     jwtPrivateKey: config.jwtPrivateKey,
     isEs256: config.isEs256,
+    jwtPreviousKey: config.jwtPreviousKey,
   }));
   app.route('/api/admin', createAdminRoutes(allowlistStore, config.adminKey));
   app.route('/api/ws/ticket', createWsTicketRoutes(ticketStore));

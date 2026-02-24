@@ -52,6 +52,9 @@ export interface DixieConfig {
 
   /** Old HS256 secret for the ES256 transition period. Null when not in transition. */
   hs256FallbackSecret: string | null;
+
+  /** Previous ES256 PEM key for key rotation grace period. Null when not rotating. */
+  jwtPreviousKey: string | null;
 }
 
 /**
@@ -181,5 +184,10 @@ export function loadConfig(): DixieConfig {
     // Phase 3: HS256 fallback for ES256 transition period
     // Set to the old HS256 secret during migration so in-flight tokens still verify.
     hs256FallbackSecret: process.env.DIXIE_HS256_FALLBACK_SECRET ?? null,
+
+    // Phase 3: Previous ES256 key for key rotation grace period.
+    // Set to the previous PEM key during rotation so in-flight tokens still verify.
+    // JWKS serves both keys when this is set. See key rotation runbook in jwks.ts.
+    jwtPreviousKey: process.env.DIXIE_JWT_PREVIOUS_KEY ?? null,
   };
 }
