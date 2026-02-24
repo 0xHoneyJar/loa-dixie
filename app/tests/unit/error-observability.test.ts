@@ -1,3 +1,6 @@
+// Sprint-organized test file. When sprint structure stabilizes, consider
+// consolidating into domain-organized files (e.g., error-handling.test.ts,
+// stream-enricher.test.ts) for cross-sprint coverage of the same domain.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { enrichStream } from '../../src/services/stream-enricher.js';
 import type { StreamEvent } from '../../src/types/stream-events.js';

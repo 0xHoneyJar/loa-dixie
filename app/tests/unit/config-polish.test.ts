@@ -1,3 +1,6 @@
+// Sprint-organized test file. When sprint structure stabilizes, consider
+// consolidating into domain-organized files (e.g., config.test.ts,
+// enrichment.test.ts) for cross-sprint coverage of the same domain.
 /**
  * Configuration & Protocol Polish Test Suite — Sprint 57 (Global)
  *

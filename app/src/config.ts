@@ -30,8 +30,9 @@ export interface DixieConfig {
 
   // Phase 2: Autonomous mode
   /** Cache TTL for autonomous permission lookups (seconds). Default 300.
-   *  Separate from conviction tier TTL because permission changes (revocations)
-   *  need faster propagation than tier changes (staking is slow). */
+   *  Separate config key allows independent tuning if permission revocation
+   *  propagation needs to be faster than tier change propagation (staking is slow).
+   *  Defaults match conviction TTL (300s) as a reasonable launch baseline. */
   autonomousPermissionTtlSec: number;
   autonomousBudgetDefaultMicroUsd: number;
 

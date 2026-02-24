@@ -145,6 +145,10 @@ export function toProtocolCircuitState(state: CircuitState): _HounfourCircuitSta
  *
  * Use this when ingesting circuit state from protocol-level sources.
  *
+ * **Intended consumers**: Protocol conformance tests (verifying round-trip mapping),
+ * future webhook handlers that receive circuit state from Hounfour-aware services,
+ * and any inbound protocol integration that delivers snake_case state values.
+ *
  * @since Sprint 5 — LOW-1 (Bridge iter1 deferred finding)
  */
 export function fromProtocolCircuitState(state: _HounfourCircuitState): CircuitState {

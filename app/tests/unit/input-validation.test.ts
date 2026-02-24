@@ -1,3 +1,6 @@
+// Sprint-organized test file. When sprint structure stabilizes, consider
+// consolidating into domain-organized files (e.g., wallet.test.ts,
+// agent-validation.test.ts) for cross-sprint coverage of the same domain.
 /**
  * Input Validation & Coverage Test Suite — Sprint 56 (Global)
  *

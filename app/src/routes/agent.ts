@@ -98,9 +98,14 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
     }
   };
 
-  // Run cleanup on interval instead of request path (Sprint 56 — Task 2.2)
+  // Lazy expiration: cleanup runs on a 60s interval instead of the request path
+  // (moved off-path in Sprint 56 — Task 2.2 for latency improvement).
+  // The 60s lag is intentional — stale entries persist up to one minute past their
+  // window, which is conservative and correct for a security boundary (rate limiting
+  // should over-count, not under-count). `.unref()` ensures this interval doesn't
+  // prevent graceful Node.js process shutdown.
   const cleanupInterval = setInterval(cleanupStaleEntries, 60_000);
-  cleanupInterval.unref(); // Don't keep process alive for cleanup
+  cleanupInterval.unref();
 
   const agentRateLimit = async (agentTba: string): Promise<{ allowed: boolean; retryAfter?: number }> => {
     const now = Date.now();
