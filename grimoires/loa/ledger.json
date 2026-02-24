@@ -509,13 +509,34 @@
           "label": "E2E & Polish",
           "tasks": 4,
           "status": "completed"
+        },
+        {
+          "id": "sprint-5",
+          "global_id": 69,
+          "label": "Reputation Store Maturation",
+          "tasks": 5,
+          "status": "planned"
+        },
+        {
+          "id": "sprint-6",
+          "global_id": 70,
+          "label": "Cryptographic Operations Hardening",
+          "tasks": 5,
+          "status": "planned"
+        },
+        {
+          "id": "sprint-7",
+          "global_id": 71,
+          "label": "Event Sourcing Foundation",
+          "tasks": 6,
+          "status": "planned"
         }
       ]
     }
   ],
   "active_cycle": "cycle-006",
   "active_bugfix": null,
-  "global_sprint_counter": 68,
+  "global_sprint_counter": 71,
   "bugfix_cycles": [],
   "release_cycles": [
     {
