@@ -277,7 +277,10 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.use('*', loggerMiddleware);
 
   // --- Auth middleware (extract wallet from JWT, set on context) ---
-  app.use('/api/*', createJwtMiddleware(config.jwtPrivateKey, 'dixie-bff', config.isEs256));
+  app.use('/api/*', createJwtMiddleware(
+    config.jwtPrivateKey, 'dixie-bff', config.isEs256,
+    config.hs256FallbackSecret ?? undefined,
+  ));
 
   // --- Wallet bridge (SEC-003: copy wallet from context to request header) ---
   // JWT middleware stores wallet via c.set('wallet'), but Hono sub-app boundaries
@@ -330,6 +333,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     issuer: 'dixie-bff',
     expiresIn: '1h',
     isEs256: config.isEs256,
+    hs256FallbackSecret: config.hs256FallbackSecret ?? undefined,
   }));
   app.route('/api/auth', createJwksRoutes({
     jwtPrivateKey: config.jwtPrivateKey,

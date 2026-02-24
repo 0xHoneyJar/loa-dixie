@@ -134,6 +134,9 @@ export function createAuthRoutes(
 
 // Lazy-cached ES256 key material — avoids PEM parsing on every request.
 // Uses Node.js crypto KeyObject (always extractable) instead of Web Crypto CryptoKey.
+// NOTE: Single-PEM assumption — cache ignores the `pem` parameter after first call.
+// Call resetAuthKeyCache() between tests with different keys.
+// In production, createDixieApp is called once, so this is safe.
 let cachedEs256PrivateKey: KeyObject | null = null;
 let cachedEs256PublicKey: KeyObject | null = null;
 

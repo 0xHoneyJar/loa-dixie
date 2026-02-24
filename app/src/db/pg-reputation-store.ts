@@ -89,12 +89,27 @@ export class PostgresReputationStore implements ReputationStore {
     );
   }
 
-  async getEventHistory(nftId: string): Promise<ReputationEvent[]> {
+  async getEventHistory(nftId: string, limit = 1000): Promise<ReputationEvent[]> {
     const result = await this.pool.query(
       `SELECT event FROM reputation_events
-       WHERE nft_id = $1 ORDER BY created_at ASC`,
-      [nftId],
+       WHERE nft_id = $1 ORDER BY created_at ASC LIMIT $2`,
+      [nftId, limit],
     );
     return result.rows.map((row: { event: ReputationEvent }) => row.event);
+  }
+
+  /**
+   * Count aggregates grouped by state. Used for tier distribution
+   * without loading full JSONB blobs (avoids O(n) data transfer).
+   */
+  async countByState(): Promise<Map<string, number>> {
+    const result = await this.pool.query(
+      'SELECT state, COUNT(*)::int AS count FROM reputation_aggregates GROUP BY state',
+    );
+    const map = new Map<string, number>();
+    for (const row of result.rows as Array<{ state: string; count: number }>) {
+      map.set(row.state, row.count);
+    }
+    return map;
   }
 }

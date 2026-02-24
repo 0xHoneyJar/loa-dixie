@@ -49,6 +49,9 @@ export interface DixieConfig {
   // Phase 3: x402 payment scaffold
   /** When true, payment scaffold is active (sets X-Payment-Status header). Default false. */
   x402Enabled: boolean;
+
+  /** Old HS256 secret for the ES256 transition period. Null when not in transition. */
+  hs256FallbackSecret: string | null;
 }
 
 /**
@@ -174,5 +177,9 @@ export function loadConfig(): DixieConfig {
 
     // Phase 3: x402 payment scaffold
     x402Enabled: process.env.DIXIE_X402_ENABLED === 'true',
+
+    // Phase 3: HS256 fallback for ES256 transition period
+    // Set to the old HS256 secret during migration so in-flight tokens still verify.
+    hs256FallbackSecret: process.env.DIXIE_HS256_FALLBACK_SECRET ?? null,
   };
 }

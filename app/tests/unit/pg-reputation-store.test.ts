@@ -202,7 +202,7 @@ describe('PostgresReputationStore', () => {
       expect(result).toHaveLength(2);
       expect(pool.query).toHaveBeenCalledWith(
         expect.stringContaining('ORDER BY created_at ASC'),
-        ['nft-1'],
+        ['nft-1', 1000],
       );
     });
 

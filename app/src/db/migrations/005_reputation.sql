@@ -33,6 +33,10 @@ CREATE INDEX IF NOT EXISTS idx_reputation_task_cohorts_nft
 
 -- Table 3: reputation_events (append-only event log)
 -- Source of truth for event-sourced reputation reconstruction.
+-- RETENTION STRATEGY: Events older than 90 days should be archived or pruned.
+-- Consider partitioning by month when event volume exceeds 1M rows.
+-- UUIDv4 PK creates random write patterns; migrate to UUIDv7 or BIGSERIAL
+-- when insert throughput warrants sequential key performance.
 CREATE TABLE IF NOT EXISTS reputation_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nft_id TEXT NOT NULL,

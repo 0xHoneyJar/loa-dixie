@@ -12,8 +12,6 @@
 #   curl http://localhost:3201/api/health
 #   curl http://localhost:4200/health
 
-version: "3.9"
-
 services:
   # --- PostgreSQL (reputation storage for dixie-bff) ---
   postgres:

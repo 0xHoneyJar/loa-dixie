@@ -56,16 +56,25 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     // Sprint 6 — Task 6.2: Reputation service health reporting
     // Phase 3: Enhanced with store_type and pool metrics for operational visibility
     const isPostgres = deps.reputationService?.store instanceof PostgresReputationStore;
-    const reputationStatus = deps.reputationService ? {
-      initialized: true,
-      store_type: isPostgres ? 'postgres' : 'memory',
-      aggregate_count: await deps.reputationService.store.count(),
-      ...(isPostgres && deps.dbPool ? {
-        pool_total: deps.dbPool.totalCount,
-        pool_idle: deps.dbPool.idleCount,
-        pool_waiting: deps.dbPool.waitingCount,
-      } : {}),
-    } : undefined;
+    let reputationStatus: Record<string, unknown> | undefined;
+    if (deps.reputationService) {
+      let aggregateCount: number;
+      try {
+        aggregateCount = await deps.reputationService.store.count();
+      } catch {
+        aggregateCount = -1; // Store unreachable — degrade gracefully
+      }
+      reputationStatus = {
+        initialized: true,
+        store_type: isPostgres ? 'postgres' : 'memory',
+        aggregate_count: aggregateCount,
+        ...(isPostgres && deps.dbPool ? {
+          pool_total: deps.dbPool.totalCount,
+          pool_idle: deps.dbPool.idleCount,
+          pool_waiting: deps.dbPool.waitingCount,
+        } : {}),
+      };
+    }
 
     const services: HealthResponse['services'] = {
       dixie: { status: 'healthy' },
