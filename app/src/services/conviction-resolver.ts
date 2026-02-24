@@ -10,6 +10,7 @@ import {
   type FreesideConvictionResponse,
 } from '../types/conviction.js';
 import { BffError } from '../errors.js';
+import { normalizeWallet } from '../utils/normalize-wallet.js';
 
 /**
  * Conviction Tier Resolver — resolves wallet → BGT staking → conviction tier.
@@ -40,7 +41,7 @@ export class ConvictionResolver {
     }
 
     // Admin override — always sovereign
-    if (this.adminWallets.has(wallet.toLowerCase())) {
+    if (this.adminWallets.has(normalizeWallet(wallet))) {
       return {
         tier: 'sovereign',
         bgtStaked: 0,
@@ -52,7 +53,7 @@ export class ConvictionResolver {
 
     // Try cache first
     if (this.cache) {
-      const cached = await this.cache.get(wallet.toLowerCase()).catch(() => null);
+      const cached = await this.cache.get(normalizeWallet(wallet)).catch(() => null);
       if (cached) return cached;
     }
 
@@ -94,7 +95,7 @@ export class ConvictionResolver {
    */
   async invalidate(wallet: string): Promise<void> {
     if (this.cache) {
-      await this.cache.invalidate(wallet.toLowerCase()).catch(() => {});
+      await this.cache.invalidate(normalizeWallet(wallet)).catch(() => {});
     }
   }
 
@@ -136,7 +137,7 @@ export class ConvictionResolver {
 
   private async cacheResult(wallet: string, result: ConvictionResult): Promise<void> {
     if (this.cache) {
-      await this.cache.set(wallet.toLowerCase(), {
+      await this.cache.set(normalizeWallet(wallet), {
         ...result,
         cachedAt: new Date().toISOString(),
       }).catch(() => {});
