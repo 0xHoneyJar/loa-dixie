@@ -87,4 +87,11 @@ export type {
 export type DixieReputationAggregate = ReputationAggregate & {
   /** Per-model per-task reputation cohorts. */
   readonly task_cohorts?: TaskTypeCohort[];
+  /**
+   * Per-dimension blended scores (e.g., { accuracy: 0.85, coherence: 0.72 }).
+   * Each dimension is independently dampened and blended via the same
+   * EMA + Bayesian pipeline as the overall score.
+   * @since cycle-008 — FR-7 (multi-dimensional quality decomposition)
+   */
+  readonly dimension_scores?: Readonly<Record<string, number>>;
 };

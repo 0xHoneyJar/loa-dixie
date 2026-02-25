@@ -138,6 +138,67 @@ export const DEFAULT_PSEUDO_COUNT = 10;
  */
 export const DEFAULT_COLLECTION_SCORE = 0;
 
+// ---------------------------------------------------------------------------
+// Collection Score Aggregator (FR-6: Empirical Collection Score)
+// ---------------------------------------------------------------------------
+
+/**
+ * CollectionScoreAggregator — Maintains running population statistics
+ * for Bayesian prior calibration. Replaces DEFAULT_COLLECTION_SCORE = 0
+ * with the empirically observed mean across all agents.
+ *
+ * Uses Welford's online algorithm for numerically stable mean/variance.
+ * Standard approach used by NumPy, Apache Spark, and PostgreSQL's var_pop().
+ *
+ * @since cycle-008 — FR-6 (empirical collection score)
+ */
+export class CollectionScoreAggregator {
+  private _count = 0;
+  private _mean = 0;
+  private _m2 = 0; // Welford's running sum of squares
+
+  /**
+   * Update with a new personal score observation.
+   * Uses Welford's algorithm: stable for large N, O(1) amortized.
+   */
+  update(score: number): void {
+    this._count++;
+    const delta = score - this._mean;
+    this._mean += delta / this._count;
+    const delta2 = score - this._mean;
+    this._m2 += delta * delta2;
+  }
+
+  /** Population mean. Returns 0 when no observations (fallback to DEFAULT_COLLECTION_SCORE). */
+  get mean(): number {
+    return this._count > 0 ? this._mean : DEFAULT_COLLECTION_SCORE;
+  }
+
+  /** Number of observations. */
+  get populationSize(): number {
+    return this._count;
+  }
+
+  /** Population variance (for future adaptive pseudo_count). */
+  get variance(): number {
+    return this._count > 1 ? this._m2 / this._count : 0;
+  }
+
+  /** Snapshot for persistence. */
+  toJSON(): { count: number; mean: number; m2: number } {
+    return { count: this._count, mean: this._mean, m2: this._m2 };
+  }
+
+  /** Restore from persistence snapshot. */
+  static fromJSON(data: { count: number; mean: number; m2: number }): CollectionScoreAggregator {
+    const agg = new CollectionScoreAggregator();
+    agg._count = data.count;
+    agg._mean = data.mean;
+    agg._m2 = data.m2;
+    return agg;
+  }
+}
+
 /** Result of a reputation reliability check. */
 export interface ReliabilityResult {
   readonly reliable: boolean;
@@ -368,6 +429,13 @@ export class ReputationService {
   readonly store: ReputationStore;
 
   /**
+   * Population-level statistics for Bayesian prior calibration.
+   * Tracks the empirical mean across all agents — replaces DEFAULT_COLLECTION_SCORE.
+   * @since cycle-008 — FR-6
+   */
+  readonly collectionAggregator: CollectionScoreAggregator;
+
+  /**
    * Governed resource state — tracks governance metadata for the reputation system.
    * Uses GovernanceMutation for actor-attributed version tracking.
    * @since cycle-007 — Sprint 75, Task S3-T4
@@ -376,9 +444,11 @@ export class ReputationService {
 
   /**
    * @param store - Optional persistence layer. Defaults to InMemoryReputationStore.
+   * @param collectionAggregator - Optional pre-seeded aggregator. Defaults to empty.
    */
-  constructor(store?: ReputationStore) {
+  constructor(store?: ReputationStore, collectionAggregator?: CollectionScoreAggregator) {
     this.store = store ?? new InMemoryReputationStore();
+    this.collectionAggregator = collectionAggregator ?? new CollectionScoreAggregator();
   }
 
   /**
@@ -593,17 +663,27 @@ export class ReputationService {
     timestamp: string,
   ): ReputationAggregate {
     const newSampleCount = existing.sample_count + 1;
+
+    // FR-6: Use empirical collection mean when population data available
+    const collectionScore = this.collectionAggregator.populationSize > 0
+      ? this.collectionAggregator.mean
+      : existing.collection_score;
+
     const blended = this.computeBlended({
       personalScore: newPersonalScore,
-      collectionScore: existing.collection_score,
+      collectionScore,
       sampleCount: newSampleCount,
       pseudoCount: existing.pseudo_count,
     });
+
+    // FR-6: Update population statistics with this observation
+    this.collectionAggregator.update(newPersonalScore);
 
     return {
       ...existing,
       personal_score: newPersonalScore,
       blended_score: blended,
+      collection_score: collectionScore,
       sample_count: newSampleCount,
       last_updated: timestamp,
     };
@@ -685,18 +765,12 @@ export class ReputationService {
 
   /**
    * Handle model_performance event — decompose into quality signal pipeline.
-   *
-   * The model_performance variant carries a quality_observation that feeds
-   * into the same scoring pipeline as quality_signal events. The decomposition
-   * preserves the full event for audit while using the embedded score for
-   * blended reputation computation.
+   * Wrapped in transact() so aggregate + cohort updates are atomic.
+   * Threads dimensions through computeDimensionalBlended() when present.
    *
    * @since cycle-007 — Sprint 73, Task S1-T4
-   */
-  /**
-   * Handle model_performance event — decompose into quality signal pipeline.
-   * Wrapped in transact() so aggregate + cohort updates are atomic.
    * @since cycle-008 — Sprint 82, Task 2.3 (FR-4: transactional wrapper)
+   * @since cycle-008 — Sprint 83, Task 3.5 (FR-7: dimensional blending)
    */
   private async handleModelPerformance(
     nftId: string,
@@ -715,9 +789,28 @@ export class ReputationService {
     // Update aggregate via shared helper (FR-1: consistent blended score)
     const updated = this.buildUpdatedAggregate(aggregate, dampenedScore, event.timestamp);
 
+    // FR-7: Thread dimensions when available in quality_observation
+    const dimensions = (event.quality_observation as { dimensions?: Record<string, number> }).dimensions;
+    const dixieAggregate = aggregate as DixieReputationAggregate;
+    const collectionScore = this.collectionAggregator.populationSize > 0
+      ? this.collectionAggregator.mean
+      : aggregate.collection_score;
+    const updatedWithDimensions = dimensions
+      ? {
+          ...updated,
+          dimension_scores: computeDimensionalBlended(
+            dimensions,
+            dixieAggregate.dimension_scores,
+            aggregate.sample_count,
+            collectionScore,
+            aggregate.pseudo_count,
+          ),
+        }
+      : updated;
+
     // Atomic: aggregate + cohort update (FR-4: transaction boundary)
     await this.store.transact(async (tx) => {
-      await tx.put(nftId, updated);
+      await tx.put(nftId, updatedWithDimensions);
 
       // Update task-specific cohort
       const existingCohort = await tx.getTaskCohort(nftId, event.model_id, event.task_type);
@@ -747,6 +840,39 @@ export class ReputationService {
  */
 function assertNever(x: never): never {
   throw new Error(`Unexpected event type: ${(x as { type: string }).type}`);
+}
+
+// ---------------------------------------------------------------------------
+// Dimensional Quality Blending (FR-7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Blend each quality dimension independently using the same EMA dampening
+ * + Bayesian pipeline as the overall score. "Good at review" ≠ "good at
+ * reasoning" becomes expressible.
+ *
+ * @param dimensions - New dimension scores from the quality observation
+ * @param existingDimensions - Previous dimension scores (undefined on first observation)
+ * @param sampleCount - Current sample count (before this observation)
+ * @param collectionScore - Collection prior for blending
+ * @param pseudoCount - Bayesian prior strength
+ * @returns Record of independently blended dimension scores
+ * @since cycle-008 — FR-7 (multi-dimensional quality decomposition)
+ */
+export function computeDimensionalBlended(
+  dimensions: Readonly<Record<string, number>>,
+  existingDimensions: Readonly<Record<string, number>> | undefined,
+  sampleCount: number,
+  collectionScore: number,
+  pseudoCount: number,
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const [key, score] of Object.entries(dimensions)) {
+    const existingScore = existingDimensions?.[key] ?? null;
+    const dampened = computeDampenedScore(existingScore, score, sampleCount);
+    result[key] = computeBlendedScore(dampened, collectionScore, sampleCount + 1, pseudoCount);
+  }
+  return result;
 }
 
 /**
