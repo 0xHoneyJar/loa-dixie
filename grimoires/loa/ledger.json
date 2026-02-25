@@ -551,7 +551,9 @@
       "label": "Institutional Memory \u2014 Durable Governance, Knowledge Sovereignty & the Court of Record",
       "started": "2026-02-26",
       "completed": "2026-02-26",
-      "status": "completed",
+      "status": "archived",
+      "archived": "2026-02-26T15:30:00Z",
+      "archive_path": "grimoires/loa/archive/2026-02-26-architectural-excellence",
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
@@ -607,7 +609,13 @@
       "id": "cycle-010",
       "label": "Architectural Excellence \u2014 ADR Coverage, Vision Exploration & Knowledge Sovereignty",
       "started": "2026-02-26",
-      "status": "active",
+      "completed": "2026-02-26",
+      "status": "archived",
+      "archived": "2026-02-26T15:30:00Z",
+      "archive_path": "grimoires/loa/archive/2026-02-26-architectural-excellence",
+      "source_pr": "#27",
+      "bridge_reviews": 2,
+      "bridge_flatline": true,
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
@@ -617,26 +625,26 @@
           "global_id": 79,
           "label": "ADR Coverage — Documenting the Architecture We Built",
           "tasks": 8,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-2",
           "global_id": 80,
           "label": "Invariant & Governance Documentation Hardening",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-3",
           "global_id": 81,
           "label": "Vision Exploration Issues & Propose-Learning",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         }
       ]
     }
   ],
-  "active_cycle": "cycle-010",
+  "active_cycle": null,
   "active_bugfix": null,
   "global_sprint_counter": 81,
   "bugfix_cycles": [],
