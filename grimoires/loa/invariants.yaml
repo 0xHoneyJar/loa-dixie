@@ -204,3 +204,90 @@ invariants:
         file: "app/src/services/__tests__/autopoietic-loop-v2.test.ts"
         symbol: "GovernedResource.verifyAll() covers all resources"
         note: "Integration test proving both implementations satisfy all invariants"
+
+  - id: INV-009
+    description: "Knowledge freshness — freshness_score decreases monotonically between ingestion events via exponential decay (lambda = 0.023, ~30 day half-life). Re-ingestion resets score to 1.0."
+    severity: important
+    category: bounded
+    properties:
+      - "freshness_score(t+1) <= freshness_score(t) when no ingestion event occurs between t and t+1"
+      - "score(t) = exp(-lambda * days_since_refresh) where lambda = 0.023"
+      - "Re-ingestion resets score to 1.0 and state to 'fresh'"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/knowledge-governor.ts"
+        symbol: "computeFreshnessDecay"
+        note: "Exponential decay computation with configurable lambda"
+      - repo: loa-dixie
+        file: "app/src/services/knowledge-governor.ts"
+        symbol: "verifyFreshnessBound"
+        note: "Invariant checker verifies monotonic decay between ingestion events"
+      - repo: loa-dixie
+        file: "app/tests/unit/knowledge-governor.test.ts"
+        symbol: "INV-009 freshness bound"
+        note: "Tests decay computation, state transitions, and re-ingestion reset"
+
+  - id: INV-010
+    description: "Citation integrity — every knowledge citation references an existing source in the corpus. No dangling references permitted."
+    severity: important
+    category: referential
+    properties:
+      - "For all citations c in item.citations: c.source_id exists in known_sources"
+      - "verifyCitationIntegrity() returns satisfied: false for any dangling reference"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/knowledge-governor.ts"
+        symbol: "verifyCitationIntegrity"
+        note: "Checks all citations resolve to known sources"
+      - repo: loa-dixie
+        file: "app/tests/unit/knowledge-governor.test.ts"
+        symbol: "INV-010 citation integrity"
+        note: "Tests satisfied and violation cases"
+
+  - id: INV-011
+    description: "Chain integrity — computeChainBoundHash(entry, domainTag, previousHash) is deterministic and tamper-evident. Recomputing any entry's hash from its content and predecessor must match the stored hash."
+    severity: critical
+    category: integrity
+    properties:
+      - "For all entries e: recompute(e.content, e.previous_hash) == e.entry_hash"
+      - "Modifying content OR previous_hash invalidates entry_hash"
+      - "Chain is verifiable from genesis to tip in O(n) time"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/audit-trail-store.ts"
+        symbol: "computeChainBoundHash"
+        note: "Chain-bound hash: includes previous_hash in computation"
+      - repo: loa-dixie
+        file: "app/src/services/audit-trail-store.ts"
+        symbol: "verifyIntegrity"
+        note: "Walks chain from genesis, recomputes each hash"
+      - repo: loa-dixie
+        file: "app/src/services/scoring-path-tracker.ts"
+        symbol: "verifyIntegrity"
+        note: "Independent hash chain verification for scoring path"
+      - repo: loa-dixie
+        file: "app/tests/unit/audit-trail-store.test.ts"
+        symbol: "verifyIntegrity"
+        note: "Tests chain integrity and tamper detection"
+
+  - id: INV-012
+    description: "Three-witness quorum — the GovernorRegistry maintains >= 3 registered resource types for Byzantine fault tolerance minimum quorum. The governance isomorphism is proven, not claimed."
+    severity: important
+    category: structural
+    properties:
+      - "governorRegistry.size >= 3 after initialization"
+      - "At least 3 distinct resourceType values registered"
+      - "verifyAllGovernors() returns health for all 3+ witnesses"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/governor-registry.ts"
+        symbol: "verifyAllGovernors"
+        note: "System-level verification across all registered governors"
+      - repo: loa-dixie
+        file: "app/tests/integration/governance-three-witness.test.ts"
+        symbol: "registers all three witnesses"
+        note: "Integration test proving 3 governors registered with health"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/autopoietic-loop-v2.test.ts"
+        symbol: "GovernedResource.verifyAll()"
+        note: "Proves all resource implementations satisfy invariants"
