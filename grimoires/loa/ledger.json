@@ -477,10 +477,14 @@
       "id": "cycle-006",
       "label": "Dixie Phase 3 — Production Wiring & Live Integration",
       "started": "2026-02-25",
+      "completed": "2026-02-25",
       "status": "active",
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
+      "bridge_reviews": 3,
+      "bridge_flatline": true,
+      "source_pr": "#11",
       "sprints": [
         {
           "id": "sprint-1",
