@@ -4,11 +4,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Active Task** | Cycle-007: Hounfour v8.2.0 Full Adoption — Commons Governance Substrate |
-| **Status** | Planning complete. PRD + SDD + Sprint Plan ready. Awaiting `/run sprint-plan` |
+| **Active Task** | Cycle-008: Governance Isomorphism — Unified GovernedResource<T> Platform |
+| **Status** | Sprint 1–5 implemented. Sprint 6 (Integration & Hardening) in progress. |
 | **Blocked By** | None |
-| **Next Action** | `/run sprint-plan` for autonomous implementation (or `/implement sprint-1` for manual) |
-| **Previous** | Cycle-006 archived (Phase 3 Production Wiring); Cycle-005 archived (v7.11.0 adoption) |
+| **Next Action** | Complete Sprint 6 validation, then Bridgebuilder review (run-bridge iteration 1) |
+| **Previous** | Cycle-007 (Hounfour v8.2.0 Full Adoption); Cycle-006 archived; Cycle-005 archived |
 
 ## Session Log
 
@@ -52,6 +52,27 @@
 - **v8.1.0 (BREAKING)**: `GovernanceMutation.actor_id` required; Governance Enforcement SDK (factories, checkpoints, TTL, expansion)
 - **v8.2.0**: `ModelPerformanceEvent` (4th ReputationEvent variant), `QualityObservation`, `'unspecified'` TaskType
 - **Stats**: 6,393 tests, 193 schemas, 219 vectors, 87 constraints, 499 checksums
+
+## Cycle-008 Observations
+
+| Observation | Detail |
+|-------------|--------|
+| **Governance isomorphism** | GovernedResource<TState, TEvent, TInvariant> unifies reputation and scoring-path under one protocol. The "Kubernetes CRD moment" — every resource shares identity, transitions, invariants, and audit trail. |
+| **Welford's online algorithm** | CollectionScoreAggregator solves DEFAULT_COLLECTION_SCORE=0 gap via numerically stable running mean/variance. Cold-start agents now begin at population mean (0.5 default) instead of 0. |
+| **Cross-chain verification** | Two independent hash chains (scoring path + commons AuditTrail) verified against each other — the Google Certificate Transparency pattern. Divergence triggers quarantine. |
+| **Transaction boundaries** | InMemoryReputationStore.transact() provides snapshot/restore rollback. handleQualitySignal and handleModelPerformance both wrapped for atomic multi-write consistency. |
+| **ε-greedy exploration** | ExplorationConfig with Mulberry32 seeded PRNG prevents exploitation trap. Warmup period (50 obs) prevents exploring before system has enough data. |
+| **Canonical API refactor** | evaluateEconomicBoundaryForWallet union type discrimination → three clean functions (canonical, legacy, deprecated wrapper). No behavioral change, just cleaner types. |
+| **Multi-dimensional blending** | Per-dimension EMA dampening enables accuracy and coherence to track independently. Dimension scores stored in DixieReputationAggregate.dimension_scores. |
+| **Bridgebuilder gap resolution** | All 6 gaps from cycle-007 review addressed: (1) blended score staleness, (2) transaction absence, (3) cold-start=0, (4) checkpoint never fires, (5) dual-chain divergence, (6) overloaded API. |
+
+### Deferred for Future Cycles
+
+| Item | Reason |
+|------|--------|
+| PostgreSQL ReputationStore | transact() interface ready but production adapter deferred |
+| GovernedResource for billing/knowledge/access | Pattern proven with 2 resources; extend when those services mature |
+| Dynamic contract negotiation | DynamicContract from hounfour commons not yet adopted |
 
 ## Blockers
 

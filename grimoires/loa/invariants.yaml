@@ -169,3 +169,38 @@ invariants:
         file: "app/src/services/__tests__/governance-mutation.test.ts"
         symbol: "MutationLog session lifecycle"
         note: "Verifies sessionId uniqueness, stability, and governed state integration"
+
+  - id: INV-008
+    description: "Governance isomorphism — all governed resources implement the GovernedResource<T> protocol with identity, state transitions, invariant verification, and tamper-evident audit trail. The Kubernetes CRD moment: every governed resource in the ecosystem shares one governance primitive."
+    severity: important
+    category: structural
+    properties:
+      - "Every GovernedResource has resourceId, resourceType (identity)"
+      - "Every GovernedResource exposes current state and monotonic version"
+      - "transition(event, actorId) returns TransitionResult with success/failure discrimination"
+      - "verify(invariantId) returns InvariantResult with satisfied/detail"
+      - "verifyAll() covers all declared invariants for the resource"
+      - "auditTrail is Readonly<AuditTrail> with hash chain integrity"
+      - "mutationLog is ReadonlyArray<GovernanceMutation> with actor attribution"
+      - "≥2 resource types implement the protocol (reputation, scoring-path)"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/governed-resource.ts"
+        symbol: "GovernedResource<TState, TEvent, TInvariant>"
+        note: "Interface definition with GovernedResourceBase abstract class"
+      - repo: loa-dixie
+        file: "app/src/services/reputation-service.ts"
+        symbol: "ReputationService implements GovernedResource"
+        note: "Reputation resource with INV-006 (dampening bounds) and INV-007 (session scope)"
+      - repo: loa-dixie
+        file: "app/src/services/scoring-path-tracker.ts"
+        symbol: "ScoringPathTracker implements GovernedResource"
+        note: "Scoring path resource with chain_integrity, cross_chain_consistency, checkpoint_coverage"
+      - repo: loa-dixie
+        file: "app/src/services/governor-registry.ts"
+        symbol: "GovernorRegistry.verifyAllResources"
+        note: "System-level verification across all registered GovernedResource instances"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/autopoietic-loop-v2.test.ts"
+        symbol: "GovernedResource.verifyAll() covers all resources"
+        note: "Integration test proving both implementations satisfy all invariants"
