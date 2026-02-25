@@ -180,14 +180,24 @@ describe('PostgresReputationStore', () => {
   });
 
   describe('appendEvent', () => {
-    it('inserts event with extracted type', async () => {
+    it('inserts event with extracted type inside transaction', async () => {
       const event = makeEvent('quality_signal');
-      (pool.query as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ rows: [] });
+      const mockClient = {
+        query: vi.fn().mockResolvedValue({ rows: [] }),
+        release: vi.fn(),
+      };
+      (pool as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockClient);
+
       await store.appendEvent('nft-1', event);
-      expect(pool.query).toHaveBeenCalledWith(
+
+      expect(mockClient.query).toHaveBeenCalledTimes(4); // BEGIN, INSERT, UPDATE, COMMIT
+      expect(mockClient.query).toHaveBeenNthCalledWith(1, 'BEGIN');
+      expect(mockClient.query).toHaveBeenNthCalledWith(2,
         expect.stringContaining('INSERT INTO reputation_events'),
         ['nft-1', 'quality_signal', JSON.stringify(event)],
       );
+      expect(mockClient.query).toHaveBeenNthCalledWith(4, 'COMMIT');
+      expect(mockClient.release).toHaveBeenCalled();
     });
   });
 
@@ -250,22 +260,44 @@ describe('PostgresReputationStore', () => {
   describe('appendEvent (event_count)', () => {
     it('increments event_count on aggregate row after inserting event', async () => {
       const event = makeEvent('quality_signal');
-      (pool.query as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce({ rows: [] })  // INSERT event
-        .mockResolvedValueOnce({ rows: [] }); // UPDATE event_count
+      const mockClient = {
+        query: vi.fn().mockResolvedValue({ rows: [] }),
+        release: vi.fn(),
+      };
+      (pool as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockClient);
+
       await store.appendEvent('nft-1', event);
-      expect(pool.query).toHaveBeenCalledTimes(2);
-      const secondCall = (pool.query as ReturnType<typeof vi.fn>).mock.calls[1];
-      expect(secondCall[0]).toContain('event_count = event_count + 1');
-      expect(secondCall[1]).toEqual(['nft-1']);
+
+      expect(mockClient.query).toHaveBeenCalledTimes(4); // BEGIN, INSERT, UPDATE, COMMIT
+      const updateCall = mockClient.query.mock.calls[2];
+      expect(updateCall[0]).toContain('event_count = event_count + 1');
+      expect(updateCall[1]).toEqual(['nft-1']);
     });
 
     it('does not error when aggregate row does not exist', async () => {
       const event = makeEvent('quality_signal');
-      (pool.query as ReturnType<typeof vi.fn>)
-        .mockResolvedValueOnce({ rows: [] })  // INSERT event
-        .mockResolvedValueOnce({ rowCount: 0, rows: [] }); // UPDATE finds nothing — OK
+      const mockClient = {
+        query: vi.fn().mockResolvedValue({ rowCount: 0, rows: [] }),
+        release: vi.fn(),
+      };
+      (pool as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockClient);
+
       await expect(store.appendEvent('nft-1', event)).resolves.not.toThrow();
+    });
+
+    it('rolls back on failure', async () => {
+      const event = makeEvent('quality_signal');
+      const mockClient = {
+        query: vi.fn()
+          .mockResolvedValueOnce(undefined) // BEGIN
+          .mockRejectedValueOnce(new Error('db error')), // INSERT fails
+        release: vi.fn(),
+      };
+      (pool as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockClient);
+
+      await expect(store.appendEvent('nft-1', event)).rejects.toThrow('db error');
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.release).toHaveBeenCalled();
     });
   });
 

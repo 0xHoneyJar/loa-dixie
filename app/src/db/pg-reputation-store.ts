@@ -84,17 +84,30 @@ export class PostgresReputationStore implements ReputationStore {
   }
 
   async appendEvent(nftId: string, event: ReputationEvent): Promise<void> {
-    await this.pool.query(
-      `INSERT INTO reputation_events (nft_id, event_type, event)
-       VALUES ($1, $2, $3)`,
-      [nftId, event.type, JSON.stringify(event)],
-    );
-    // Increment event_count on the aggregate row (if it exists).
-    // Missing aggregate is valid — events can precede aggregate creation.
-    await this.pool.query(
-      `UPDATE reputation_aggregates SET event_count = event_count + 1 WHERE nft_id = $1`,
-      [nftId],
-    );
+    // Transactional: INSERT event + UPDATE event_count must succeed or fail together.
+    // If the UPDATE fails after INSERT, event_count drifts from actual event count,
+    // causing needsCompaction() to make decisions on stale metadata.
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO reputation_events (nft_id, event_type, event)
+         VALUES ($1, $2, $3)`,
+        [nftId, event.type, JSON.stringify(event)],
+      );
+      // Increment event_count on the aggregate row (if it exists).
+      // Missing aggregate is valid — events can precede aggregate creation.
+      await client.query(
+        `UPDATE reputation_aggregates SET event_count = event_count + 1 WHERE nft_id = $1`,
+        [nftId],
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      try { await client.query('ROLLBACK'); } catch { /* don't shadow original error */ }
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async getEventHistory(nftId: string, limit = 1000): Promise<ReputationEvent[]> {
@@ -158,7 +171,7 @@ export class PostgresReputationStore implements ReputationStore {
       );
       await client.query('COMMIT');
     } catch (err) {
-      await client.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch { /* don't shadow original error */ }
       throw err;
     } finally {
       client.release();

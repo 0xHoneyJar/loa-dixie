@@ -123,6 +123,15 @@ data "aws_secretsmanager_secret" "dixie_database_url" {
   name = "dixie/database-url"
 }
 
+# Phase 3: ES256 migration secrets (populated only during transition/rotation)
+data "aws_secretsmanager_secret" "dixie_hs256_fallback" {
+  name = "dixie/hs256-fallback-secret"
+}
+
+data "aws_secretsmanager_secret" "dixie_jwt_previous_key" {
+  name = "dixie/jwt-previous-key"
+}
+
 # -------------------------------------------------------------------
 # Security Group
 # -------------------------------------------------------------------
@@ -252,7 +261,9 @@ resource "aws_iam_role_policy" "dixie_secrets" {
         Resource = [
           data.aws_secretsmanager_secret.dixie_jwt_key.arn,
           data.aws_secretsmanager_secret.dixie_admin_key.arn,
-          data.aws_secretsmanager_secret.dixie_database_url.arn
+          data.aws_secretsmanager_secret.dixie_database_url.arn,
+          data.aws_secretsmanager_secret.dixie_hs256_fallback.arn,
+          data.aws_secretsmanager_secret.dixie_jwt_previous_key.arn
         ]
       }
     ]
@@ -347,6 +358,14 @@ resource "aws_ecs_task_definition" "dixie" {
         {
           name      = "DATABASE_URL"
           valueFrom = data.aws_secretsmanager_secret.dixie_database_url.arn
+        },
+        {
+          name      = "DIXIE_HS256_FALLBACK_SECRET"
+          valueFrom = data.aws_secretsmanager_secret.dixie_hs256_fallback.arn
+        },
+        {
+          name      = "DIXIE_JWT_PREVIOUS_KEY"
+          valueFrom = data.aws_secretsmanager_secret.dixie_jwt_previous_key.arn
         }
       ]
 

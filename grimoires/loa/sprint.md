@@ -566,6 +566,147 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
+---
+
+## Sprint 8 (Global 72): Bridge Convergence — Data Integrity & Infrastructure Completeness
+
+**Theme**: Fix transactional gaps, type safety, infrastructure deployment gaps
+**Goal**: Address all 7 convergence findings from bridge iteration 1 (score 19) — 2 HIGH, 4 MEDIUM, 1 LOW.
+**Source**: Bridgebuilder review bridge-20260226-phase3-g69to71, iteration 1
+
+### Task 8.1: Wrap appendEvent in a transaction [HIGH-1]
+
+**Finding**: appendEvent runs INSERT + UPDATE as independent statements; event_count can drift.
+**Files**:
+- `app/src/db/pg-reputation-store.ts`
+
+**Changes**:
+1. Wrap the INSERT (event) and UPDATE (event_count) in a BEGIN/COMMIT transaction using a dedicated client
+2. Match the compactSnapshot transaction pattern
+
+**Acceptance Criteria**:
+- appendEvent uses a dedicated client with BEGIN/COMMIT/ROLLBACK
+- On INSERT failure, no UPDATE occurs
+- On UPDATE failure, event INSERT is rolled back
+- All existing tests pass unchanged
+
+**Tests**:
+- Unit: `pg-reputation-store.test.ts` — verify transaction wraps both operations
+
+---
+
+### Task 8.2: Fix unsafe type cast in reconstructAggregateFromEvents [HIGH-2]
+
+**Finding**: `(event as Record<string, unknown>).score` bypasses discriminated union narrowing.
+**Files**:
+- `app/src/services/reputation-service.ts` — `reconstructAggregateFromEvents()`
+
+**Changes**:
+1. Replace `(event as Record<string, unknown>).score` with proper discriminated union access
+2. Use `QualitySignalEvent` type narrowing after `event.type === 'quality_signal'` check
+3. If QualitySignalEvent doesn't have a `score` field, extract it from the appropriate payload field
+
+**Acceptance Criteria**:
+- No `as Record<string, unknown>` cast in the function
+- Event fields accessed through narrowed discriminated union type
+- Existing reconstruction tests pass unchanged
+
+**Tests**:
+- Verify: existing `reputation-service.test.ts` reconstruction tests pass
+
+---
+
+### Task 8.3: Add Terraform Secrets Manager references for ES256 migration [MEDIUM-1]
+
+**Finding**: DIXIE_HS256_FALLBACK_SECRET and DIXIE_JWT_PREVIOUS_KEY missing from task definition.
+**Files**:
+- `deploy/terraform/dixie.tf`
+
+**Changes**:
+1. Add `data.aws_secretsmanager_secret` for `dixie/hs256-fallback-secret` and `dixie/jwt-previous-key`
+2. Add them to the IAM policy resource list
+3. Add them to the `secrets` block in container_definitions
+
+**Acceptance Criteria**:
+- Both secrets referenced from Secrets Manager
+- IAM policy grants access to both
+- Container definition includes both as environment variable secrets
+- `terraform plan` would show additive changes only
+
+---
+
+### Task 8.4: Add database migration to docker-compose.integration.yml [MEDIUM-2]
+
+**Finding**: PostgreSQL starts with empty database; reputation tables not created.
+**Files**:
+- `deploy/docker-compose.integration.yml`
+
+**Changes**:
+1. Mount migration SQL files into postgres service
+2. Add init script that runs migrations on startup
+
+**Acceptance Criteria**:
+- PostgreSQL starts with reputation tables created
+- Both 005_reputation.sql and 006_reputation_snapshot.sql applied
+- dixie-bff can use PostgresReputationStore without manual migration
+
+---
+
+### Task 8.5: Make min_sample_count configurable in reconstructAggregateFromEvents [MEDIUM-3]
+
+**Finding**: Hardcoded `min_sample_count = 10` should be in options.
+**Files**:
+- `app/src/services/reputation-service.ts`
+
+**Changes**:
+1. Add `minSampleCount?: number` to the options parameter
+2. Default to 10 (matching DixieReputationAggregate.min_sample_count)
+3. Use the option value instead of the magic number
+
+**Acceptance Criteria**:
+- `options.minSampleCount` overrides the default 10
+- Default behavior unchanged when option not provided
+- Existing tests pass unchanged
+
+**Tests**:
+- Unit: `reputation-service.test.ts` — verify custom minSampleCount respected
+
+---
+
+### Task 8.6: Consolidate NftOwnershipResolver duplicate methods [MEDIUM-4]
+
+**Finding**: resolveNftId and resolveOwnership call the same endpoint with different return types.
+**Files**:
+- `app/src/services/nft-ownership-resolver.ts`
+
+**Changes**:
+1. Have `resolveNftId` delegate to `resolveOwnership`
+2. Extract nftId from the result: `(await this.resolveOwnership(wallet))?.nftId ?? null`
+
+**Acceptance Criteria**:
+- resolveNftId delegates to resolveOwnership (single network call path)
+- Behavior unchanged for callers
+- All existing tests pass
+
+---
+
+### Task 8.7: Fix ROLLBACK error shadowing in compactSnapshot [LOW-1]
+
+**Finding**: If ROLLBACK fails, it shadows the original error.
+**Files**:
+- `app/src/db/pg-reputation-store.ts`
+
+**Changes**:
+1. Wrap the ROLLBACK in its own try-catch
+2. Original error re-thrown regardless of ROLLBACK success
+
+**Acceptance Criteria**:
+- ROLLBACK failure does not shadow original error
+- Original error propagated to caller
+- All existing tests pass
+
+---
+
 ## Dependencies
 
 | Task | Depends On | Reason |

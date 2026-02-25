@@ -41,6 +41,7 @@ import {
 import type {
   TaskTypeCohort,
   ReputationEvent,
+  QualitySignalEvent,
   DixieReputationAggregate,
 } from '../types/reputation-evolution.js';
 
@@ -513,10 +514,11 @@ export function computeTaskAwareCrossModelScore(
  */
 export function reconstructAggregateFromEvents(
   events: ReadonlyArray<ReputationEvent>,
-  options?: { pseudoCount?: number; collectionScore?: number },
+  options?: { pseudoCount?: number; collectionScore?: number; minSampleCount?: number },
 ): DixieReputationAggregate {
   const pseudoCount = options?.pseudoCount ?? 10;
   const collectionScore = options?.collectionScore ?? 0;
+  const minSampleCount = options?.minSampleCount ?? 10;
   const now = new Date().toISOString();
 
   // Start with a cold aggregate
@@ -527,9 +529,9 @@ export function reconstructAggregateFromEvents(
 
   for (const event of events) {
     if (event.type === 'quality_signal') {
-      // Extract score from the event — quality signals carry a numeric score
-      const score = (event as Record<string, unknown>).score as number | undefined;
-      if (score != null) {
+      // Type-safe access via discriminated union narrowing
+      const qe = event as QualitySignalEvent;
+      if (qe.score != null) {
         sampleCount++;
         // Bayesian blended personal score update
         personalScore = computeBlendedScore(
@@ -542,7 +544,6 @@ export function reconstructAggregateFromEvents(
     }
 
     // State transitions based on sample count thresholds
-    const minSampleCount = 10;
     let nextState: ReputationState = state;
     if (state === 'cold' && sampleCount > 0) {
       nextState = 'warming';
@@ -569,7 +570,7 @@ export function reconstructAggregateFromEvents(
     sample_count: sampleCount,
     pseudo_count: pseudoCount,
     contributor_count: 0,
-    min_sample_count: 10,
+    min_sample_count: minSampleCount,
     created_at: events.length > 0 ? events[0].timestamp : now,
     last_updated: events.length > 0 ? events[events.length - 1].timestamp : now,
     transition_history: transitionHistory as unknown as ReputationAggregate['transition_history'],

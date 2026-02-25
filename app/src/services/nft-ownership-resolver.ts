@@ -20,17 +20,10 @@ export class NftOwnershipResolver {
   /**
    * Resolve wallet → nftId via loa-finn identity graph.
    * Returns null when the wallet has no associated dNFT.
+   * Delegates to resolveOwnership to avoid duplicate network calls.
    */
   async resolveNftId(wallet: string): Promise<string | null> {
-    try {
-      const result = await this.finnClient.request<{ nftId: string }>(
-        'GET',
-        `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
-      );
-      return result.nftId;
-    } catch {
-      return null;
-    }
+    return (await this.resolveOwnership(wallet))?.nftId ?? null;
   }
 
   /**
