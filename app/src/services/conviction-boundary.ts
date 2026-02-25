@@ -32,6 +32,7 @@ import type { ConvictionTier } from '../types/conviction.js';
 import type { TaskType, ScoringPathLog } from '../types/reputation-evolution.js';
 import type { DixieReputationAggregate } from '../types/reputation-evolution.js';
 import type { ScoringPathTracker } from './scoring-path-tracker.js';
+import { logScoringPath } from './scoring-path-logger.js';
 
 /**
  * Trust profile derived from a conviction tier.
@@ -253,6 +254,17 @@ export function evaluateEconomicBoundaryForWallet(
   // cycle-007 — Sprint 77, Task S5-T3: Quarantine safe fallback.
   // When the scoring path tracker is quarantined (integrity failure detected),
   // fall back to tier defaults. No hard failure — degraded but safe.
+  //
+  // TRADE-OFF (Bridgebuilder F6, Sprint 79 S2-T3):
+  // Recording to a quarantined tracker means entries link to a chain with a
+  // known integrity break. However, NOT recording makes the quarantine period
+  // invisible to audit — we'd lose all scoring decisions during quarantine.
+  //
+  // Design choice: visibility > purity. Analogous to Bitcoin's orphaned block
+  // preservation — the blocks are individually valid but the chain they extend
+  // has a known fork. Consumers should check `integrity_status` before trusting
+  // chain integrity; quarantine entries are individually valid but the chain
+  // they link to has a known break.
   if (tracker?.isQuarantined) {
     const quarantineInput: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'> = {
       path: 'tier_default',
@@ -260,13 +272,13 @@ export function evaluateEconomicBoundaryForWallet(
     };
     const quarantinePath = tracker.record(quarantineInput);
 
-    console.debug('[conviction-boundary] scoring_path:', JSON.stringify({
+    logScoringPath({
       ...quarantinePath,
       wallet,
       tier,
       blending_used: false,
       quarantined: true,
-    }));
+    });
 
     const trustSnapshot: TrustLayerSnapshot = {
       reputation_state: reputationState,
@@ -351,13 +363,13 @@ export function evaluateEconomicBoundaryForWallet(
 
   // Structured provenance log: what happened, with what data, and how fresh
   // (Sprint 63 — Task 4.4, Bridge deep review Q3)
-  console.debug('[conviction-boundary] scoring_path:', JSON.stringify({
+  logScoringPath({
     ...scoringPath,
     wallet,
     tier,
     blending_used: !!reputationAggregate,
     reputation_freshness: reputationFreshness,
-  }));
+  });
 
   const trustSnapshot: TrustLayerSnapshot = {
     reputation_state: reputationState,

@@ -23,7 +23,13 @@ export const DIXIE_PROTOCOL_VERSION = '8.2.0';
  * Monotonic expansion: cold ⊂ warming ⊂ established ⊂ authoritative
  * Each higher tier adds capabilities without removing any from lower tiers.
  *
+ * NOTE: Surface enforcement is delegated to the routing layer (Finn's
+ * tier-gated middleware). This contract declares the capability surfaces
+ * but does not enforce them at the HTTP boundary. Dixie advertises;
+ * Finn enforces. See: loa-finn RFC #31 (Multi-Model Provider Abstraction).
+ *
  * @since cycle-007 — Sprint 76, Task S4-T4
+ * @since cycle-007 — Sprint 79, Task S2-T1 (Bridgebuilder F2: enforcement delegation)
  */
 export const DIXIE_CONTRACT: DynamicContract = {
   contract_id: '00000000-0000-4000-a000-000000000001',
@@ -63,12 +69,18 @@ export const DIXIE_CONTRACT: DynamicContract = {
 /**
  * Hono middleware that adds X-Protocol-Version header to all responses.
  *
+ * This middleware advertises the protocol version — it does not enforce
+ * surface boundaries. Enforcement is the routing layer's responsibility
+ * (defense-in-depth: Finn validates tier before forwarding requests).
+ *
  * Also reads the client's X-Protocol-Version request header and stores
  * it in the Hono context for downstream handlers.
  *
  * @returns Hono middleware function
  * @since cycle-007 — Sprint 76, Task S4-T4
+ * @since cycle-007 — Sprint 79, Task S2-T1 (Bridgebuilder F2: enforcement delegation)
  */
+// ENFORCEMENT: routing-layer (not this middleware)
 export function protocolVersionMiddleware() {
   return async (c: Context, next: Next): Promise<void> => {
     // Read client protocol version if provided

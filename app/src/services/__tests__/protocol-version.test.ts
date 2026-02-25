@@ -87,4 +87,49 @@ describe('protocolVersionMiddleware', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('X-Protocol-Version')).toBe('8.2.0');
   });
+
+  it('does not enforce surface boundaries (delegated to routing layer)', async () => {
+    const app = new Hono();
+    app.use('*', protocolVersionMiddleware());
+
+    // Handler returns a rich response body — middleware should not filter it
+    const richBody = {
+      reputation: { state: 'authoritative', score: 1.0 },
+      governance: { mutations: [{ id: '1' }] },
+      schemas: ['AuditTrail', 'GovernedReputation'],
+    };
+    app.get('/test', (c) => c.json(richBody));
+
+    const res = await app.request('/test');
+    const body = await res.json();
+
+    // Full response body passes through — middleware does not filter or restrict
+    expect(body).toEqual(richBody);
+    expect(body.governance).toBeDefined();
+    expect(body.schemas).toContain('AuditTrail');
+  });
+
+  it('does not inspect or modify response body', async () => {
+    const app = new Hono();
+    app.use('*', protocolVersionMiddleware());
+
+    const payload = 'arbitrary-binary-content-\x00\x01';
+    app.get('/test', (c) => c.text(payload));
+
+    const res = await app.request('/test');
+    expect(await res.text()).toBe(payload);
+  });
+
+  it('only adds X-Protocol-Version header — no other response modifications', async () => {
+    const app = new Hono();
+    app.use('*', protocolVersionMiddleware());
+    app.get('/test', (c) => {
+      c.header('X-Custom', 'preserved');
+      return c.text('ok');
+    });
+
+    const res = await app.request('/test');
+    expect(res.headers.get('X-Protocol-Version')).toBe('8.2.0');
+    expect(res.headers.get('X-Custom')).toBe('preserved');
+  });
 });

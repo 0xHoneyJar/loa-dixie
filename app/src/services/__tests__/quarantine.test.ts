@@ -180,6 +180,50 @@ describe('Quarantine mechanism', () => {
   });
 });
 
+describe('Quarantine recording trade-off (Bridgebuilder F6, Sprint 79)', () => {
+  let tracker: ScoringPathTracker;
+
+  beforeEach(() => {
+    tracker = new ScoringPathTracker();
+  });
+
+  it('records during quarantine are individually hashable', () => {
+    // Record entries, enter quarantine, record more entries
+    tracker.record({ path: 'tier_default', reason: 'Before quarantine 1' });
+    tracker.record({ path: 'aggregate', reason: 'Before quarantine 2' });
+
+    tracker.enterQuarantine('integrity-break-001');
+
+    // Record during quarantine — these still get individual hashes
+    const quarantineEntry = tracker.record({
+      path: 'tier_default',
+      reason: 'Scoring path tracker quarantined — safe fallback to tier defaults',
+    });
+
+    // Entry should have a valid entry_hash (SHA-256 hex with sha256: prefix)
+    expect(quarantineEntry.entry_hash).toBeDefined();
+    expect(quarantineEntry.entry_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+    // Entry is individually valid despite broken chain
+    expect(quarantineEntry.path).toBe('tier_default');
+  });
+
+  it('quarantine fallback produces tier_default scoring path', () => {
+    tracker.record({ path: 'aggregate', reason: 'Normal operation' });
+
+    tracker.enterQuarantine('chain-break-001');
+
+    const fallbackEntry = tracker.record({
+      path: 'tier_default',
+      reason: 'Scoring path tracker quarantined — safe fallback to tier defaults',
+    });
+
+    expect(fallbackEntry.path).toBe('tier_default');
+    expect(fallbackEntry.reason).toContain('quarantined');
+    expect(fallbackEntry.reason).toContain('safe fallback');
+  });
+});
+
 describe('ScoringPathTrackerOptions', () => {
   it('accepts custom checkpointInterval', () => {
     const tracker = new ScoringPathTracker({ checkpointInterval: 50 });
