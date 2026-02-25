@@ -1,269 +1,505 @@
-# PRD: Hounfour v7.11.0 Full Adoption — Task-Dimensional Protocol Compliance
+# PRD: Hounfour v8.2.0 Full Adoption — Commons Governance Substrate
 
-**Version**: 5.0.0
-**Date**: 2026-02-24
+**Version**: 7.0.0
+**Date**: 2026-02-25
 **Author**: Merlin (Product), Claude (Synthesis)
-**Cycle**: cycle-005
+**Cycle**: cycle-007
 **Status**: Draft
-**Predecessor**: cycle-004 PRD v4.0.0 (Tag Release v2.0.0)
+**Predecessor**: cycle-006 PRD (Phase 3 — Production Wiring & Live Integration)
 
-> Sources: loa-finn#66 §6 Sprint A (Protocol Adoption), loa-hounfour CHANGELOG v7.10.0–v7.11.0,
-> cycle-003 (Hounfour v7.9.2 Full Adoption, 12 sprints — Level 6 foundation),
-> Migration surface analysis (5 files, 3 critical replacements, 1 new feature)
+> Sources: loa-hounfour CHANGELOG v8.0.0–v8.2.0, MIGRATION.md (Dixie consumer path),
+> cycle-005 (Hounfour v7.11.0 Full Adoption, 5 sprints — Level 6+ foundation),
+> cycle-006 (Phase 3 — Production Wiring, 8 sprints — event sourcing + crypto hardening),
+> codebase analysis (42 files import hounfour, 8 service files need refactoring)
 
 ---
 
 ## 1. Problem Statement
 
-Dixie achieved Hounfour Level 6 protocol compliance in cycle-003 against v7.9.2. Since then, Hounfour has advanced through three releases (v7.10.0, v7.10.1, v7.11.0) totaling **261 files changed, +4671/-685 lines**. These releases upstream Dixie's own task-dimensional reputation types into the shared protocol — the exact types Dixie defined locally in Sprint 52.
+Dixie achieved Hounfour Level 6+ protocol compliance in cycle-005 against v7.11.0 and wired production infrastructure in cycle-006. Since then, Hounfour has advanced through three releases (v8.0.0, v8.1.0, v8.2.0) introducing a **governance substrate** — the `commons` module with 21 schemas, an enforcement SDK, and the 4th ReputationEvent variant.
 
-**The gap**: Dixie has **local stub definitions** for types that now exist as **canonical protocol exports** in Hounfour. Specifically:
+**The gap**: The local `loa-hounfour` package is already at v8.2.0 (symlinked at `file:../../loa-hounfour`), but **Dixie has not adopted any v8.x functionality**. The existing code works (backward compatible) but leaves significant protocol surface unused, and Dixie still maintains local patterns for things that now have canonical protocol implementations:
 
-| Local Type | File | Hounfour Canonical | Gap |
+| Local Pattern | File | Hounfour v8.2.0 Canonical | Gap |
 |---|---|---|---|
-| `TaskType` (fixed 5-type array) | `types/reputation-evolution.ts:36-45` | `TaskTypeSchema` (open enum + namespace:type) | Local is subset of protocol |
-| `TaskTypeCohort` (ModelCohort &) | `types/reputation-evolution.ts:62-65` | `TaskTypeCohortSchema` (+confidence_threshold) | Missing protocol field |
-| `ReputationEvent` (generic payload) | `types/reputation-evolution.ts:104-111` | `ReputationEventSchema` (3-variant discriminated union) | Underspecified stub |
-| `ScoringPathLog` (3 fields) | `types/reputation-evolution.ts:122-129` | `ScoringPathLogSchema` (+hash chain, +reason, +scored_at) | Missing audit trail |
+| Hardcoded conservation checks | `conviction-boundary.ts:327-339` | `ConservationLaw<T>` factories + `buildSumInvariant()` | Local checks bypass protocol verification |
+| Scattered error types | `errors.ts`, `access-policy-validator.ts`, `conformance-signal.ts` | `GovernanceError` discriminated union (6 variants) | No structured governance error taxonomy |
+| Plain state machine objects | `state-machine.ts:95-155` | `StateMachineConfig` with invariants + audit hooks | Missing cross-state constraints and audit |
+| Custom hash chain tracker | `scoring-path-tracker.ts` | `AuditTrail<T>` with `verifyAuditTrailIntegrity()` | Missing checkpoint/verification infrastructure |
+| Generic resource governor | `resource-governor.ts` | `GovernedResource<T>` with mutation tracking | Missing governed mutations + versioning |
+| `QualityEvent` (3 fields) | `quality-feedback.ts:40-51` | `ModelPerformanceEvent` + `QualityObservation` | No model-level performance tracking |
+| No `'unspecified'` TaskType handling | `conviction-boundary.ts:261-286` | `'unspecified'` literal with aggregate-only routing | Silent fallthrough on missing task metadata |
+| No governance mutations | — | `GovernanceMutation` with required `actor_id` | No auditable policy change trail |
+| No protocol versioning | — | `DynamicContract` + `ContractNegotiation` | No capability negotiation with clients |
+| No quarantine mechanism | — | `QuarantineStatus` + `QuarantineRecord` | No unsafe state isolation |
+| `invariants.yaml` pinned to 7.0.0 | `grimoires/loa/invariants.yaml:9` | Protocol version 8.2.0 | Stale protocol declaration |
 
-Additionally, Hounfour v7.11.0 introduces **hash chain infrastructure** (`computeScoringPathHash()`, `SCORING_PATH_GENESIS_HASH`) for scoring path audit trails — a feature Dixie should implement to complete its economic boundary observability.
+**Why this matters**: Hounfour v8.0.0 introduced the commons module specifically to **canonicalize governance patterns that every consumer was implementing independently**. Dixie has conservation invariants, state machines, audit trails, resource governance, and error handling — all implemented locally. Each local implementation diverges from the protocol's verified, tested, and cross-consumer-compatible patterns. The v8.2.0 release adds `ModelPerformanceEvent` which closes the autopoietic feedback loop (Dixie evaluation → scoring → routing → Finn) — without it, Dixie's quality signals don't feed back into model selection.
 
-**Why this matters**: Running local stubs alongside canonical protocol exports creates **drift risk**. Hounfour's types include validation schemas, conformance vectors, and constitutional constraints that local stubs lack. Every release widens the gap. The types were upstreamed *from* Dixie — adopting them back closes the loop.
-
-> Sources: loa-hounfour CHANGELOG v7.10.0 ("upstream shared vocabulary from Dixie"),
-> types/reputation-evolution.ts (local definitions), migration surface analysis
+> Sources: loa-hounfour CHANGELOG v8.0.0 ("commons module introduces governance substrate"),
+> v8.1.0 ("GovernanceMutation.actor_id required"), v8.2.0 ("ModelPerformanceEvent closes autopoietic loop"),
+> MIGRATION.md (Dixie consumer path), codebase analysis
 
 ## 2. Product Vision
 
-**Replace Dixie's local reputation type stubs with canonical Hounfour v7.11.0 protocol imports, and implement the scoring path hash chain audit trail.**
+**Replace Dixie's local governance patterns with canonical Hounfour v8.2.0 commons implementations, close the autopoietic feedback loop with ModelPerformanceEvent, and enable runtime protocol negotiation via DynamicContract.**
 
-This is a **protocol adoption cycle** (like cycle-003), not a feature cycle. The types already exist on both sides — the work is replacing local definitions with shared contract imports, gaining schema validation, conformance vectors, and constitutional constraints for free.
+This is a **deep protocol adoption cycle** — not just type imports (cycle-005) but behavioral alignment. Dixie already implements the right patterns; the work is replacing local implementations with protocol-canonical equivalents that gain:
+- Verified conservation law enforcement (property-tested in hounfour)
+- Structured governance error taxonomy (6-variant discriminated union)
+- Audit trail checkpointing and integrity verification
+- Mutation-tracked resource governance
+- Protocol capability negotiation for client compatibility
+- Quarantine mechanism for unsafe state isolation
 
-The hash chain implementation is the one genuinely new feature: each scoring path decision in `conviction-boundary.ts` will produce a hash-linked audit entry, enabling tamper-evident scoring audit trails.
+The autopoietic loop closure is the highest-value functional change: model performance observations from Finn inference flow back through reputation scoring, influencing future model routing decisions. This makes the Oracle self-improving — the defining characteristic of the system's architecture.
 
 ## 3. Success Metrics
 
 | ID | Metric | Target |
 |----|--------|--------|
-| H-1 | Local type stubs eliminated | 0 local definitions for types available in Hounfour v7.11.0 |
-| H-2 | Hounfour import coverage | All 4 type families imported from `@0xhoneyjar/loa-hounfour/governance` |
-| H-3 | Open enum adoption | TaskType accepts community namespace:type pattern per ADR-003 |
-| H-4 | Hash chain operational | Scoring path decisions produce hash-linked ScoringPathLog entries |
-| H-5 | Conformance vectors | New v7.10.0–v7.11.0 vectors pass in Dixie's conformance suite |
-| H-6 | Zero regressions | All existing tests pass (1011+ baseline) |
-| H-7 | Type audit updated | `types.ts` header comment reflects v7.11.0 import surface |
+| C-1 | Local governance pattern elimination | 0 local implementations where hounfour commons equivalent exists |
+| C-2 | Commons module imports | All 6 commons subsystems integrated (conservation, error, state, audit, resource, contract) |
+| C-3 | ModelPerformanceEvent operational | Finn inference quality → ReputationEvent → scoring → routing (functional loop) |
+| C-4 | QualityObservation emission | Every quality assessment produces structured observation with score [0,1] |
+| C-5 | GovernanceMutation trail | All policy changes produce auditable mutation with `actor_id` attribution |
+| C-6 | `'unspecified'` TaskType handled | Explicit aggregate-only routing when task metadata unavailable |
+| C-7 | Protocol versioning active | `X-Protocol-Version` header on all responses, capability negotiation functional |
+| C-8 | Conformance vectors | v8.2.0 vectors pass (217+ total) |
+| C-9 | Zero regressions | All existing tests pass (baseline from cycle-006) |
+| C-10 | `invariants.yaml` updated | Protocol pin at `loa-hounfour@8.2.0` |
+| C-11 | Quarantine operational | Unsafe state isolation with automatic recovery |
+| C-12 | Audit trail checkpoints | Checkpoint creation, continuity verification, and pruning functional |
 
 ## 4. Functional Requirements
 
-### FR-1: Replace Local TaskType with Hounfour Open Enum
+### Tier 1: Required Protocol Compliance
 
-**Current**: `types/reputation-evolution.ts:36-45` defines `TASK_TYPES` as a fixed 5-element const array and `TaskType` as a derived union type.
+#### FR-1: Handle ModelPerformanceEvent (4th ReputationEvent Variant)
 
-**Target**: Import `TaskTypeSchema`, `TASK_TYPES`, and `type TaskType` from `@0xhoneyjar/loa-hounfour/governance`. The Hounfour version is an **open enum** (ADR-003) that accepts:
-- 5 protocol-defined literals: `code_review`, `creative_writing`, `analysis`, `summarization`, `general`
-- Community-defined pattern: `namespace:type` (e.g., `legal-guild:contract_review`)
+**Current**: `ReputationEvent` is a 3-variant discriminated union (`quality_signal`, `task_completion`, `credential_update`). Dixie's `reputation-service.ts` and `quality-feedback.ts` handle these three variants but have no handling for `model_performance`.
 
-**Acceptance Criteria**:
-- [ ] Local `TASK_TYPES` const removed from `reputation-evolution.ts`
-- [ ] Local `TaskType` type removed from `reputation-evolution.ts`
-- [ ] `TaskType` and `TASK_TYPES` imported from hounfour governance barrel
-- [ ] All files that import from `reputation-evolution.ts` updated if needed
-- [ ] Community namespace:type pattern accepted by type system
+**Target**: Full integration of the 4th variant:
 
-> Sources: loa-hounfour src/governance/task-type.ts:42-76, ADR-003
-
-### FR-2: Replace Local TaskTypeCohort with Hounfour Schema
-
-**Current**: `types/reputation-evolution.ts:62-65` defines `TaskTypeCohort` as `ModelCohort & { readonly task_type: TaskType }`.
-
-**Target**: Import `type TaskTypeCohort` from hounfour governance. The Hounfour version adds:
-- `confidence_threshold` (integer, optional, default 30) — cold-start blending threshold
-- Uses `COHORT_BASE_FIELDS` (shared leaf module, v7.10.1)
-- `validateTaskCohortUniqueness()` helper for composite key validation
+1. `quality-feedback.ts` emits `ModelPerformanceEvent` after Finn inference completes, capturing:
+   - `model_id`: which model was used
+   - `provider`: model provider (e.g., `'anthropic'`, `'openai'`)
+   - `pool_id`: routing pool identifier
+   - `quality`: `QualityObservation` (score [0,1], optional dimensions, latency, evaluator)
+2. `reputation-service.ts` processes `model_performance` events in the discriminated union handler
+3. Model performance feeds into blended score computation, influencing future routing
+4. Exhaustive switch coverage ensures type safety (no `default` fallthrough)
 
 **Acceptance Criteria**:
-- [ ] Local `TaskTypeCohort` removed from `reputation-evolution.ts`
-- [ ] Imported from `@0xhoneyjar/loa-hounfour/governance`
-- [ ] `DixieReputationAggregate` updated to use hounfour's `TaskTypeCohort`
-- [ ] `validateTaskCohortUniqueness()` imported and used where task cohorts are constructed
+- [ ] `ModelPerformanceEvent` type imported from `@0xhoneyjar/loa-hounfour/governance`
+- [ ] `quality-feedback.ts` emits model performance events after Finn inference
+- [ ] `reputation-service.ts` handles `model_performance` variant in event processing
+- [ ] Model performance scores influence blended reputation computation
+- [ ] Exhaustive switch on `ReputationEvent.type` (4 cases, no default)
+- [ ] Tests verify end-to-end: inference → event emission → reputation update
 
-> Sources: loa-hounfour src/governance/task-type-cohort.ts:26-74
+> Sources: loa-hounfour CHANGELOG v8.2.0 ("ModelPerformanceEvent closes autopoietic loop"),
+> quality-feedback.ts:40-51, reputation-service.ts event handling
 
-### FR-3: Replace Local ReputationEvent with Hounfour Discriminated Union
+#### FR-2: Emit QualityObservation for Structured Evaluation Output
 
-**Current**: `types/reputation-evolution.ts:104-111` defines `ReputationEvent` as a generic interface with `type` discriminator and `payload: unknown`.
+**Current**: `quality-feedback.ts` computes a quality score via severity-weighted sum (`1 / (1 + weighted_count)`) but stores it as a bare number within `QualityEvent`. No structured observation schema.
 
-**Target**: Import the full discriminated union from hounfour governance:
-- `ReputationEvent` (union of 3 variants)
-- `QualitySignalEvent` — score (0-1), optional dimensions record, optional task_type
-- `TaskCompletedEvent` — required task_type, success boolean, optional duration_ms
-- `CredentialUpdateEvent` — credential_id (UUID), action enum
-
-All variants share an envelope: `event_id` (UUID), `agent_id`, `collection_id`, `timestamp`, optional `sequence`.
-
-**Acceptance Criteria**:
-- [ ] Local `ReputationEvent` interface removed from `reputation-evolution.ts`
-- [ ] All 4 types imported from hounfour governance barrel
-- [ ] `reputation-service.ts` updated to use typed event variants (not `payload: unknown`)
-- [ ] Event construction sites produce well-typed events with required envelope fields
-- [ ] `reconstructAggregateFromEvents()` stub updated with typed event handling
-
-> Sources: loa-hounfour src/governance/reputation-event.ts:133-145
-
-### FR-4: Replace Local ScoringPathLog with Hounfour Schema
-
-**Current**: `types/reputation-evolution.ts:122-129` defines `ScoringPathLog` with 3 fields (path, model?, task_type?).
-
-**Target**: Import `ScoringPath` and `ScoringPathLog` from hounfour governance. The Hounfour version adds:
-- `model_id` (replaces `model`) — field name alignment
-- `reason` (string, max 500 chars) — human explanation
-- `scored_at` (ISO 8601) — timestamp
-- `entry_hash` (sha256: format) — content hash
-- `previous_hash` (sha256: format) — chain link
+**Target**: Replace `QualityEvent` with `QualityObservation` from hounfour governance:
+- `score`: [0,1] float — computed from severity distribution (existing algorithm preserved)
+- `dimensions`: optional record of named dimension scores (max 20)
+- `latency_ms`: optional inference latency
+- `evaluated_by`: evaluator identifier (e.g., `'dixie-quality-feedback'`)
 
 **Acceptance Criteria**:
-- [ ] Local `ScoringPathLog` interface removed from `reputation-evolution.ts`
-- [ ] `ScoringPath` and `ScoringPathLog` imported from hounfour governance
-- [ ] Field name `model` updated to `model_id` at all usage sites
-- [ ] `conviction-boundary.ts` produces ScoringPathLog entries with all required fields
+- [ ] `QualityObservation` and `QualityObservationSchema` imported from hounfour governance
+- [ ] `QualityEvent` interface replaced with `QualityObservation` usage
+- [ ] Severity-weighted score computation preserved (backward compatible output)
+- [ ] `dimensions` populated with per-severity breakdown
+- [ ] `evaluated_by` field identifies the evaluation source
+- [ ] Conformance suite validates `QualityObservation` payloads
 
-> Sources: loa-hounfour src/governance/scoring-path-log.ts:26-81
+> Sources: loa-hounfour CHANGELOG v8.2.0 ("QualityObservation schema"),
+> quality-feedback.ts:84-94 (severity weights)
 
-### FR-5: Implement Scoring Path Hash Chain
+#### FR-3: Handle `'unspecified'` TaskType
 
-**Current**: No hash chain implementation exists. Scoring path decisions are not hash-linked.
+**Current**: When `taskType` is undefined or doesn't match any cohort, `conviction-boundary.ts` falls through to aggregate scoring silently. No explicit handling of the `'unspecified'` literal.
 
-**Target**: Implement hash chain audit trail using hounfour's `computeScoringPathHash()` and `SCORING_PATH_GENESIS_HASH`:
-
-1. Each scoring path decision in `conviction-boundary.ts` produces a `ScoringPathLog` entry
-2. `entry_hash` is computed via `computeScoringPathHash()` (RFC 8785 canonical JSON + SHA-256)
-3. `previous_hash` chains to the prior entry's `entry_hash` (or `SCORING_PATH_GENESIS_HASH` for first entry)
-4. `scored_at` timestamp records evaluation time
-5. Hash pair constraint: both `entry_hash` and `previous_hash` present or both absent
-
-**Acceptance Criteria**:
-- [ ] `computeScoringPathHash` and `SCORING_PATH_GENESIS_HASH` imported from hounfour governance
-- [ ] Scoring path hash computed for each economic boundary evaluation
-- [ ] Hash chain links consecutive scoring decisions (previous_hash → prior entry_hash)
-- [ ] Genesis hash used for first entry in a chain
-- [ ] Hash chain entries include `scored_at` timestamp
-- [ ] Tests verify hash chain integrity (determinism, chain linking, genesis sentinel)
-
-> Sources: loa-hounfour src/governance/scoring-path-hash.ts:49-65,
-> constraints/ScoringPathLog.constraints.json (scoring-path-hash-pair, scoring-path-chain-integrity)
-
-### FR-6: Update Conformance Suite
-
-**Current**: Conformance suite validates against v7.9.2 schemas (7 schema types).
-
-**Target**: Extend conformance coverage to include v7.11.0 governance schemas:
-- TaskType validation (protocol + community patterns)
-- TaskTypeCohort validation (including uniqueness constraint)
-- ReputationEvent validation (all 3 variants)
-- ScoringPathLog validation (including hash chain constraints)
+**Target**: Explicit routing:
+1. When `taskType === 'unspecified'` or `taskType === undefined`: route to aggregate-only scoring (skip cohort lookup entirely)
+2. Record scoring path as `{ path: 'aggregate', reason: 'unspecified task type' }`
+3. No cohort entry created for `'unspecified'` (aggregate-only)
 
 **Acceptance Criteria**:
-- [ ] Conformance suite schema enum extended with governance types
-- [ ] Sample payloads added for new schema types
-- [ ] v7.10.0–v7.11.0 conformance vectors referenced in test assertions
-- [ ] `runFullSuite()` includes governance schema validation
+- [ ] Explicit `'unspecified'` check before cohort lookup in `conviction-boundary.ts`
+- [ ] Scoring path records `'unspecified'` handling with clear reason
+- [ ] No `TaskTypeCohort` entries created for `'unspecified'` task type
+- [ ] Tests verify `'unspecified'` routes to aggregate-only scoring
+- [ ] Backward compatible: `undefined` taskType still works identically
 
-> Sources: services/conformance-suite.ts:24-204
+> Sources: loa-hounfour CHANGELOG v8.2.0 ("'unspecified' TaskType literal"),
+> MIGRATION.md ("route to aggregate-only scoring"), conviction-boundary.ts:261-286
 
-### FR-7: Update Type Audit Documentation
+#### FR-4: Update Conformance Suite for v8.2.0
 
-**Current**: `types.ts` header comment documents v7.9.2 import surface (12 imports across 8 files).
+**Current**: Conformance suite validates against governance schemas from v7.11.0 (6 schema types: AccessPolicy, ConversationSealingPolicy, TaskType, TaskTypeCohort, ReputationEvent, ScoringPathLog).
 
-**Target**: Update the type audit table to reflect v7.11.0 imports, including:
-- New governance barrel imports (TaskType, TaskTypeCohort, ReputationEvent variants, ScoringPathLog)
-- Hash chain utilities (computeScoringPathHash, SCORING_PATH_GENESIS_HASH)
-- ADR-001 aliasing note (GovernanceTaskType vs core TaskType)
+**Target**: Extend coverage to include all v8.2.0 additions:
+- `QualityObservation` validation
+- `ModelPerformanceEvent` as 4th ReputationEvent variant
+- `GovernanceMutation` validation (with required `actor_id`)
+- `ConservationLaw` validation
+- `AuditTrail` validation (including integrity verification)
+- `DynamicContract` validation
+- `GovernanceError` validation (all 6 variants)
 
 **Acceptance Criteria**:
-- [ ] Type audit table in `types.ts` updated with all v7.11.0 imports
-- [ ] Protocol maturity level updated (Level 6 → Level 6+ with task-dimensional vocabulary)
-- [ ] ADR-001 collision resolution documented
+- [ ] Conformance suite schema enum extended with v8.2.0 types
+- [ ] Sample payloads for each new schema type
+- [ ] v8.0.0–v8.2.0 conformance vectors referenced (217+ total)
+- [ ] `runFullSuite()` includes commons schema validation
+- [ ] Integration test verifies full suite passes
+
+> Sources: conformance-suite.ts:24-204, loa-hounfour RELEASE-INTEGRITY.json (219 vectors)
+
+### Tier 2: Commons Governance Substrate
+
+#### FR-5: Adopt ConservationLaw Factories for Existing Invariants
+
+**Current**: `conviction-boundary.ts` documents 3 conservation invariants as comments (I-1 through I-3) and checks them inline. `invariants.yaml` declares 5 cross-repo invariants (INV-001 through INV-005). These are verified by tests but not expressed as protocol objects.
+
+**Target**: Replace inline checks with `ConservationLaw<T>` factories from commons:
+
+| Invariant | Factory | Predicate |
+|-----------|---------|-----------|
+| I-1: Budget conservation | `buildSumInvariant()` | `committed + reserved + available === limit` |
+| I-2: Pricing conservation | `buildSumInvariant()` | `SUM(recipients) === total_cost` |
+| I-3: Cache coherence | `buildBoundedInvariant()` | `abs(redis_value - postgres_value) <= threshold` |
+| INV-001: Cost conservation | `buildSumInvariant()` | `cost_micro * 1_000_000 + remainder == tokens * price_per_million` |
+| INV-002: Non-negative spend | `buildNonNegativeInvariant()` | `daily_spend >= 0` |
+| INV-004: Budget monotonicity | `createMonotonicConservation()` | `daily_spend(t+1) >= daily_spend(t)` |
+
+**Acceptance Criteria**:
+- [ ] `ConservationLaw`, `buildSumInvariant`, `buildNonNegativeInvariant`, `buildBoundedInvariant`, `createMonotonicConservation` imported from `@0xhoneyjar/loa-hounfour/commons`
+- [ ] Budget conservation (I-1) expressed as protocol `ConservationLaw<BudgetState>`
+- [ ] Pricing conservation (I-2) expressed as protocol `ConservationLaw<BillingEntry>`
+- [ ] Cache coherence (I-3) expressed as protocol `ConservationLaw<CacheState>`
+- [ ] Inline conservation checks in `conviction-boundary.ts` replaced with factory-produced law evaluation
+- [ ] `invariants.yaml` updated to `loa-hounfour@8.2.0` and invariants reference commons types
+- [ ] Tests verify conservation law evaluation produces same results as inline checks
+
+> Sources: loa-hounfour CHANGELOG v8.1.0 ("conservation law factories"),
+> conviction-boundary.ts:20-30 (invariant comments), invariants.yaml
+
+#### FR-6: Adopt GovernanceError Discriminated Union
+
+**Current**: Error handling is scattered across files:
+- `errors.ts`: `BffError` class with `status` + `body`
+- `access-policy-validator.ts`: policy validation errors with `violations[]`
+- `conformance-signal.ts`: `ConformanceViolationSignal` interface
+- `conviction-boundary.ts`: `buildConvictionDenialResponse()` with `denial_codes[]`
+
+**Target**: Introduce `GovernanceError` from commons as canonical governance error type:
+- Map existing error patterns to 6-variant discriminated union
+- Add `severity`, `remediation`, and `provenance` fields
+- Preserve HTTP status mapping (400, 403, 409, 429)
+
+| Current Pattern | GovernanceError Variant | HTTP Status |
+|----------------|------------------------|-------------|
+| Policy validation failure | `PolicyValidationError` | 400 |
+| Access/conviction denied | `AccessBoundaryError` | 403 |
+| Conformance violation | `ConformanceViolationError` | 400 |
+| Budget exhausted | `ResourceExhaustedError` | 429 |
+| State transition invalid | `StateConflictError` | 409 |
+| Protocol version mismatch | `ProtocolVersionError` | 422 |
+
+**Acceptance Criteria**:
+- [ ] `GovernanceError` and all 6 variants imported from `@0xhoneyjar/loa-hounfour/commons`
+- [ ] `errors.ts` extended with `GovernanceError` → `BffError` mapping utility
+- [ ] `access-policy-validator.ts` produces `PolicyValidationError` instances
+- [ ] `conviction-boundary.ts` denial responses use `AccessBoundaryError`
+- [ ] `conformance-signal.ts` violations use `ConformanceViolationError`
+- [ ] All governance errors include `severity` and optional `remediation`
+- [ ] Tests verify error mapping preserves HTTP status codes
+
+> Sources: loa-hounfour CHANGELOG v8.0.0 ("GovernanceError 6-variant union"),
+> errors.ts, access-policy-validator.ts:36-69, conviction-boundary.ts:362-401
+
+#### FR-7: Wire GovernanceMutation with Required `actor_id`
+
+**Current**: No governance mutation tracking exists. Policy changes (e.g., conviction tier thresholds, access matrix updates) happen without audit trail.
+
+**Target**: Implement `GovernanceMutation` from commons for all policy changes:
+1. Every governance policy change produces a mutation record with required `actor_id`
+2. `evaluateGovernanceMutation()` validates mutation before application
+3. Mutation history provides auditable trail of governance evolution
+
+**Acceptance Criteria**:
+- [ ] `GovernanceMutation`, `GovernanceMutationSchema`, `evaluateGovernanceMutation` imported from `@0xhoneyjar/loa-hounfour/commons`
+- [ ] Mutation envelope includes `mutation_id` (UUID), `expected_version`, `mutated_at`, `actor_id`
+- [ ] `evaluateGovernanceMutation()` called before any policy modification
+- [ ] Mutation history stored and queryable
+- [ ] `actor_id` required on all mutations (v8.1.0 breaking change compliance)
+- [ ] Tests verify mutation validation rejects missing `actor_id`
+
+> Sources: loa-hounfour CHANGELOG v8.1.0 ("GovernanceMutation.actor_id required"),
+> MIGRATION.md (actor_id migration pattern)
+
+#### FR-8: Adopt AuditTrail from Commons
+
+**Current**: `scoring-path-tracker.ts` implements a custom hash chain with `computeScoringPathHash()` and `SCORING_PATH_GENESIS_HASH`. It works but lacks checkpoint support, integrity verification, and pruning capabilities.
+
+**Target**: Refactor `ScoringPathTracker` to compose with `AuditTrail<ScoringPathLog>` from commons:
+1. Core hash chain computation preserved (same hash algorithm)
+2. Add `createCheckpoint()` for periodic chain snapshots
+3. Add `verifyCheckpointContinuity()` for integrity verification between checkpoints
+4. Add `pruneBeforeCheckpoint()` for managed log rotation
+5. Add `verifyAuditTrailIntegrity()` for full chain verification
+
+**Acceptance Criteria**:
+- [ ] `AuditTrail`, `createCheckpoint`, `verifyCheckpointContinuity`, `pruneBeforeCheckpoint`, `verifyAuditTrailIntegrity`, `AUDIT_TRAIL_GENESIS_HASH` imported from commons
+- [ ] `ScoringPathTracker` refactored to compose with `AuditTrail<ScoringPathLog>`
+- [ ] Existing hash chain behavior preserved (genesis linking, chain integrity)
+- [ ] Checkpoint creation functional after N entries (configurable)
+- [ ] Continuity verification detects tampered entries
+- [ ] Pruning removes entries before checkpoint without breaking chain
+- [ ] Metadata (`reputation_freshness`, `routed_model_id`) preserved through refactoring
+- [ ] All existing `scoring-path-tracker.test.ts` tests pass unchanged
+
+> Sources: loa-hounfour CHANGELOG v8.1.0 ("checkpoint utilities"),
+> scoring-path-tracker.ts, scoring-path-tracker.test.ts
+
+#### FR-9: Adopt GovernedResource Patterns
+
+**Current**: `resource-governor.ts` defines a generic `ResourceGovernor<T>` interface. `governor-registry.ts` provides a registry. `reputation-service.ts` manages reputation but doesn't implement `ResourceGovernor<T>`. Credits and freshness are managed ad-hoc.
+
+**Target**: Replace local `ResourceGovernor<T>` with hounfour's `GovernedResource<T>` pattern:
+
+| Resource | Current | GovernedResource<T> Pattern |
+|----------|---------|----------------------------|
+| Reputation | `ReputationService` + `InMemoryReputationStore` | `GovernedReputation` with event log + mutation tracking |
+| Credits | Ad-hoc budget checks in conviction-boundary | `GovernedCredits` with conservation law enforcement |
+| Freshness | `freshness-disclaimer.ts` confidence mapping | `GovernedFreshness` with TTL validation |
+
+**Acceptance Criteria**:
+- [ ] `GovernedResource`, `GovernedCredits`, `GovernedReputation`, `GovernedFreshness`, `GOVERNED_RESOURCE_FIELDS` imported from commons
+- [ ] `ReputationService` extended to track mutations via `GovernanceMutation`
+- [ ] Credit balance managed through `GovernedCredits` with conservation enforcement
+- [ ] Freshness metadata uses `GovernedFreshness` with protocol-standard TTL
+- [ ] `GovernorRegistry` updated to work with commons `GovernedResource<T>`
+- [ ] `resource-governor.ts` local interface deprecated in favor of commons pattern
+- [ ] Tests verify governed resource mutation tracking
+
+> Sources: loa-hounfour CHANGELOG v8.0.0 ("GovernedResource<T>"),
+> resource-governor.ts, governor-registry.ts, reputation-service.ts
+
+#### FR-10: Adopt StateMachineConfig for State Machines
+
+**Current**: `state-machine.ts` defines 4 state machines as plain objects with a generic `StateMachine<S>` interface. Transitions are validated manually. No cross-state invariants or audit hooks.
+
+**Target**: Replace local `StateMachine<S>` with `StateMachineConfig` from commons:
+
+| Machine | Current States | Enhancement |
+|---------|---------------|-------------|
+| CircuitStateMachine | closed → open → half_open → {closed, open} | Add max_open_duration invariant |
+| MemoryEncryptionMachine | unsealed → sealing → sealed ↔ unsealing | Add sealing timeout invariant |
+| AutonomousModeMachine | disabled → enabled → {suspended, confirming} | Add auto-suspend on error threshold |
+| ScheduleLifecycleMachine | pending → {active, cancelled} with retry | Add retry budget invariant |
+
+**Acceptance Criteria**:
+- [ ] `StateMachineConfig`, `State`, `Transition` imported from `@0xhoneyjar/loa-hounfour/commons`
+- [ ] All 4 state machines expressed as `StateMachineConfig` instances
+- [ ] `validateTransition()` and `assertTransition()` refactored to use commons validation
+- [ ] Cross-state invariants declared (at minimum: circuit max_open_duration)
+- [ ] Transition audit hooks wired to emit governance events
+- [ ] All existing `state-machine.test.ts` tests pass unchanged
+- [ ] New tests for cross-state invariant enforcement
+
+> Sources: loa-hounfour CHANGELOG v8.0.0 ("StateMachineConfig"),
+> state-machine.ts:95-155, state-machine.test.ts
+
+### Tier 3: Future-Ready Infrastructure
+
+#### FR-11: Implement DynamicContract + Protocol Versioning
+
+**Current**: No protocol versioning or capability negotiation exists. All clients receive the same response format regardless of their protocol awareness.
+
+**Target**: Implement runtime protocol capability negotiation:
+
+1. **Protocol version header**: `X-Protocol-Version` on all API responses
+2. **Capability matrix**: Declare what each protocol version supports
+3. **DynamicContract**: Define Dixie's protocol surface as a negotiable contract
+4. **ContractNegotiation**: Enable clients to assert required capabilities
+5. **Backward compatibility**: Support current version + 2 prior versions
+6. **Monotonic expansion verification**: New versions only add capabilities, never remove
+
+**Acceptance Criteria**:
+- [ ] `DynamicContract`, `DynamicContractSchema`, `ContractNegotiation`, `ContractNegotiationSchema` imported from commons
+- [ ] `isNegotiationValid()`, `computeNegotiationExpiry()`, `verifyMonotonicExpansion()` imported from commons
+- [ ] Protocol version constant defined (e.g., `DIXIE_PROTOCOL_VERSION = '8.2.0'`)
+- [ ] `X-Protocol-Version` header emitted on all API responses
+- [ ] Capability negotiation middleware validates client capability requirements
+- [ ] Backward compatibility for 2 prior protocol versions
+- [ ] Contract monotonic expansion verified on version bump
+- [ ] Tests verify negotiation, capability resolution, and version headers
+
+> Sources: loa-hounfour CHANGELOG v8.0.0 ("DynamicContract"), v8.1.0 ("isNegotiationValid, verifyMonotonicExpansion"),
+> MIGRATION.md ("wire DynamicContract at gateway")
+
+#### FR-12: Implement Audit Trail Checkpoints
+
+**Current**: `ScoringPathTracker` maintains an unbounded in-memory chain. No checkpoint or pruning mechanism exists.
+
+**Target**: Production-ready audit trail management:
+
+1. **Automatic checkpointing**: Create checkpoint after every N entries (configurable, default 100)
+2. **Continuity verification**: Verify chain integrity between checkpoints on startup
+3. **Managed pruning**: Prune entries before oldest active checkpoint
+4. **Discontinuity detection**: `HashChainDiscontinuity` schema for detecting and recording chain breaks
+
+**Acceptance Criteria**:
+- [ ] `HashChainDiscontinuity`, `HashChainDiscontinuitySchema` imported from commons
+- [ ] Checkpoint creation configurable via service options
+- [ ] Continuity verification runs on service initialization
+- [ ] Pruning preserves checkpoint entries and all entries after latest checkpoint
+- [ ] Discontinuity events detected and recorded (not silently ignored)
+- [ ] Tests verify checkpoint lifecycle: create → verify → prune → verify
+
+> Sources: loa-hounfour CHANGELOG v8.0.0 ("HashChainDiscontinuity"), v8.1.0 ("checkpoint utilities")
+
+#### FR-13: Implement Quarantine for Unsafe States
+
+**Current**: No quarantine mechanism exists. Unsafe states (corrupted aggregates, broken hash chains, invalid policy states) are either silently tolerated or cause hard failures.
+
+**Target**: Introduce quarantine mechanism using hounfour commons:
+
+1. **QuarantineStatus**: Track which resources are quarantined and why
+2. **QuarantineRecord**: Full quarantine event with trigger, timestamp, severity
+3. **Automatic quarantine triggers**:
+   - Hash chain integrity failure → quarantine scoring path
+   - Conservation law violation → quarantine affected resource
+   - State machine invariant violation → quarantine machine
+4. **Recovery path**: Manual or automatic release from quarantine with re-verification
+
+**Acceptance Criteria**:
+- [ ] `QuarantineStatus`, `QuarantineStatusSchema`, `QuarantineRecord` imported from commons
+- [ ] Quarantine triggered automatically on integrity failures
+- [ ] Quarantined resources excluded from scoring/routing decisions (safe fallback)
+- [ ] Quarantine events surfaced in governance error responses
+- [ ] Recovery requires passing integrity verification
+- [ ] Tests verify quarantine triggers, isolation, and recovery
+
+> Sources: loa-hounfour CHANGELOG v8.0.0 ("QuarantineStatus, QuarantineRecord")
 
 ## 5. Non-Functional Requirements
 
-### NFR-1: Zero Breaking Changes
+### NFR-1: Zero Breaking External Changes
 
-All changes are internal type replacements. No public API surface changes. No new routes, no changed response shapes. External consumers see identical behavior.
+All changes are internal governance refactoring. No public API surface changes. No new routes, no changed response shapes (except added `X-Protocol-Version` header). External consumers see identical behavior.
 
 ### NFR-2: Backward Compatibility
 
-- `DixieReputationAggregate.task_cohorts` remains optional (backward compatible with pre-task-type aggregates)
-- Hash chain fields on `ScoringPathLog` are optional per Hounfour schema (existing logs without hashes remain valid)
-- `confidence_threshold` on `TaskTypeCohort` has a default value (30) — existing cohorts without it are valid
+- All existing response formats preserved
+- `X-Protocol-Version` header is additive (clients that don't send it get default behavior)
+- Quarantine falls back to safe defaults (no hard failures)
+- Conservation law factories produce identical results to inline checks
 
 ### NFR-3: Test Coverage
 
-- All existing 1011+ tests must pass unchanged
-- New tests for: hash chain computation, chain integrity, typed event construction, open enum validation
-- Minimum 3 test scenarios per new feature per EDD policy
+- All existing tests must pass unchanged
+- New tests for every FR (minimum 3 scenarios per feature)
+- Integration tests for: autopoietic loop (FR-1), conservation laws (FR-5), audit trail lifecycle (FR-12)
+- Property-based tests for conservation law enforcement where applicable
+
+### NFR-4: Performance
+
+- Conservation law evaluation: <1ms per check (same as inline)
+- GovernanceError construction: <0.1ms (object creation)
+- AuditTrail checkpoint: <5ms (hash computation + write)
+- Protocol negotiation: <0.5ms per request (header parsing + lookup)
+- ModelPerformanceEvent emission: fire-and-forget (no latency impact on response)
 
 ## 6. Technical Constraints
 
 | Constraint | Detail |
 |---|---|
-| Hounfour version | v7.11.0 (local: `file:../../loa-hounfour`) |
-| Import barrels | `@0xhoneyjar/loa-hounfour/governance` (primary), root barrel for aliased exports |
-| ADR-001 compliance | Use `GovernanceTaskType` alias when importing from root barrel; unaliased from governance sub-package |
-| ADR-004 compliance | TaskType assigned exogenously by routing layer — Dixie already compliant (no changes needed) |
-| Hash algorithm | SHA-256 via `@noble/hashes` (browser-compatible, not `node:crypto`) |
-| Canonicalization | RFC 8785 (JSON Canonicalization Scheme) for deterministic hash inputs |
-| Native enforcement | Constraints with `expression: "true"` sentinel require runtime validation per ADR-002 |
+| Hounfour version | v8.2.0 (local: `file:../../loa-hounfour`) |
+| Import barrels | `@0xhoneyjar/loa-hounfour/commons` (primary new), `/governance`, `/core`, `/economy` (existing) |
+| Breaking: `actor_id` | `GovernanceMutation.actor_id` required (v8.1.0) — all mutations must identify actor |
+| Hash algorithm | SHA-256 via `@noble/hashes` (unchanged from cycle-005) |
+| Canonicalization | RFC 8785 (unchanged from cycle-005) |
+| ADR-006 | Hash chain discontinuity detection (commons pattern) |
+| ADR-007 | Commons module organization (barrel structure) |
+| ADR-008 | Enforcement SDK design (Path B — factories + utilities) |
+| ADR-009 | Dynamic contract integration pattern |
 
 ## 7. Scope
 
 ### In Scope
 
-- Replace 4 local type definitions with canonical hounfour imports
-- Implement scoring path hash chain audit trail
-- Extend conformance suite with governance schemas
-- Update type audit documentation
-- Add tests for all new functionality
+- **Tier 1**: ModelPerformanceEvent, QualityObservation, unspecified TaskType, conformance v8.2.0
+- **Tier 2**: ConservationLaw factories, GovernanceError union, GovernanceMutation, AuditTrail, GovernedResource, StateMachineConfig
+- **Tier 3**: DynamicContract, protocol versioning, audit checkpoints, quarantine mechanism
+- **Cross-cutting**: invariants.yaml update, type audit update, conformance suite extension
+- **Functional**: Autopoietic feedback loop operational end-to-end
 
 ### Out of Scope
 
-- E2E cross-system integration (loa-finn#66 Sprint B — separate cycle)
-- Production deployment (loa-finn#66 Sprint C — separate cycle)
-- NFT personality surfacing (loa-finn#66 Sprint D — separate cycle)
-- Event sourcing full implementation (`reconstructAggregateFromEvents()` remains stub — requires persistence layer design)
-- Community TaskType registry infrastructure (ADR-003 Tier 2 — future governance feature)
-- New API endpoints or route changes
+- Database schema changes for audit trail persistence (current in-memory sufficient for this cycle)
+- Cross-repo E2E integration testing with live Finn instance
+- Production deployment changes
+- Community TaskType registry infrastructure (ADR-003 Tier 2)
+- Multi-agent governance orchestration (Agent Teams feature)
 
 ## 8. Risks & Mitigations
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Type shape mismatch between local stubs and hounfour schemas | Low | Medium | Migration analysis confirmed compatibility; hounfour types are supersets |
-| Hash chain performance overhead | Low | Low | Hash is computed once per scoring decision (~1ms); not on hot path |
-| `@noble/hashes` dependency | Low | Low | Already a transitive dependency of hounfour; no new dep for Dixie |
-| Open enum allowing unexpected community types | Medium | Low | Protocol types validated at schema level; community pattern validated by regex |
-| Conformance suite expansion increases test time | Low | Low | Governance schemas are small; marginal test time increase |
+| Commons module API instability | Low | Medium | v8.2.0 is published with 6,393 passing tests; API surface verified |
+| GovernanceError refactoring breaks error handling | Medium | Medium | Map existing HTTP status codes first; add new variants incrementally |
+| Audit trail checkpoint performance | Low | Low | Checkpointing is configurable; default 100-entry interval is conservative |
+| Protocol versioning complexity | Medium | Low | Start with single version; add backward compat incrementally |
+| Quarantine false positives | Low | Medium | Conservative triggers only (integrity failures, not transient errors) |
+| `actor_id` requirement on GovernanceMutation | Low | Low | Dixie always knows the actor (wallet address or system agent ID) |
+| Large refactoring surface (8 service files) | Medium | Medium | Incremental by tier; each tier independently testable and deployable |
 
 ## 9. Dependencies
 
 | Dependency | Type | Status |
 |---|---|---|
-| `@0xhoneyjar/loa-hounfour` v7.11.0 | Local package | Available at `../../loa-hounfour` |
+| `@0xhoneyjar/loa-hounfour` v8.2.0 | Local package | Available at `../../loa-hounfour` (already v8.2.0) |
 | `@noble/hashes` | Transitive (via hounfour) | Already installed |
-| Hounfour ADR-001 (barrel precedence) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-002 (native enforcement sentinel) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-003 (TaskType governance) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-004 (exogenous task type) | Meta-constraint | Already compliant |
-| Hounfour ADR-005 (enum governance) | Convention | Published in hounfour docs/adr/ |
+| Hounfour ADR-006 (hash chain discontinuity) | Convention | Published in hounfour docs/adr/ |
+| Hounfour ADR-007 (commons barrel structure) | Convention | Published in hounfour docs/adr/ |
+| Hounfour ADR-008 (enforcement SDK) | Convention | Published in hounfour docs/adr/ |
+| Hounfour ADR-009 (dynamic contract) | Convention | Published in hounfour docs/adr/ |
+| All prior ADRs (001-005) | Convention | Already compliant from cycle-005 |
 
 ## 10. Estimated Effort
 
-| Sprint | Focus | Tasks (est.) |
-|---|---|---|
-| Sprint 1 | Type migration (FR-1 through FR-4) + type audit (FR-7) | 5-7 |
-| Sprint 2 | Hash chain implementation (FR-5) + conformance (FR-6) + hardening | 5-7 |
+| Sprint | Focus | FRs | Tasks (est.) |
+|---|---|---|---|
+| Sprint 1 | **Protocol Compliance**: ModelPerformanceEvent + QualityObservation + unspecified TaskType + conformance | FR-1, FR-2, FR-3, FR-4 | 6-8 |
+| Sprint 2 | **Conservation & Errors**: ConservationLaw factories + GovernanceError discriminated union | FR-5, FR-6 | 6-8 |
+| Sprint 3 | **Governance Infrastructure**: GovernanceMutation + AuditTrail refactoring + GovernedResource | FR-7, FR-8, FR-9 | 7-9 |
+| Sprint 4 | **State & Contracts**: StateMachineConfig + DynamicContract + protocol versioning | FR-10, FR-11 | 6-8 |
+| Sprint 5 | **Safety & Hardening**: Audit checkpoints + quarantine + integration testing + type audit | FR-12, FR-13, cross-cutting | 5-7 |
 
-**Estimated: 2 sprints.** This is a focused adoption cycle — all types are already designed and tested in hounfour. The work is mechanical replacement plus one new feature (hash chain).
+**Estimated: 5 sprints.** This is a deep adoption cycle — refactoring established patterns to use canonical protocol implementations, closing the autopoietic feedback loop, and adding production safety infrastructure (quarantine, checkpoints, protocol negotiation).
+
+## 11. Architecture Decision Context
+
+This cycle builds on 6 previous cycles of protocol adoption. Key architectural decisions that inform this work:
+
+| ADR | Decision | Relevance |
+|-----|----------|-----------|
+| adr-hounfour-alignment | Hounfour is source of truth for all protocol types | Extends to commons governance patterns |
+| adr-separation-of-powers | Access control boundaries between layers | GovernanceError respects layer boundaries |
+| adr-autopoietic-property | Self-improving system via feedback loops | ModelPerformanceEvent closes the loop |
+| adr-conviction-currency-path | Reputation as economic signal | GovernedReputation formalizes this |
+| adr-constitutional-amendment | Protocol evolution via governed mutation | GovernanceMutation provides the mechanism |
 
 ---
 
-*This PRD scopes the narrow adoption of loa-hounfour v7.11.0 into loa-dixie, replacing local type stubs with canonical protocol imports and implementing the scoring path hash chain audit trail. Broader launch readiness items from loa-finn#66 are deferred to subsequent cycles.*
+*This PRD scopes the full adoption of loa-hounfour v8.2.0 commons governance substrate into loa-dixie, replacing local governance patterns with canonical protocol implementations, closing the autopoietic feedback loop, and enabling runtime protocol negotiation. All three tiers (required, recommended, future-ready) are included per stakeholder direction to use hounfour as the single source of truth.*
