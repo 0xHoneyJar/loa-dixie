@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "bridge_id": "bridge-20260226-phase3-g69to71",
+  "iteration": 1,
+  "convergence_score": 19,
+  "convergence_scoring": "HIGH=5*2=10, MEDIUM=2*4=8, LOW=1*1=1, PRAISE=0, SPECULATION=0 → total=19",
+  "findings_count": {
+    "total": 11,
+    "HIGH": 2,
+    "MEDIUM": 4,
+    "LOW": 1,
+    "PRAISE": 4,
+    "SPECULATION": 1
+  },
+  "convergence_findings": ["high-1", "high-2", "medium-1", "medium-2", "medium-3", "medium-4", "low-1"]
+}
