@@ -1,7 +1,7 @@
 /**
  * Conformance Suite Service — Sprint 4, Task 4.1
  *
- * Validates Dixie payloads against Hounfour v7.11.0 schemas. This service is
+ * Validates Dixie payloads against Hounfour v8.2.0 schemas. This service is
  * the Level 4+ gate: if all payloads pass, Dixie achieves protocol maturity.
  *
  * Methods:
@@ -11,6 +11,7 @@
  * See: grimoires/loa/context/adr-hounfour-alignment.md (Level 4+)
  * @since Sprint 4 — E2E Conformance & Level 4 Gate
  * @since cycle-005 — Sprint 61 (governance schema extension for v7.11.0)
+ * @since cycle-007 — Sprint 73, Task S1-T6 (v8.2.0 schema extensions)
  */
 
 import { validate, validators } from '@0xhoneyjar/loa-hounfour';
@@ -21,6 +22,8 @@ import {
   TaskTypeCohortSchema,
   ReputationEventSchema,
   ScoringPathLogSchema,
+  QualityObservationSchema,
+  ModelPerformanceEventSchema,
 } from '@0xhoneyjar/loa-hounfour/governance';
 
 /**
@@ -38,7 +41,10 @@ export type ConformanceSchemaName =
   | 'taskType'
   | 'taskTypeCohort'
   | 'reputationEvent'
-  | 'scoringPathLog';
+  | 'scoringPathLog'
+  // v8.2.0 additions
+  | 'qualityObservation'
+  | 'modelPerformanceEvent';
 
 /** Result of a single conformance check. */
 export interface ConformanceResult {
@@ -67,6 +73,9 @@ const GOVERNANCE_SCHEMAS: Record<string, unknown> = {
   taskTypeCohort: TaskTypeCohortSchema,
   reputationEvent: ReputationEventSchema,
   scoringPathLog: ScoringPathLogSchema,
+  // v8.2.0 additions
+  qualityObservation: QualityObservationSchema,
+  modelPerformanceEvent: ModelPerformanceEventSchema,
 };
 
 /**
@@ -297,6 +306,89 @@ function getSamplePayloads(): Array<{ schemaName: ConformanceSchemaName; payload
       label: 'ScoringPathLog without hash chain (backward compat)',
       payload: {
         path: 'tier_default',
+      },
+    },
+
+    // ─── v8.2.0 schema additions ─────────────────────────────────────
+
+    // ReputationEvent — model_performance variant (4th variant, v8.2.0)
+    {
+      schemaName: 'reputationEvent',
+      label: 'ReputationEvent (model_performance)',
+      payload: {
+        event_id: '550e8400-e29b-41d4-a716-446655440004',
+        agent_id: 'agent-dixie-01',
+        collection_id: 'collection-honeyjar',
+        timestamp: '2026-02-25T08:00:00Z',
+        type: 'model_performance',
+        model_id: 'gpt-4o',
+        provider: 'openai',
+        pool_id: 'pool-primary',
+        task_type: 'code_review',
+        quality_observation: {
+          score: 0.88,
+          dimensions: { coherence: 0.92, accuracy: 0.85 },
+          latency_ms: 1200,
+          evaluated_by: 'dixie-quality-feedback:bridge',
+        },
+      },
+    },
+    // QualityObservation — standalone
+    {
+      schemaName: 'qualityObservation',
+      label: 'QualityObservation (standalone)',
+      payload: {
+        score: 0.92,
+        dimensions: { coherence: 0.95, accuracy: 0.88, relevance: 0.93 },
+        latency_ms: 800,
+        evaluated_by: 'dixie-quality-feedback:flatline',
+      },
+    },
+    // QualityObservation — minimal (score only)
+    {
+      schemaName: 'qualityObservation',
+      label: 'QualityObservation (minimal)',
+      payload: {
+        score: 0.75,
+      },
+    },
+    // ModelPerformanceEvent — direct schema validation
+    {
+      schemaName: 'modelPerformanceEvent',
+      label: 'ModelPerformanceEvent (full)',
+      payload: {
+        event_id: '550e8400-e29b-41d4-a716-446655440005',
+        agent_id: 'agent-dixie-01',
+        collection_id: 'collection-honeyjar',
+        timestamp: '2026-02-25T08:05:00Z',
+        type: 'model_performance',
+        model_id: 'claude-opus-4-20250514',
+        provider: 'anthropic',
+        pool_id: 'pool-premium',
+        task_type: 'analysis',
+        quality_observation: {
+          score: 0.95,
+          dimensions: { depth: 0.97, clarity: 0.93 },
+          latency_ms: 2400,
+          evaluated_by: 'dixie-quality-feedback:audit',
+        },
+        request_context: {
+          request_id: '550e8400-e29b-41d4-a716-446655440099',
+        },
+      },
+    },
+    // ReputationEvent — quality_signal with 'unspecified' TaskType (v8.2.0)
+    {
+      schemaName: 'reputationEvent',
+      label: 'ReputationEvent (quality_signal with unspecified task_type)',
+      payload: {
+        event_id: '550e8400-e29b-41d4-a716-446655440006',
+        agent_id: 'agent-dixie-01',
+        collection_id: 'collection-honeyjar',
+        timestamp: '2026-02-25T08:10:00Z',
+        type: 'quality_signal',
+        score: 0.80,
+        task_type: 'unspecified',
       },
     },
   ];

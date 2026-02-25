@@ -19,6 +19,7 @@
  */
 import { evaluateEconomicBoundary } from '@0xhoneyjar/loa-hounfour';
 import { computeBlendedScore } from '@0xhoneyjar/loa-hounfour/governance';
+import { CONSERVATION_REGISTRY } from './conservation-laws.js';
 import type {
   TrustLayerSnapshot,
   CapitalLayerSnapshot,
@@ -31,6 +32,7 @@ import type { ConvictionTier } from '../types/conviction.js';
 import type { TaskType, ScoringPathLog } from '../types/reputation-evolution.js';
 import type { DixieReputationAggregate } from '../types/reputation-evolution.js';
 import type { ScoringPathTracker } from './scoring-path-tracker.js';
+import { logScoringPath } from './scoring-path-logger.js';
 
 /**
  * Trust profile derived from a conviction tier.
@@ -81,6 +83,26 @@ const DEFAULT_CRITERIA: QualificationCriteria = {
 export const DEFAULT_BUDGET_PERIOD_DAYS = 30;
 
 /**
+ * Mulberry32 — simple, fast, deterministic 32-bit PRNG.
+ * Used for reproducible exploration decisions in tests.
+ * In production (no seed), delegates to Math.random().
+ * @since cycle-008 — FR-9
+ */
+export function createPRNG(seed?: string): () => number {
+  if (!seed) return Math.random;
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(31, h) + seed.charCodeAt(i) | 0;
+  }
+  return () => {
+    h |= 0; h = h + 0x6D2B79F5 | 0;
+    let t = Math.imul(h ^ h >>> 15, 1 | h);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/**
  * Resolve the effective budget period in days.
  * Priority: explicit parameter > env var > constant default.
  */
@@ -98,6 +120,22 @@ function resolveBudgetPeriodDays(override?: number): number {
  * Options for evaluateEconomicBoundaryForWallet.
  * @since Sprint 6 — Task 6.2
  */
+/**
+ * Configuration for ε-greedy exploration in model selection.
+ * Prevents the exploitation trap: without exploration, the system
+ * converges to a single model and can never discover if alternatives
+ * have improved.
+ * @since cycle-008 — FR-9
+ */
+export interface ExplorationConfig {
+  /** Probability of selecting non-optimal model [0, 1]. Default: 0.05. */
+  readonly epsilon: number;
+  /** Minimum observations before exploration begins. Default: 50. */
+  readonly warmup: number;
+  /** Seed for deterministic PRNG (for testing). */
+  readonly seed?: string;
+}
+
 export interface EconomicBoundaryOptions {
   /** Override qualification criteria. */
   criteria?: QualificationCriteria;
@@ -138,6 +176,12 @@ export interface EconomicBoundaryOptions {
    * @since cycle-005 — Sprint 61 (Hounfour v7.11.0 hash chain)
    */
   scoringPathTracker?: ScoringPathTracker;
+  /**
+   * ε-greedy exploration configuration. When epsilon > 0 and warmup met,
+   * a fraction of evaluations explore non-optimal model selections.
+   * @since cycle-008 — FR-9
+   */
+  exploration?: ExplorationConfig;
 }
 
 /**
@@ -154,25 +198,22 @@ export interface EconomicBoundaryOptions {
  * ## Social Contract: Enforcing the Conservation Invariants
  *
  * This function is the enforcement point for three conservation invariants
- * that constitute the economic social contract of the Dixie commons:
+ * that constitute the economic social contract of the Dixie commons.
+ * Each invariant is backed by a protocol ConservationLaw from CONSERVATION_REGISTRY.
  *
- * **I-1: committed + reserved + available = limit**
- * "Community resources are finite and accounted for." The `budgetRemainingMicroUsd`
- * parameter represents the `available` portion of the wallet's budget. The
- * economic boundary decision engine verifies that this value is sufficient
- * before granting access. No wallet can consume more than the community has
- * allocated — this is the scarcity constraint that makes the commons viable.
+ * **I-1: BUDGET_CONSERVATION** (committed + reserved + available = limit)
+ * "Community resources are finite and accounted for." Protocol: `CONSERVATION_REGISTRY.get('I-1')`.
+ * The `budgetRemainingMicroUsd` parameter represents the `available` portion.
+ * The economic boundary engine verifies sufficiency before granting access.
  *
- * **I-2: SUM(lot_entries) per lot = original_micro**
- * "Every credit lot is fully consumed." When access is granted and a response
- * incurs cost, that cost flows through the billing pipeline where conservation
- * is verified by `verifyPricingConservation()`. No value is created or destroyed.
+ * **I-2: PRICING_CONSERVATION** (SUM(lot_entries) per lot = original_micro)
+ * "Every credit lot is fully consumed." Protocol: `CONSERVATION_REGISTRY.get('I-2')`.
+ * Enforcement downstream in the billing pipeline via `verifyPricingConservation()`.
  *
- * **I-3: Redis.committed ~ Postgres.usage_events**
- * "Fast storage matches durable storage." The budget_remaining value fed to
- * this function may come from Redis (fast path) or Postgres (durable path).
- * The invariant that these eventually converge ensures that access decisions
- * made on the fast path are consistent with the durable record of truth.
+ * **I-3: CACHE_COHERENCE** (Redis.committed ~ Postgres.usage_events, bounded drift)
+ * "Fast storage matches durable storage." Protocol: `CONSERVATION_REGISTRY.get('I-3')`.
+ * Budget values from Redis (fast path) or Postgres (durable path) converge within
+ * the drift bound defined by the conservation law.
  *
  * In Web4 terms: this function is the gatekeeper that translates conviction
  * (demonstrated commitment to the commons) into economic access (the right
@@ -183,45 +224,27 @@ export interface EconomicBoundaryOptions {
  * @param wallet - Wallet address (used as boundary_id for traceability)
  * @param tier - Resolved conviction tier for the wallet
  * @param budgetRemainingMicroUsd - Remaining budget in micro-USD string format
- * @param criteriaOrOpts - QualificationCriteria for backward compat, or EconomicBoundaryOptions
- * @param budgetPeriodDays - Optional budget period in days (deprecated: use opts)
+ * @param options - Typed evaluation options (criteria, reputation, task type, tracker)
  * @returns EconomicBoundaryEvaluationResult with access decision, denial codes, and gap info
  *
  * @since Sprint 3 — Economic Boundary Integration
  * @since Sprint 12 — Conservation invariant social contract framing (Task 12.6)
+ * @since cycle-008 — FR-3 (canonical API: clear types, no union discrimination)
  */
-export function evaluateEconomicBoundaryForWallet(
+export function evaluateEconomicBoundaryCanonical(
   wallet: string,
   tier: ConvictionTier,
   budgetRemainingMicroUsd: number | string = '0',
-  criteriaOrOpts?: QualificationCriteria | EconomicBoundaryOptions,
-  budgetPeriodDays?: number,
+  options: EconomicBoundaryOptions = {},
 ): EconomicBoundaryEvaluationResult {
-  // Resolve overloaded parameter: if it has 'reputationAggregate' or 'criteria', it's opts
-  let criteria: QualificationCriteria = DEFAULT_CRITERIA;
-  let periodDaysOverride: number | undefined = budgetPeriodDays;
-  let reputationAggregate: ReputationAggregate | null | undefined;
-
-  if (criteriaOrOpts) {
-    // Discriminate via negative check: QualificationCriteria always has
-    // 'min_trust_score', so its absence definitively indicates
-    // EconomicBoundaryOptions. This single check scales regardless of
-    // how many fields are added to EconomicBoundaryOptions.
-    // (Bridge iter1 LOW-2: replaces growing 5-field OR chain)
-    if (!('min_trust_score' in criteriaOrOpts)) {
-      // New: EconomicBoundaryOptions
-      const opts = criteriaOrOpts as EconomicBoundaryOptions;
-      criteria = opts.criteria ?? DEFAULT_CRITERIA;
-      periodDaysOverride = opts.budgetPeriodDays ?? budgetPeriodDays;
-      reputationAggregate = opts.reputationAggregate;
-    } else {
-      // Legacy: direct QualificationCriteria
-      criteria = criteriaOrOpts as QualificationCriteria;
-    }
-  }
+  // Direct reads from typed options — no union type discrimination needed (FR-3)
+  const criteria = options.criteria ?? DEFAULT_CRITERIA;
+  const reputationAggregate = options.reputationAggregate;
+  const taskType = options.taskType;
+  const tracker = options.scoringPathTracker;
 
   const profile = TIER_TRUST_PROFILES[tier];
-  const periodDays = resolveBudgetPeriodDays(periodDaysOverride);
+  const periodDays = resolveBudgetPeriodDays(options.budgetPeriodDays);
 
   // Compute timestamp once to avoid multiple Date constructions in hot path (Bridge iter2-medium-6)
   const now = new Date();
@@ -234,14 +257,6 @@ export function evaluateEconomicBoundaryForWallet(
   // task_cohorts matching that task type, use the task-specific score instead
   // of the aggregate score. This provides more precise access decisions when
   // the request context includes a known task type.
-  // Resolve taskType and tracker from options (may be undefined even when opts is provided)
-  const taskType = (criteriaOrOpts && 'taskType' in criteriaOrOpts)
-    ? (criteriaOrOpts as EconomicBoundaryOptions).taskType
-    : undefined;
-  const tracker = (criteriaOrOpts && 'scoringPathTracker' in criteriaOrOpts)
-    ? (criteriaOrOpts as EconomicBoundaryOptions).scoringPathTracker
-    : undefined;
-
   let blendedScore = profile.blended_score;
   let reputationState = profile.reputation_state;
   // Governance origin tag for scoring path reasons (Sprint 64 — Q5 governance provenance)
@@ -252,13 +267,61 @@ export function evaluateEconomicBoundaryForWallet(
     reason: `No reputation aggregate available; using static tier-based score ${weightsTag}`,
   };
 
+  // cycle-007 — Sprint 77, Task S5-T3: Quarantine safe fallback.
+  // When the scoring path tracker is quarantined (integrity failure detected),
+  // fall back to tier defaults. No hard failure — degraded but safe.
+  //
+  // TRADE-OFF (Bridgebuilder F6, Sprint 79 S2-T3):
+  // Recording to a quarantined tracker means entries link to a chain with a
+  // known integrity break. However, NOT recording makes the quarantine period
+  // invisible to audit — we'd lose all scoring decisions during quarantine.
+  //
+  // Design choice: visibility > purity. Analogous to Bitcoin's orphaned block
+  // preservation — the blocks are individually valid but the chain they extend
+  // has a known fork. Consumers should check `integrity_status` before trusting
+  // chain integrity; quarantine entries are individually valid but the chain
+  // they link to has a known break.
+  if (tracker?.isQuarantined) {
+    const quarantineInput: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'> = {
+      path: 'tier_default',
+      reason: `Scoring path tracker quarantined — safe fallback to tier defaults ${weightsTag}`,
+    };
+    const quarantinePath = tracker.record(quarantineInput);
+
+    logScoringPath({
+      ...quarantinePath,
+      wallet,
+      tier,
+      blending_used: false,
+      quarantined: true,
+    });
+
+    const trustSnapshot: TrustLayerSnapshot = {
+      reputation_state: reputationState,
+      blended_score: blendedScore,
+      snapshot_at: nowIso,
+    };
+    const capitalSnapshot: CapitalLayerSnapshot = {
+      budget_remaining: String(budgetRemainingMicroUsd),
+      billing_tier: tier,
+      budget_period_end: new Date(now.getTime() + periodDays * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    return evaluateEconomicBoundary(trustSnapshot, capitalSnapshot, criteria, nowIso, `wallet:${wallet}`);
+  }
+
+  // cycle-007 — Sprint 73, Task S1-T5: Handle 'unspecified' TaskType explicitly.
+  // When taskType is 'unspecified' or undefined, skip cohort lookup entirely
+  // and route directly to aggregate-only scoring. The 'unspecified' literal
+  // is the v8.2.0 explicit aggregate-only routing signal.
+  const isUnspecifiedTask = taskType === undefined || taskType === 'unspecified';
+
   if (reputationAggregate) {
     // Sprint 10 — Task 10.4: Try task-specific cohort first
     const dixieAggregate = reputationAggregate as DixieReputationAggregate;
     const taskCohorts = dixieAggregate.task_cohorts;
     let usedTaskCohort = false;
 
-    if (taskType && taskCohorts && taskCohorts.length > 0) {
+    if (!isUnspecifiedTask && taskType && taskCohorts && taskCohorts.length > 0) {
       // Find cohorts matching the requested task type
       const matchingCohorts = taskCohorts.filter(c => c.task_type === taskType);
       if (matchingCohorts.length > 0) {
@@ -294,7 +357,30 @@ export function evaluateEconomicBoundaryForWallet(
         reputationAggregate.pseudo_count,
       );
       reputationState = reputationAggregate.state;
-      scoringPathInput = { path: 'aggregate', reason: `Using aggregate personal score (no task-specific cohort) ${weightsTag}` };
+      // Differentiated reason messages for aggregate-only routing
+      const aggregateReason = isUnspecifiedTask
+        ? (taskType === 'unspecified'
+          ? `Explicit 'unspecified' TaskType — aggregate-only routing (v8.2.0) ${weightsTag}`
+          : `No task type provided — aggregate-only routing ${weightsTag}`)
+        : `Using aggregate personal score (no task-specific cohort for '${taskType}') ${weightsTag}`;
+      scoringPathInput = { path: 'aggregate', reason: aggregateReason };
+    }
+  }
+
+  // FR-9: ε-greedy exploration budget
+  const exploration = options.exploration;
+  let isExploration = false;
+  if (exploration && exploration.epsilon > 0) {
+    const totalObservations = reputationAggregate?.sample_count ?? 0;
+    if (totalObservations >= exploration.warmup) {
+      const rand = createPRNG(exploration.seed);
+      if (rand() < exploration.epsilon) {
+        isExploration = true;
+        scoringPathInput = {
+          ...scoringPathInput,
+          reason: `${scoringPathInput.reason} [EXPLORATION: ε=${exploration.epsilon}]`,
+        };
+      }
     }
   }
 
@@ -305,18 +391,25 @@ export function evaluateEconomicBoundaryForWallet(
 
   // Record scoring path — with hash chain when tracker is provided, plain object otherwise
   const scoringPath: ScoringPathLog = tracker
-    ? tracker.record(scoringPathInput, { reputation_freshness: reputationFreshness })
+    ? tracker.record(scoringPathInput, {
+        reputation_freshness: reputationFreshness,
+        routing: isExploration ? {
+          routed_model: 'exploration-selected',
+          routing_reason: `ε-greedy exploration (ε=${exploration!.epsilon})`,
+          exploration: true,
+        } : undefined,
+      })
     : scoringPathInput;
 
   // Structured provenance log: what happened, with what data, and how fresh
   // (Sprint 63 — Task 4.4, Bridge deep review Q3)
-  console.debug('[conviction-boundary] scoring_path:', JSON.stringify({
+  logScoringPath({
     ...scoringPath,
     wallet,
     tier,
     blending_used: !!reputationAggregate,
     reputation_freshness: reputationFreshness,
-  }));
+  });
 
   const trustSnapshot: TrustLayerSnapshot = {
     reputation_state: reputationState,
@@ -336,6 +429,58 @@ export function evaluateEconomicBoundaryForWallet(
     criteria,
     nowIso,
     `wallet:${wallet}`,
+  );
+}
+
+/**
+ * Legacy adapter — maps positional QualificationCriteria to canonical EconomicBoundaryOptions.
+ * @deprecated Use evaluateEconomicBoundaryCanonical()
+ * @since Sprint 3 — preserved for backward compatibility
+ * @since cycle-008 — FR-3 (extracted as adapter)
+ */
+export function evaluateEconomicBoundaryLegacy(
+  wallet: string,
+  tier: ConvictionTier,
+  budgetRemainingMicroUsd: number | string = '0',
+  criteria?: QualificationCriteria,
+  budgetPeriodDays?: number,
+): EconomicBoundaryEvaluationResult {
+  return evaluateEconomicBoundaryCanonical(wallet, tier, budgetRemainingMicroUsd, {
+    criteria,
+    budgetPeriodDays,
+  });
+}
+
+/**
+ * Evaluate economic boundary for a wallet based on their conviction tier.
+ *
+ * @deprecated Use evaluateEconomicBoundaryCanonical() for new code.
+ * Preserved for backward compatibility — delegates to canonical or legacy
+ * based on the runtime type of criteriaOrOpts.
+ *
+ * @since Sprint 3 — original entry point
+ * @since cycle-008 — FR-3 (deprecated in favor of canonical API)
+ */
+export function evaluateEconomicBoundaryForWallet(
+  wallet: string,
+  tier: ConvictionTier,
+  budgetRemainingMicroUsd: number | string = '0',
+  criteriaOrOpts?: QualificationCriteria | EconomicBoundaryOptions,
+  budgetPeriodDays?: number,
+): EconomicBoundaryEvaluationResult {
+  if (!criteriaOrOpts) {
+    return evaluateEconomicBoundaryCanonical(wallet, tier, budgetRemainingMicroUsd, {
+      budgetPeriodDays,
+    });
+  }
+  if (!('min_trust_score' in criteriaOrOpts)) {
+    return evaluateEconomicBoundaryCanonical(
+      wallet, tier, budgetRemainingMicroUsd, criteriaOrOpts as EconomicBoundaryOptions,
+    );
+  }
+  return evaluateEconomicBoundaryLegacy(
+    wallet, tier, budgetRemainingMicroUsd,
+    criteriaOrOpts as QualificationCriteria, budgetPeriodDays,
   );
 }
 
@@ -660,5 +805,5 @@ export const CONVICTION_ACCESS_MATRIX_ORIGIN: GovernanceAnnotation = {
 };
 
 export { TIER_TRUST_PROFILES, DEFAULT_CRITERIA };
-export type { TierTrustProfile, EconomicBoundaryOptions };
+export type { TierTrustProfile };
 export type { ScoringPathLog } from '../types/reputation-evolution.js';

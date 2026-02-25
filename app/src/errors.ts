@@ -8,7 +8,11 @@
  * Replaces plain `{ status, body }` objects thrown throughout the BFF.
  * Catch handlers can use `err instanceof BffError` for type-safe matching.
  *
+ * v8.2.0: GovernanceError → BffError conversion via toBffError() from
+ * governance-errors.ts. Re-exported here for consumer convenience.
+ *
  * @since Sprint 5 — LOW-3 (Bridge iter1 deferred finding)
+ * @since cycle-007 — Sprint 74, Task S2-T5 (GovernanceError integration)
  */
 import type { ErrorResponse } from './types.js';
 
@@ -60,3 +64,7 @@ export class BffError extends Error {
     return err instanceof BffError;
   }
 }
+
+// Re-export governance error conversion for consumer convenience
+export { toBffError } from './services/governance-errors.js';
+export type { GovernanceError } from '@0xhoneyjar/loa-hounfour/commons';
