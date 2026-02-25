@@ -24,11 +24,15 @@ import {
 } from '@0xhoneyjar/loa-hounfour/governance';
 import type { AuditTrail, AuditEntry } from '@0xhoneyjar/loa-hounfour/commons';
 import type { AuditTrailVerificationResult } from '@0xhoneyjar/loa-hounfour/commons';
+import type { QuarantineRecord } from '@0xhoneyjar/loa-hounfour/commons';
 import {
   AUDIT_TRAIL_GENESIS_HASH,
   buildDomainTag,
   computeAuditEntryHash,
   verifyAuditTrailIntegrity,
+  createCheckpoint,
+  verifyCheckpointContinuity,
+  pruneBeforeCheckpoint,
 } from '@0xhoneyjar/loa-hounfour/commons';
 import type { ScoringPathLog } from '../types/reputation-evolution.js';
 
@@ -92,6 +96,17 @@ const SCORING_PATH_DOMAIN_TAG = buildDomainTag('ScoringPathLog', '8.2.0');
  * // result.valid === true
  * ```
  */
+/**
+ * Configuration options for ScoringPathTracker.
+ * @since cycle-007 — Sprint 77, Task S5-T1
+ */
+export interface ScoringPathTrackerOptions {
+  /** Checkpoint interval — auto-checkpoint after this many entries. Default: 100. */
+  checkpointInterval?: number;
+  /** Verify integrity on initialization. Default: true. */
+  verifyOnInit?: boolean;
+}
+
 export class ScoringPathTracker {
   private lastHash: string = SCORING_PATH_GENESIS_HASH;
   private entryCount: number = 0;
@@ -99,6 +114,15 @@ export class ScoringPathTracker {
    *  this tracker is used sequentially (one record() completes before the next).
    *  If concurrent usage is ever needed, return metadata alongside the result instead. */
   private _lastRecordOptions?: RecordOptions;
+
+  /** @since cycle-007 — Sprint 77, Task S5-T1 */
+  private readonly _options: Required<ScoringPathTrackerOptions>;
+
+  /**
+   * Quarantine state — set when integrity verification detects a failure.
+   * @since cycle-007 — Sprint 77, Task S5-T2
+   */
+  private _quarantineRecord: QuarantineRecord | null = null;
 
   /**
    * Commons AuditTrail — mirrors scoring path entries for checkpoint/verification.
@@ -110,6 +134,13 @@ export class ScoringPathTracker {
     genesis_hash: AUDIT_TRAIL_GENESIS_HASH,
     integrity_status: 'verified',
   };
+
+  constructor(options?: ScoringPathTrackerOptions) {
+    this._options = {
+      checkpointInterval: options?.checkpointInterval ?? 100,
+      verifyOnInit: options?.verifyOnInit ?? true,
+    };
+  }
 
   /**
    * Build the content fields shared between hash input and return value.
@@ -220,11 +251,130 @@ export class ScoringPathTracker {
     return this._auditTrail;
   }
 
+  // ---------------------------------------------------------------------------
+  // Checkpoint lifecycle (S5-T1)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Create a checkpoint at the current position in the audit trail.
+   * Entries before the checkpoint can later be pruned.
+   *
+   * @returns true if checkpoint was created, false if trail is empty
+   * @since cycle-007 — Sprint 77, Task S5-T1
+   */
+  checkpoint(): boolean {
+    if (this._auditTrail.entries.length === 0) return false;
+    const result = createCheckpoint(this._auditTrail);
+    if (result.success) {
+      this._auditTrail = result.trail;
+    }
+    return result.success;
+  }
+
+  /**
+   * Verify continuity from the last checkpoint.
+   * If no checkpoint exists, verifies the full trail.
+   *
+   * @returns Verification result
+   * @since cycle-007 — Sprint 77, Task S5-T1
+   */
+  verifyContinuity(): AuditTrailVerificationResult {
+    if (this._auditTrail.checkpoint_hash !== undefined) {
+      return verifyCheckpointContinuity(this._auditTrail);
+    }
+    return verifyAuditTrailIntegrity(this._auditTrail);
+  }
+
+  /**
+   * Prune entries before the last checkpoint. Preserves chain integrity.
+   * No-op if no checkpoint exists.
+   *
+   * @returns Number of entries pruned
+   * @since cycle-007 — Sprint 77, Task S5-T1
+   */
+  prune(): number {
+    const beforeCount = this._auditTrail.entries.length;
+    this._auditTrail = pruneBeforeCheckpoint(this._auditTrail);
+    return beforeCount - this._auditTrail.entries.length;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quarantine (S5-T2)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Enter quarantine when integrity verification detects a failure.
+   * Creates a QuarantineRecord referencing the discontinuity.
+   *
+   * @param discontinuityId - UUID of the detected discontinuity
+   * @param firstAffectedIndex - Index of the first affected entry
+   * @param lastAffectedIndex - Index of the last affected entry
+   * @since cycle-007 — Sprint 77, Task S5-T2
+   */
+  enterQuarantine(
+    discontinuityId: string,
+    firstAffectedIndex: number = 0,
+    lastAffectedIndex?: number,
+  ): void {
+    this._quarantineRecord = {
+      quarantine_id: crypto.randomUUID(),
+      discontinuity_id: discontinuityId,
+      resource_type: 'ScoringPathLog',
+      resource_id: 'scoring-path-tracker',
+      status: 'active',
+      quarantined_at: new Date().toISOString(),
+      first_affected_index: firstAffectedIndex,
+      last_affected_index: lastAffectedIndex ?? Math.max(0, this._auditTrail.entries.length - 1),
+    };
+    (this._auditTrail as { integrity_status: string }).integrity_status = 'quarantined';
+  }
+
+  /**
+   * Attempt to recover from quarantine by re-verifying integrity.
+   * If verification passes, quarantine is released. Otherwise stays active.
+   *
+   * @returns true if recovered (quarantine released), false if still quarantined
+   * @since cycle-007 — Sprint 77, Task S5-T2
+   */
+  recover(): boolean {
+    if (!this._quarantineRecord) return true;
+
+    const result = this.verifyIntegrity();
+    if (result.valid) {
+      this._quarantineRecord = {
+        ...this._quarantineRecord,
+        status: 'reconciled',
+        resolved_at: new Date().toISOString(),
+      };
+      (this._auditTrail as { integrity_status: string }).integrity_status = 'verified';
+      this._quarantineRecord = null;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check if the tracker is currently quarantined.
+   * @since cycle-007 — Sprint 77, Task S5-T2
+   */
+  get isQuarantined(): boolean {
+    return this._quarantineRecord !== null && this._quarantineRecord.status === 'active';
+  }
+
+  /**
+   * Get the current quarantine record, if any.
+   * @since cycle-007 — Sprint 77, Task S5-T2
+   */
+  get quarantineRecord(): Readonly<QuarantineRecord> | null {
+    return this._quarantineRecord;
+  }
+
   /** Reset the chain to genesis state. */
   reset(): void {
     this.lastHash = SCORING_PATH_GENESIS_HASH;
     this.entryCount = 0;
     this._lastRecordOptions = undefined;
+    this._quarantineRecord = null;
     this._auditTrail = {
       entries: [],
       hash_algorithm: 'sha256',

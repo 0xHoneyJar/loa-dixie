@@ -373,7 +373,7 @@ function getSamplePayloads(): Array<{ schemaName: ConformanceSchemaName; payload
           evaluated_by: 'dixie-quality-feedback:audit',
         },
         request_context: {
-          request_id: 'req-abc123',
+          request_id: '550e8400-e29b-41d4-a716-446655440099',
         },
       },
     },

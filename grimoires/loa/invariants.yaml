@@ -6,7 +6,7 @@
 # functions in the codebase, referenced by repo:file:symbol.
 
 schema_version: 1
-protocol: loa-hounfour@7.0.0
+protocol: loa-hounfour@8.2.0
 
 invariants:
   - id: INV-001

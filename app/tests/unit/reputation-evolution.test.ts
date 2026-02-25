@@ -89,15 +89,16 @@ function makeEvent(overrides: Partial<ReputationEvent> = {}): ReputationEvent {
 
 describe('Reputation Evolution — Sprint 10', () => {
   describe('Task 10.1: TaskTypeCohort types and TASK_TYPES taxonomy', () => {
-    it('TASK_TYPES contains the 5 expected task categories', () => {
+    it('TASK_TYPES contains the 6 expected task categories', () => {
       expect(TASK_TYPES).toEqual([
         'code_review',
         'creative_writing',
         'analysis',
         'summarization',
         'general',
+        'unspecified',
       ]);
-      expect(TASK_TYPES).toHaveLength(5);
+      expect(TASK_TYPES).toHaveLength(6);
     });
 
     it('TASK_TYPES is readonly (frozen at type level)', () => {
@@ -495,11 +496,12 @@ describe('Reputation Evolution — Sprint 10', () => {
         ];
 
         const aggregate = reconstructAggregateFromEvents(events);
-        expect(aggregate.state).toBe('cold');
-        expect(aggregate.personal_score).toBeNull();
+        expect(aggregate.state).toBe('warming');
+        expect(aggregate.personal_score).toBeUndefined();
         expect(aggregate.sample_count).toBe(3); // Event count recorded
         expect(aggregate.created_at).toBe('2026-02-01T00:00:00Z');
         expect(aggregate.last_updated).toBe('2026-02-03T00:00:00Z');
+        expect(aggregate.contract_version).toBe('8.2.0');
         expect(aggregate.task_cohorts).toEqual([]);
       });
 
@@ -507,7 +509,7 @@ describe('Reputation Evolution — Sprint 10', () => {
         const aggregate = reconstructAggregateFromEvents([]);
         expect(aggregate.state).toBe('cold');
         expect(aggregate.sample_count).toBe(0);
-        expect(aggregate.contract_version).toBe('7.11.0');
+        expect(aggregate.contract_version).toBe('8.2.0');
       });
     });
   });

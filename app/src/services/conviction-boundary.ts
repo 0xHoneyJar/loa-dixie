@@ -250,6 +250,37 @@ export function evaluateEconomicBoundaryForWallet(
     reason: `No reputation aggregate available; using static tier-based score ${weightsTag}`,
   };
 
+  // cycle-007 — Sprint 77, Task S5-T3: Quarantine safe fallback.
+  // When the scoring path tracker is quarantined (integrity failure detected),
+  // fall back to tier defaults. No hard failure — degraded but safe.
+  if (tracker?.isQuarantined) {
+    const quarantineInput: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'> = {
+      path: 'tier_default',
+      reason: `Scoring path tracker quarantined — safe fallback to tier defaults ${weightsTag}`,
+    };
+    const quarantinePath = tracker.record(quarantineInput);
+
+    console.debug('[conviction-boundary] scoring_path:', JSON.stringify({
+      ...quarantinePath,
+      wallet,
+      tier,
+      blending_used: false,
+      quarantined: true,
+    }));
+
+    const trustSnapshot: TrustLayerSnapshot = {
+      reputation_state: reputationState,
+      blended_score: blendedScore,
+      snapshot_at: nowIso,
+    };
+    const capitalSnapshot: CapitalLayerSnapshot = {
+      budget_remaining: String(budgetRemainingMicroUsd),
+      billing_tier: tier,
+      budget_period_end: new Date(now.getTime() + periodDays * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    return evaluateEconomicBoundary(trustSnapshot, capitalSnapshot, criteria, nowIso, `wallet:${wallet}`);
+  }
+
   // cycle-007 — Sprint 73, Task S1-T5: Handle 'unspecified' TaskType explicitly.
   // When taskType is 'unspecified' or undefined, skip cohort lookup entirely
   // and route directly to aggregate-only scoring. The 'unspecified' literal
