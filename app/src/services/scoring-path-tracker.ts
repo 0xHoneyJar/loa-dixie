@@ -34,6 +34,8 @@ import {
   verifyCheckpointContinuity,
   pruneBeforeCheckpoint,
 } from '@0xhoneyjar/loa-hounfour/commons';
+import type { GovernanceMutation } from '@0xhoneyjar/loa-hounfour/commons';
+import type { GovernedResource, TransitionResult, InvariantResult } from './governed-resource.js';
 import type { ScoringPathLog } from '../types/reputation-evolution.js';
 
 /**
@@ -146,7 +148,26 @@ export interface CrossChainVerificationResult {
   readonly detail: string;
 }
 
-export class ScoringPathTracker {
+/** State snapshot for the scoring path resource. @since cycle-008 — FR-12 */
+export interface ScoringPathState {
+  readonly entryCount: number;
+  readonly tipHash: string;
+  readonly isQuarantined: boolean;
+  readonly hasCheckpoint: boolean;
+}
+
+/** Event types for scoring path transitions. @since cycle-008 — FR-12 */
+export type ScoringPathEvent =
+  | { type: 'record'; entry: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason'> }
+  | { type: 'checkpoint' }
+  | { type: 'quarantine'; discontinuityId: string };
+
+/** Invariant IDs verifiable on the scoring path resource. @since cycle-008 — FR-12 */
+export type ScoringPathInvariant = 'chain_integrity' | 'cross_chain_consistency' | 'checkpoint_coverage';
+
+export class ScoringPathTracker
+  implements GovernedResource<ScoringPathState, ScoringPathEvent, ScoringPathInvariant>
+{
   private lastHash: string = SCORING_PATH_GENESIS_HASH;
   private entryCount: number = 0;
   /** Metadata from the most recent record() call. Single-caller assumption:
@@ -501,5 +522,90 @@ export class ScoringPathTracker {
    */
   get lastRecordOptions(): RecordOptions | undefined {
     return this._lastRecordOptions;
+  }
+
+  // ---------------------------------------------------------------------------
+  // GovernedResource<T> implementation (FR-12)
+  // ---------------------------------------------------------------------------
+
+  readonly resourceId = 'scoring-path-tracker';
+  readonly resourceType = 'scoring-path';
+
+  get current(): ScoringPathState {
+    return {
+      entryCount: this.entryCount,
+      tipHash: this.lastHash,
+      isQuarantined: this.isQuarantined,
+      hasCheckpoint: this._auditTrail.checkpoint_hash !== undefined,
+    };
+  }
+
+  get version(): number {
+    return this.entryCount;
+  }
+
+  async transition(
+    event: ScoringPathEvent,
+    _actorId: string,
+  ): Promise<TransitionResult<ScoringPathState>> {
+    switch (event.type) {
+      case 'record':
+        this.record(event.entry);
+        return { success: true, state: this.current, version: this.version };
+      case 'checkpoint': {
+        const ok = this.checkpoint();
+        return ok
+          ? { success: true, state: this.current, version: this.version }
+          : { success: false, reason: 'Empty trail — cannot checkpoint', code: 'EMPTY_TRAIL' };
+      }
+      case 'quarantine':
+        this.enterQuarantine(event.discontinuityId);
+        return { success: true, state: this.current, version: this.version };
+    }
+  }
+
+  verify(invariantId: ScoringPathInvariant): InvariantResult {
+    const now = new Date().toISOString();
+    switch (invariantId) {
+      case 'chain_integrity': {
+        const result = this.verifyIntegrity();
+        return {
+          invariant_id: 'chain_integrity',
+          satisfied: result.valid,
+          detail: result.valid ? 'Audit trail integrity verified' : `Integrity failure at phase: ${result.failure_phase}, index: ${result.failure_index}`,
+          checked_at: now,
+        };
+      }
+      case 'cross_chain_consistency': {
+        const result = this.verifyCrossChainConsistency();
+        return {
+          invariant_id: 'cross_chain_consistency',
+          satisfied: result.consistent,
+          detail: result.detail,
+          checked_at: now,
+        };
+      }
+      case 'checkpoint_coverage': {
+        const hasCheckpoint = this._auditTrail.checkpoint_hash !== undefined;
+        const satisfied = this.entryCount < this._options.checkpointInterval || hasCheckpoint;
+        return {
+          invariant_id: 'checkpoint_coverage',
+          satisfied,
+          detail: hasCheckpoint
+            ? `Checkpoint exists (entries: ${this.entryCount})`
+            : `No checkpoint yet (entries: ${this.entryCount}, interval: ${this._options.checkpointInterval})`,
+          checked_at: now,
+        };
+      }
+    }
+  }
+
+  verifyAll(): InvariantResult[] {
+    return (['chain_integrity', 'cross_chain_consistency', 'checkpoint_coverage'] as const)
+      .map(id => this.verify(id));
+  }
+
+  get mutationLog(): ReadonlyArray<GovernanceMutation> {
+    return [];
   }
 }

@@ -1,4 +1,5 @@
 import type { ResourceGovernor, ResourceHealth } from './resource-governor.js';
+import type { GovernedResource, InvariantResult } from './governed-resource.js';
 
 /**
  * Governor Registry — unified observability for all governed resources.
@@ -40,6 +41,8 @@ export interface GovernorSnapshot {
 
 export class GovernorRegistry {
   private readonly governors = new Map<string, ResourceGovernor<unknown>>();
+  /** @since cycle-008 — FR-13 */
+  private readonly governedResources = new Map<string, GovernedResource<unknown, unknown, string>>();
 
   /**
    * Register a resource governor. Each resource type may only be registered once.
@@ -52,9 +55,29 @@ export class GovernorRegistry {
     this.governors.set(governor.resourceType, governor);
   }
 
+  /**
+   * Register a GovernedResource instance.
+   * @throws Error if already registered
+   * @since cycle-008 — FR-13
+   */
+  registerResource(resource: GovernedResource<unknown, unknown, string>): void {
+    if (this.governedResources.has(resource.resourceType)) {
+      throw new Error(`Resource already registered: ${resource.resourceType}`);
+    }
+    this.governedResources.set(resource.resourceType, resource);
+  }
+
   /** Get a governor by resource type */
   get(resourceType: string): ResourceGovernor<unknown> | undefined {
     return this.governors.get(resourceType);
+  }
+
+  /**
+   * Get a governed resource by type.
+   * @since cycle-008 — FR-13
+   */
+  getResource(resourceType: string): GovernedResource<unknown, unknown, string> | undefined {
+    return this.governedResources.get(resourceType);
   }
 
   /** Get health snapshots for all registered governors */
@@ -65,14 +88,45 @@ export class GovernorRegistry {
     }));
   }
 
-  /** Number of registered governors */
-  get size(): number {
-    return this.governors.size;
+  /**
+   * Verify all invariants across all registered governed resources.
+   * @since cycle-008 — FR-13
+   */
+  verifyAllResources(): Map<string, InvariantResult[]> {
+    const results = new Map<string, InvariantResult[]>();
+    for (const [type, resource] of this.governedResources) {
+      results.set(type, resource.verifyAll());
+    }
+    return results;
   }
 
-  /** Clear all registered governors (testing utility) */
+  /**
+   * Audit summary across all governed resources.
+   * @since cycle-008 — FR-13
+   */
+  getAuditSummary(): Array<{
+    resourceType: string;
+    version: number;
+    auditEntryCount: number;
+    mutationCount: number;
+  }> {
+    return [...this.governedResources.entries()].map(([type, resource]) => ({
+      resourceType: type,
+      version: resource.version,
+      auditEntryCount: resource.auditTrail.entries.length,
+      mutationCount: resource.mutationLog.length,
+    }));
+  }
+
+  /** Number of registered governors */
+  get size(): number {
+    return this.governors.size + this.governedResources.size;
+  }
+
+  /** Clear all registered governors and resources (testing utility) */
   clear(): void {
     this.governors.clear();
+    this.governedResources.clear();
   }
 }
 
