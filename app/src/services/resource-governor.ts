@@ -8,6 +8,13 @@
  * CorpusMeta implements it for knowledge. The same pattern applies to model routing
  * pools, soul memory quotas, autonomous operation budgets, and schedule capacity.
  *
+ * @deprecated cycle-007 (v8.2.0): Use `GovernedResource<T>` pattern from
+ * `@0xhoneyjar/loa-hounfour/commons` (GOVERNED_RESOURCE_FIELDS spread).
+ * The commons GovernedResource pattern provides: ConservationLaw, AuditTrail,
+ * StateMachineConfig, GovernanceMutation, and GovernanceClass — all with
+ * TypeBox schemas and hash-chain integrity. This interface will be removed
+ * in a future cycle after all consumers have migrated.
+ *
  * See: Deep Bridgebuilder Meditation §VII.2, Billing-Knowledge Isomorphism,
  *      Kubernetes CRD/Operator pattern, Ostrom's commons governance
  */
@@ -47,6 +54,7 @@ export interface ResourceSelfKnowledge {
  * provides unified observability across all governed resources.
  *
  * @typeParam TResource - The type of individual resource items being governed
+ * @deprecated Use `GovernedResource<T>` from `@0xhoneyjar/loa-hounfour/commons`.
  */
 export interface ResourceGovernor<TResource> {
   /** Get current health metadata */

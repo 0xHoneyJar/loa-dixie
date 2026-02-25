@@ -6,18 +6,30 @@
  * canonical JSON + SHA-256) and links to the previous entry via `previous_hash`.
  * The first entry links to `SCORING_PATH_GENESIS_HASH`.
  *
- * The hash chain provides:
- * 1. Tamper evidence: Any modification to a historical entry breaks the chain
- * 2. Ordering proof: Entries are provably sequential via hash linking
- * 3. Audit trail: Full history of scoring decisions with cryptographic integrity
+ * v8.2.0 (cycle-007): Dual-track state — maintains both:
+ * 1. Original `entries[]` (backward compat, ScoringPathLog-typed)
+ * 2. Commons `AuditTrail` (for checkpoint/verification/integrity)
+ *
+ * The `record()` method mirrors entries to the audit trail. The `verifyIntegrity()`
+ * method delegates to `verifyAuditTrailIntegrity()` from commons. The `auditTrail`
+ * getter exposes the read-only trail for external consumers.
  *
  * See: Hounfour v7.11.0 ADR-005 (Scoring Path Hash Chain), SDD §3.3
  * @since cycle-005 — Sprint 61 (Hash Chain Implementation)
+ * @since cycle-007 — Sprint 75, Task S3-T3 (AuditTrail composition)
  */
 import {
   computeScoringPathHash,
   SCORING_PATH_GENESIS_HASH,
 } from '@0xhoneyjar/loa-hounfour/governance';
+import type { AuditTrail, AuditEntry } from '@0xhoneyjar/loa-hounfour/commons';
+import type { AuditTrailVerificationResult } from '@0xhoneyjar/loa-hounfour/commons';
+import {
+  AUDIT_TRAIL_GENESIS_HASH,
+  buildDomainTag,
+  computeAuditEntryHash,
+  verifyAuditTrailIntegrity,
+} from '@0xhoneyjar/loa-hounfour/commons';
 import type { ScoringPathLog } from '../types/reputation-evolution.js';
 
 /**
@@ -61,8 +73,11 @@ export interface RecordOptions {
   routed_model_id?: string;
 }
 
+/** Domain tag for scoring path audit entries. */
+const SCORING_PATH_DOMAIN_TAG = buildDomainTag('ScoringPathLog', '8.2.0');
+
 /**
- * ScoringPathTracker — stateful hash chain manager.
+ * ScoringPathTracker — stateful hash chain manager with AuditTrail composition.
  *
  * Usage:
  * ```ts
@@ -71,6 +86,10 @@ export interface RecordOptions {
  * // entry1.previous_hash === SCORING_PATH_GENESIS_HASH
  * const entry2 = tracker.record({ path: 'aggregate', reason: '...' });
  * // entry2.previous_hash === entry1.entry_hash
+ *
+ * // v8.2.0: verify integrity via commons
+ * const result = tracker.verifyIntegrity();
+ * // result.valid === true
  * ```
  */
 export class ScoringPathTracker {
@@ -80,6 +99,17 @@ export class ScoringPathTracker {
    *  this tracker is used sequentially (one record() completes before the next).
    *  If concurrent usage is ever needed, return metadata alongside the result instead. */
   private _lastRecordOptions?: RecordOptions;
+
+  /**
+   * Commons AuditTrail — mirrors scoring path entries for checkpoint/verification.
+   * @since cycle-007 — Sprint 75, Task S3-T3
+   */
+  private _auditTrail: AuditTrail = {
+    entries: [],
+    hash_algorithm: 'sha256',
+    genesis_hash: AUDIT_TRAIL_GENESIS_HASH,
+    integrity_status: 'verified',
+  };
 
   /**
    * Build the content fields shared between hash input and return value.
@@ -103,6 +133,7 @@ export class ScoringPathTracker {
 
   /**
    * Record a scoring path entry, computing its hash and linking to the chain.
+   * Also mirrors the entry to the commons AuditTrail.
    *
    * @param entry - Partial ScoringPathLog with content fields (path, model_id, task_type, reason)
    * @param options - Optional metadata (reputation_freshness). Stored alongside entry, not hashed.
@@ -121,6 +152,9 @@ export class ScoringPathTracker {
     this.entryCount++;
     this._lastRecordOptions = options;
 
+    // Mirror to AuditTrail (S3-T3)
+    this.appendToAuditTrail(contentFields, scored_at, entry_hash, previous_hash);
+
     return {
       ...contentFields,
       entry_hash,
@@ -128,11 +162,75 @@ export class ScoringPathTracker {
     };
   }
 
+  /**
+   * Mirror a scoring path entry to the commons AuditTrail.
+   * @since cycle-007 — Sprint 75, Task S3-T3
+   */
+  private appendToAuditTrail(
+    contentFields: Pick<ScoringPathLog, 'path' | 'model_id' | 'task_type' | 'reason' | 'scored_at'>,
+    timestamp: string,
+    entryHash: string,
+    previousHash: string,
+  ): void {
+    const entryId = `scoring-path-${this.entryCount}`;
+    const auditEntryHash = computeAuditEntryHash(
+      {
+        entry_id: entryId,
+        timestamp,
+        event_type: `scoring_path:${contentFields.path}`,
+        payload: contentFields,
+      },
+      SCORING_PATH_DOMAIN_TAG,
+    );
+
+    const lastAuditHash = this._auditTrail.entries.length > 0
+      ? this._auditTrail.entries[this._auditTrail.entries.length - 1].entry_hash
+      : AUDIT_TRAIL_GENESIS_HASH;
+
+    const auditEntry: AuditEntry = {
+      entry_id: entryId,
+      timestamp,
+      event_type: `scoring_path:${contentFields.path}`,
+      payload: contentFields,
+      entry_hash: auditEntryHash,
+      previous_hash: lastAuditHash,
+      hash_domain_tag: SCORING_PATH_DOMAIN_TAG,
+    };
+
+    (this._auditTrail.entries as AuditEntry[]).push(auditEntry);
+  }
+
+  /**
+   * Verify the integrity of the AuditTrail using commons verification.
+   * Delegates to `verifyAuditTrailIntegrity()` for two-phase verification
+   * (content hash + chain linkage).
+   *
+   * @returns Verification result with failure details if invalid
+   * @since cycle-007 — Sprint 75, Task S3-T3
+   */
+  verifyIntegrity(): AuditTrailVerificationResult {
+    return verifyAuditTrailIntegrity(this._auditTrail);
+  }
+
+  /**
+   * Get the commons AuditTrail (read-only).
+   * @since cycle-007 — Sprint 75, Task S3-T3
+   */
+  get auditTrail(): Readonly<AuditTrail> {
+    return this._auditTrail;
+  }
+
   /** Reset the chain to genesis state. */
   reset(): void {
     this.lastHash = SCORING_PATH_GENESIS_HASH;
     this.entryCount = 0;
     this._lastRecordOptions = undefined;
+    this._auditTrail = {
+      entries: [],
+      hash_algorithm: 'sha256',
+      genesis_hash: AUDIT_TRAIL_GENESIS_HASH,
+      integrity_status: 'verified',
+    };
   }
 
   /** Get the current chain tip hash. */

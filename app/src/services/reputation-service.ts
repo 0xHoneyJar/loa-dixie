@@ -44,11 +44,14 @@ import {
   computeCrossModelScore,
   getModelCohort,
 } from '@0xhoneyjar/loa-hounfour/governance';
+import type { GovernedReputation } from '@0xhoneyjar/loa-hounfour/commons';
+import type { GovernanceMutation } from '@0xhoneyjar/loa-hounfour/commons';
 import type {
   TaskTypeCohort,
   ReputationEvent,
   DixieReputationAggregate,
 } from '../types/reputation-evolution.js';
+import { MutationLog, createMutation } from './governance-mutation.js';
 
 /** Result of a reputation reliability check. */
 export interface ReliabilityResult {
@@ -250,10 +253,63 @@ export class ReputationService {
   readonly store: ReputationStore;
 
   /**
+   * Governed resource state — tracks governance metadata for the reputation system.
+   * Uses GovernanceMutation for actor-attributed version tracking.
+   * @since cycle-007 — Sprint 75, Task S3-T4
+   */
+  private readonly _mutationLog = new MutationLog();
+
+  /**
    * @param store - Optional persistence layer. Defaults to InMemoryReputationStore.
    */
   constructor(store?: ReputationStore) {
     this.store = store ?? new InMemoryReputationStore();
+  }
+
+  /**
+   * Record a governance mutation against the reputation system.
+   *
+   * Wraps the mutation in a GovernanceMutation envelope with actor_id
+   * attribution and version tracking. Appends to the append-only mutation log.
+   *
+   * @param actorId - The actor performing the mutation (from resolveActorId)
+   * @returns The recorded GovernanceMutation envelope
+   * @throws Error if version conflict (optimistic concurrency)
+   * @since cycle-007 — Sprint 75, Task S3-T4
+   */
+  recordMutation(actorId: string): GovernanceMutation {
+    const mutation = createMutation(actorId, this._mutationLog.version);
+    this._mutationLog.append(mutation);
+    return mutation;
+  }
+
+  /**
+   * Get the governed resource state for the reputation system.
+   *
+   * Returns protocol-level metadata: current version, last mutation,
+   * mutation history, and contract version. This is the governance
+   * substrate view of the reputation resource — separate from the
+   * domain-level ReputationAggregate data.
+   *
+   * @returns Readonly governed resource metadata
+   * @since cycle-007 — Sprint 75, Task S3-T4
+   */
+  getGovernedState(): Readonly<{
+    version: number;
+    contract_version: string;
+    governance_class: 'registry-extensible';
+    mutation_count: number;
+    latest_mutation: GovernanceMutation | undefined;
+    mutation_history: ReadonlyArray<GovernanceMutation>;
+  }> {
+    return {
+      version: this._mutationLog.version,
+      contract_version: '8.2.0',
+      governance_class: 'registry-extensible',
+      mutation_count: this._mutationLog.history.length,
+      latest_mutation: this._mutationLog.latest,
+      mutation_history: this._mutationLog.history,
+    };
   }
   /**
    * Check if a reputation score is reliable enough to make decisions on.
