@@ -367,12 +367,13 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-## Sprint 7 (Global 71): Event Sourcing Foundation
+## Sprint 7 (Global 71): Event Sourcing Foundation -- COMPLETED
 
 **Theme**: Snapshot compaction, aggregate reconstruction, multi-currency scaffolding
 **Goal**: Build the event-sourced reputation infrastructure that enables algorithm-change replays, and lay the groundwork for multi-currency and per-community reputation scoping.
+**Review**: APPROVED (1 cycle -- zero findings)
 
-### Task 7.1: Implement snapshot compaction trigger
+### Task 7.1: Implement snapshot compaction trigger [DONE]
 
 **Finding**: Iter 1 SPECULATION-1, Meditation §II
 **Files**:
@@ -400,7 +401,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 7.2: Implement full event replay in reconstructAggregateFromEvents
+### Task 7.2: Implement full event replay in reconstructAggregateFromEvents [DONE]
 
 **Finding**: Iter 1 SPECULATION-1
 **Files**:
@@ -431,7 +432,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 7.3: Add retention automation query helpers
+### Task 7.3: Add retention automation query helpers [DONE]
 
 **Finding**: Iter 1 MEDIUM-5 (retention strategy follow-up)
 **Files**:
@@ -456,7 +457,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 7.4: Multi-currency budget type scaffold (ResourceGovernor preparation)
+### Task 7.4: Multi-currency budget type scaffold (ResourceGovernor preparation) [DONE]
 
 **Finding**: Meditation §IV — "monies can be infinite"
 **Files**:
@@ -498,7 +499,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 7.5: Per-community reputation scoping type definitions
+### Task 7.5: Per-community reputation scoping type definitions [DONE]
 
 **Finding**: Meditation §V
 **Files**:
@@ -531,7 +532,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 7.6: Multi-rail payment type scaffold
+### Task 7.6: Multi-rail payment type scaffold [DONE]
 
 **Finding**: Meditation §IV
 **Files**:
