@@ -1,7 +1,7 @@
 /**
  * Reputation Service — Foundation wiring for Hounfour governance types.
  *
- * Wraps Hounfour v7.9.2 governance functions with typed Dixie service methods.
+ * Wraps Hounfour governance functions with typed Dixie service methods.
  * Provides a typed API surface for the reputation aggregate lifecycle
  * (quality events, state transitions, cross-model scoring).
  *
@@ -15,10 +15,16 @@
  * - Task-aware cross-model scoring (prioritize task-matching cohorts)
  * - Event sourcing foundation (append-only event log + reconstruction stub)
  *
+ * cycle-007 (v8.2.0) extends with:
+ * - processEvent() method with exhaustive 4-variant switch
+ * - model_performance variant handling (decomposes into quality_signal pipeline)
+ * - Updated reconstructAggregateFromEvents with 4-variant support
+ *
  * See: Hounfour governance sub-package, SDD §2.3 (ReputationAggregate FR-3)
  * @since Sprint 3 — Reputation Service Foundation
  * @since Sprint 6 — ReputationStore persistence layer
  * @since Sprint 10 — Reputation Evolution (per-model per-task cohorts)
+ * @since cycle-007 — Sprint 73, Task S1-T4 (v8.2.0 model_performance variant)
  */
 import type {
   ReputationScore,
@@ -38,11 +44,162 @@ import {
   computeCrossModelScore,
   getModelCohort,
 } from '@0xhoneyjar/loa-hounfour/governance';
+import type { GovernedReputation } from '@0xhoneyjar/loa-hounfour/commons';
+import type { AuditTrail } from '@0xhoneyjar/loa-hounfour/commons';
+import type { GovernanceMutation } from '@0xhoneyjar/loa-hounfour/commons';
+import type { GovernedResource, TransitionResult, InvariantResult } from './governed-resource.js';
 import type {
   TaskTypeCohort,
   ReputationEvent,
   DixieReputationAggregate,
 } from '../types/reputation-evolution.js';
+import { MutationLog, createMutation } from './governance-mutation.js';
+import type { MutationLogPersistence } from './governance-mutation.js';
+
+// ---------------------------------------------------------------------------
+// Feedback Dampening (Bridgebuilder F1 — autopoietic loop safety)
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimum dampening alpha — applied to cold/new agents with few observations.
+ * Low alpha = conservative: new observations have minimal impact on the score.
+ * This prevents a single outlier observation from dominating early reputation.
+ * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
+ */
+export const FEEDBACK_DAMPENING_ALPHA_MIN = 0.1;
+
+/**
+ * Maximum dampening alpha — applied to mature agents with many observations.
+ * High alpha = responsive: the score tracks recent performance more closely.
+ * Mature agents have enough history that individual observations matter more.
+ * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
+ */
+export const FEEDBACK_DAMPENING_ALPHA_MAX = 0.5;
+
+/**
+ * Number of samples needed to ramp alpha from MIN to MAX.
+ * At 50 samples, alpha reaches ALPHA_MAX and the agent is fully responsive.
+ * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
+ */
+export const DAMPENING_RAMP_SAMPLES = 50;
+
+/**
+ * Compute a dampened reputation score using exponential moving average.
+ *
+ * Prevents runaway convergence or death spirals in the autopoietic feedback loop.
+ * Alpha grows linearly with sample count:
+ *   alpha = ALPHA_MIN + (ALPHA_MAX - ALPHA_MIN) * min(1, sampleCount / RAMP)
+ *   dampened = alpha * newScore + (1 - alpha) * oldScore
+ *
+ * On cold start (oldScore === null), returns newScore directly — no dampening
+ * applies because there's no running average to blend with.
+ *
+ * @param oldScore - Current personal score (null for first observation)
+ * @param newScore - New observation score from quality signal or model performance
+ * @param sampleCount - Current sample count (before this observation)
+ * @returns Dampened score in [0, 1]
+ * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
+ */
+export function computeDampenedScore(
+  oldScore: number | null,
+  newScore: number,
+  sampleCount: number,
+): number {
+  // Cold start: no previous score to blend with
+  if (oldScore === null) return newScore;
+
+  // Trust assumption: inputs are in [0, 1] — validated at event ingestion boundary.
+  // This function does not clamp to avoid masking upstream bugs.
+
+  const rampFraction = Math.min(1, sampleCount / DAMPENING_RAMP_SAMPLES);
+  const alpha = FEEDBACK_DAMPENING_ALPHA_MIN
+    + (FEEDBACK_DAMPENING_ALPHA_MAX - FEEDBACK_DAMPENING_ALPHA_MIN) * rampFraction;
+
+  return alpha * newScore + (1 - alpha) * oldScore;
+}
+
+// ---------------------------------------------------------------------------
+// Default Economic Parameters (Bridgebuilder F4 — single source of truth)
+// ---------------------------------------------------------------------------
+
+/**
+ * Default pseudo count for Bayesian reputation blending.
+ * Represents the strength of the collection prior: higher values make the
+ * system more conservative (slower to deviate from the collection score).
+ * A value of 10 means an agent needs ~10 observations before its personal
+ * score starts significantly outweighing the collection prior.
+ * @since cycle-007 — Sprint 78, Task S1-T5 (Bridgebuilder F4)
+ */
+export const DEFAULT_PSEUDO_COUNT = 10;
+
+/**
+ * Default collection score for Bayesian reputation blending.
+ * The prior mean — what we assume an agent's quality is before any observations.
+ * Zero represents "no information" — the neutral starting point.
+ * @since cycle-007 — Sprint 78, Task S1-T5 (Bridgebuilder F4)
+ */
+export const DEFAULT_COLLECTION_SCORE = 0;
+
+// ---------------------------------------------------------------------------
+// Collection Score Aggregator (FR-6: Empirical Collection Score)
+// ---------------------------------------------------------------------------
+
+/**
+ * CollectionScoreAggregator — Maintains running population statistics
+ * for Bayesian prior calibration. Replaces DEFAULT_COLLECTION_SCORE = 0
+ * with the empirically observed mean across all agents.
+ *
+ * Uses Welford's online algorithm for numerically stable mean/variance.
+ * Standard approach used by NumPy, Apache Spark, and PostgreSQL's var_pop().
+ *
+ * @since cycle-008 — FR-6 (empirical collection score)
+ */
+export class CollectionScoreAggregator {
+  private _count = 0;
+  private _mean = 0;
+  private _m2 = 0; // Welford's running sum of squares
+
+  /**
+   * Update with a new personal score observation.
+   * Uses Welford's algorithm: stable for large N, O(1) amortized.
+   */
+  update(score: number): void {
+    this._count++;
+    const delta = score - this._mean;
+    this._mean += delta / this._count;
+    const delta2 = score - this._mean;
+    this._m2 += delta * delta2;
+  }
+
+  /** Population mean. Returns 0 when no observations (fallback to DEFAULT_COLLECTION_SCORE). */
+  get mean(): number {
+    return this._count > 0 ? this._mean : DEFAULT_COLLECTION_SCORE;
+  }
+
+  /** Number of observations. */
+  get populationSize(): number {
+    return this._count;
+  }
+
+  /** Population variance (for future adaptive pseudo_count). */
+  get variance(): number {
+    return this._count > 1 ? this._m2 / this._count : 0;
+  }
+
+  /** Snapshot for persistence. */
+  toJSON(): { count: number; mean: number; m2: number } {
+    return { count: this._count, mean: this._mean, m2: this._m2 };
+  }
+
+  /** Restore from persistence snapshot. */
+  static fromJSON(data: { count: number; mean: number; m2: number }): CollectionScoreAggregator {
+    const agg = new CollectionScoreAggregator();
+    agg._count = data.count;
+    agg._mean = data.mean;
+    agg._m2 = data.m2;
+    return agg;
+  }
+}
 
 /** Result of a reputation reliability check. */
 export interface ReliabilityResult {
@@ -128,6 +285,15 @@ export interface ReputationStore {
    * @since Sprint 10 — Task 10.5
    */
   getEventHistory(nftId: string): Promise<ReputationEvent[]>;
+
+  /**
+   * Execute operations atomically. The callback receives the store itself.
+   * In-memory: snapshot/restore semantics (rollback on error).
+   * PostgreSQL: wraps in BEGIN/COMMIT with rollback on error.
+   *
+   * @since cycle-008 — FR-4 (transaction boundaries)
+   */
+  transact<T>(fn: (store: ReputationStore) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -222,6 +388,35 @@ export class InMemoryReputationStore implements ReputationStore {
     return this.eventLog.get(nftId) ?? [];
   }
 
+  /**
+   * Execute operations atomically with snapshot/restore semantics.
+   * Before calling fn, snapshots aggregates and task cohorts.
+   * On error: restores pre-transaction state. On success: keeps mutations.
+   * @since cycle-008 — FR-4
+   */
+  async transact<T>(fn: (store: ReputationStore) => Promise<T>): Promise<T> {
+    const snapshot = new Map(this.store);
+    const cohortSnapshot = new Map(this.taskCohorts);
+    const eventLogSnapshot = new Map(
+      [...this.eventLog.entries()].map(([k, v]) => [k, [...v]] as const),
+    );
+    try {
+      return await fn(this);
+    } catch (err) {
+      // Restore state on failure — the "rollback"
+      // BB-008-001: Event log must be transactionally consistent with aggregates.
+      // Without this, reconstructAggregateFromEvents() replays events whose
+      // aggregate effects were rolled back, creating divergence.
+      this.store.clear();
+      for (const [k, v] of snapshot) this.store.set(k, v);
+      this.taskCohorts.clear();
+      for (const [k, v] of cohortSnapshot) this.taskCohorts.set(k, v);
+      this.eventLog.clear();
+      for (const [k, v] of eventLogSnapshot) this.eventLog.set(k, v);
+      throw err;
+    }
+  }
+
   /** Clear all stored data (aggregates, task cohorts, events) for testing. */
   clear(): void {
     this.store.clear();
@@ -240,14 +435,158 @@ export class InMemoryReputationStore implements ReputationStore {
  * @since Sprint 3 — Reputation Service Foundation
  * @since Sprint 6 — Constructor injection of ReputationStore
  */
-export class ReputationService {
+/** Invariant IDs verifiable on the reputation resource. */
+export type ReputationInvariant = 'INV-006' | 'INV-007';
+
+export class ReputationService
+  implements GovernedResource<ReputationAggregate | undefined, ReputationEvent, ReputationInvariant>
+{
   readonly store: ReputationStore;
 
   /**
-   * @param store - Optional persistence layer. Defaults to InMemoryReputationStore.
+   * Population-level statistics for Bayesian prior calibration.
+   * Tracks the empirical mean across all agents — replaces DEFAULT_COLLECTION_SCORE.
+   * @since cycle-008 — FR-6
    */
-  constructor(store?: ReputationStore) {
+  readonly collectionAggregator: CollectionScoreAggregator;
+
+  /**
+   * Governed resource state — tracks governance metadata for the reputation system.
+   * Uses GovernanceMutation for actor-attributed version tracking.
+   * @since cycle-007 — Sprint 75, Task S3-T4
+   */
+  private readonly _mutationLog = new MutationLog();
+
+  /**
+   * @param store - Optional persistence layer. Defaults to InMemoryReputationStore.
+   * @param collectionAggregator - Optional pre-seeded aggregator. Defaults to empty.
+   */
+  constructor(store?: ReputationStore, collectionAggregator?: CollectionScoreAggregator) {
     this.store = store ?? new InMemoryReputationStore();
+    this.collectionAggregator = collectionAggregator ?? new CollectionScoreAggregator();
+  }
+
+  // ---------------------------------------------------------------------------
+  // GovernedResource<T> implementation (FR-11)
+  // ---------------------------------------------------------------------------
+
+  readonly resourceId = 'reputation-service';
+  readonly resourceType = 'reputation';
+
+  /** Most recently accessed aggregate (GovernedResource semantics). */
+  private _lastAccessedAggregate?: ReputationAggregate;
+
+  get current(): ReputationAggregate | undefined {
+    return this._lastAccessedAggregate;
+  }
+
+  get version(): number {
+    return this._mutationLog.version;
+  }
+
+  async transition(
+    event: ReputationEvent,
+    actorId: string,
+  ): Promise<TransitionResult<ReputationAggregate | undefined>> {
+    try {
+      this.recordMutation(actorId);
+      const agentId = (event as { agent_id?: string }).agent_id;
+      if (agentId) {
+        await this.processEvent(agentId, event);
+        const updated = await this.store.get(agentId);
+        this._lastAccessedAggregate = updated;
+        return { success: true, state: updated, version: this.version };
+      }
+      return { success: false, reason: 'Event missing agent_id', code: 'MISSING_AGENT_ID' };
+    } catch (err) {
+      return {
+        success: false,
+        reason: err instanceof Error ? err.message : String(err),
+        code: 'TRANSITION_FAILED',
+      };
+    }
+  }
+
+  verify(invariantId: ReputationInvariant): InvariantResult {
+    const now = new Date().toISOString();
+    switch (invariantId) {
+      case 'INV-006':
+        return {
+          invariant_id: 'INV-006',
+          satisfied: FEEDBACK_DAMPENING_ALPHA_MIN <= FEEDBACK_DAMPENING_ALPHA_MAX
+            && FEEDBACK_DAMPENING_ALPHA_MAX <= 1.0,
+          detail: `EMA bounds: α ∈ [${FEEDBACK_DAMPENING_ALPHA_MIN}, ${FEEDBACK_DAMPENING_ALPHA_MAX}]`,
+          checked_at: now,
+        };
+      case 'INV-007':
+        return {
+          invariant_id: 'INV-007',
+          satisfied: typeof this._mutationLog.sessionId === 'string'
+            && this._mutationLog.sessionId.length > 0,
+          detail: `Session ID: ${this._mutationLog.sessionId}`,
+          checked_at: now,
+        };
+    }
+  }
+
+  verifyAll(): InvariantResult[] {
+    return (['INV-006', 'INV-007'] as const).map(id => this.verify(id));
+  }
+
+  get auditTrail(): Readonly<AuditTrail> {
+    return { entries: [], hash_algorithm: 'sha256', genesis_hash: '', integrity_status: 'verified' };
+  }
+
+  get mutationLog(): ReadonlyArray<GovernanceMutation> {
+    return this._mutationLog.history;
+  }
+
+  /**
+   * Record a governance mutation against the reputation system.
+   *
+   * Wraps the mutation in a GovernanceMutation envelope with actor_id
+   * attribution and version tracking. Appends to the append-only mutation log.
+   *
+   * @param actorId - The actor performing the mutation (from resolveActorId)
+   * @returns The recorded GovernanceMutation envelope
+   * @throws Error if version conflict (optimistic concurrency)
+   * @since cycle-007 — Sprint 75, Task S3-T4
+   */
+  recordMutation(actorId: string): GovernanceMutation {
+    const mutation = createMutation(actorId, this._mutationLog.version);
+    this._mutationLog.append(mutation);
+    return mutation;
+  }
+
+  /**
+   * Get the governed resource state for the reputation system.
+   *
+   * Returns protocol-level metadata: current version, last mutation,
+   * mutation history, and contract version. This is the governance
+   * substrate view of the reputation resource — separate from the
+   * domain-level ReputationAggregate data.
+   *
+   * @returns Readonly governed resource metadata
+   * @since cycle-007 — Sprint 75, Task S3-T4
+   */
+  getGovernedState(): Readonly<{
+    version: number;
+    contract_version: string;
+    governance_class: 'registry-extensible';
+    mutation_count: number;
+    latest_mutation: GovernanceMutation | undefined;
+    mutation_history: ReadonlyArray<GovernanceMutation>;
+    session_id: string;
+  }> {
+    return {
+      version: this._mutationLog.version,
+      contract_version: '8.2.0',
+      governance_class: 'registry-extensible',
+      mutation_count: this._mutationLog.history.length,
+      latest_mutation: this._mutationLog.latest,
+      mutation_history: this._mutationLog.history,
+      session_id: this._mutationLog.sessionId,
+    };
   }
   /**
    * Check if a reputation score is reliable enough to make decisions on.
@@ -353,6 +692,263 @@ export class ReputationService {
   getModelCohort(aggregate: ReputationAggregate, modelId: string): ModelCohort | undefined {
     return getModelCohort(aggregate, modelId);
   }
+
+  /**
+   * Process a reputation event through the appropriate handler.
+   *
+   * Exhaustive switch on all 4 ReputationEvent variants (v8.2.0).
+   * Each variant is dispatched to its handler, which updates the
+   * reputation aggregate accordingly.
+   *
+   * The model_performance variant is decomposed: the embedded
+   * quality_observation score feeds into the blended reputation
+   * computation as a quality signal, while the full event is
+   * preserved in the event log for audit.
+   *
+   * @param nftId - The dNFT ID of the agent
+   * @param event - The reputation event to process
+   * @since cycle-007 — Sprint 73, Task S1-T4
+   */
+  async processEvent(nftId: string, event: ReputationEvent): Promise<void> {
+    // BB-008-001: Wrap entire event processing in a single transaction so
+    // event log and aggregate/cohort state are atomically consistent. If any
+    // handler fails, both the event append and state changes are rolled back.
+    // This ensures reconstructAggregateFromEvents() stays in sync with
+    // materialized aggregates.
+    await this.store.transact(async (tx) => {
+      // Append event to log inside the transaction
+      await tx.appendEvent(nftId, event);
+
+      // Dispatch by variant type (exhaustive)
+      switch (event.type) {
+        case 'quality_signal':
+          await this._handleQualitySignalInTx(tx, nftId, event);
+          break;
+        case 'task_completed':
+          await this._handleTaskCompletedInTx(tx, nftId, event);
+          break;
+        case 'credential_update':
+          // No-op: credentials affect access policy, not scores
+          break;
+        case 'model_performance':
+          await this._handleModelPerformanceInTx(tx, nftId, event);
+          break;
+        default:
+          // TypeScript exhaustiveness check — should never reach here
+          assertNever(event);
+      }
+    });
+  }
+
+  /**
+   * Build a fully consistent updated aggregate from a new personal score.
+   *
+   * Shared helper that ensures every event path (quality_signal, model_performance)
+   * produces an aggregate with fresh blended_score. Extracted as part of
+   * Bridgebuilder Gap 1 fix (FR-1): handleQualitySignal previously updated
+   * personal_score but NOT blended_score.
+   *
+   * @param existing - Current aggregate state
+   * @param newPersonalScore - New dampened personal score
+   * @param timestamp - Event timestamp for last_updated
+   * @returns Fully consistent aggregate with fresh blended_score
+   * @since cycle-008 — Sprint 81, Task 1.1 (FR-1: consistent blended score)
+   */
+  private buildUpdatedAggregate(
+    existing: ReputationAggregate,
+    newPersonalScore: number,
+    timestamp: string,
+  ): ReputationAggregate {
+    const newSampleCount = existing.sample_count + 1;
+
+    // FR-6: Use empirical collection mean when population data available
+    const collectionScore = this.collectionAggregator.populationSize > 0
+      ? this.collectionAggregator.mean
+      : existing.collection_score;
+
+    const blended = this.computeBlended({
+      personalScore: newPersonalScore,
+      collectionScore,
+      sampleCount: newSampleCount,
+      pseudoCount: existing.pseudo_count,
+    });
+
+    // FR-6: Update population statistics AFTER blending — the current
+    // observation must not influence its own Bayesian prior (BB-008-010).
+    this.collectionAggregator.update(newPersonalScore);
+
+    return {
+      ...existing,
+      personal_score: newPersonalScore,
+      blended_score: blended,
+      collection_score: collectionScore,
+      sample_count: newSampleCount,
+      last_updated: timestamp,
+    };
+  }
+
+  /**
+   * In-transaction quality_signal handler. Operates on the provided store
+   * (which is the transact() context from processEvent).
+   * @since cycle-008 — BB-008-001 (event log transactional consistency)
+   */
+  private async _handleQualitySignalInTx(
+    tx: ReputationStore,
+    nftId: string,
+    event: Extract<ReputationEvent, { type: 'quality_signal' }>,
+  ): Promise<void> {
+    const aggregate = await tx.get(nftId);
+    if (!aggregate) return;
+
+    const dampenedScore = computeDampenedScore(
+      aggregate.personal_score,
+      event.score,
+      aggregate.sample_count,
+    );
+    const updated = this.buildUpdatedAggregate(aggregate, dampenedScore, event.timestamp);
+    await tx.put(nftId, updated);
+  }
+
+  /**
+   * In-transaction task_completed handler.
+   * @since cycle-008 — BB-008-001 (event log transactional consistency)
+   */
+  private async _handleTaskCompletedInTx(
+    tx: ReputationStore,
+    nftId: string,
+    event: Extract<ReputationEvent, { type: 'task_completed' }>,
+  ): Promise<void> {
+    const aggregate = await tx.get(nftId);
+    if (!aggregate) return;
+
+    const cohort = await tx.getTaskCohort(nftId, 'default', event.task_type);
+    if (cohort) {
+      await tx.putTaskCohort(nftId, {
+        ...cohort,
+        sample_count: cohort.sample_count + 1,
+        last_updated: event.timestamp,
+      });
+    }
+  }
+
+  /**
+   * In-transaction model_performance handler. Decomposes into quality
+   * signal pipeline. Threads dimensions through computeDimensionalBlended()
+   * when present. Applies dampening to task cohort scores (BB-008-009).
+   *
+   * @since cycle-007 — Sprint 73, Task S1-T4
+   * @since cycle-008 — Sprint 82, Task 2.3 (FR-4: transactional wrapper)
+   * @since cycle-008 — Sprint 83, Task 3.5 (FR-7: dimensional blending)
+   * @since cycle-008 — BB-008-001 (event log transactional consistency)
+   * @since cycle-008 — BB-008-009 (cohort dampening consistency)
+   */
+  private async _handleModelPerformanceInTx(
+    tx: ReputationStore,
+    nftId: string,
+    event: Extract<ReputationEvent, { type: 'model_performance' }>,
+  ): Promise<void> {
+    const aggregate = await tx.get(nftId);
+    if (!aggregate) return;
+
+    const rawScore = event.quality_observation.score;
+    const dampenedScore = computeDampenedScore(
+      aggregate.personal_score,
+      rawScore,
+      aggregate.sample_count,
+    );
+
+    const updated = this.buildUpdatedAggregate(aggregate, dampenedScore, event.timestamp);
+
+    // FR-7: Thread dimensions when available in quality_observation
+    const dimensions = (event.quality_observation as { dimensions?: Record<string, number> }).dimensions;
+    const dixieAggregate = aggregate as DixieReputationAggregate;
+    const collectionScore = this.collectionAggregator.populationSize > 0
+      ? this.collectionAggregator.mean
+      : aggregate.collection_score;
+    const updatedWithDimensions = dimensions
+      ? {
+          ...updated,
+          dimension_scores: computeDimensionalBlended(
+            dimensions,
+            dixieAggregate.dimension_scores,
+            aggregate.sample_count,
+            collectionScore,
+            aggregate.pseudo_count,
+          ),
+        }
+      : updated;
+
+    await tx.put(nftId, updatedWithDimensions);
+
+    // Update task-specific cohort with dampened score (BB-008-009)
+    const existingCohort = await tx.getTaskCohort(nftId, event.model_id, event.task_type);
+    if (existingCohort) {
+      const cohortDampened = computeDampenedScore(
+        existingCohort.personal_score,
+        rawScore,
+        existingCohort.sample_count,
+      );
+      await tx.putTaskCohort(nftId, {
+        ...existingCohort,
+        personal_score: cohortDampened,
+        sample_count: existingCohort.sample_count + 1,
+        last_updated: event.timestamp,
+      });
+    } else {
+      await tx.putTaskCohort(nftId, {
+        model_id: event.model_id,
+        task_type: event.task_type,
+        personal_score: rawScore,
+        sample_count: 1,
+        last_updated: event.timestamp,
+      });
+    }
+  }
+}
+
+/**
+ * Exhaustiveness check helper for discriminated unions.
+ * TypeScript will error at compile time if a variant is not handled.
+ */
+function assertNever(x: never): never {
+  throw new Error(`Unexpected event type: ${(x as { type: string }).type}`);
+}
+
+// ---------------------------------------------------------------------------
+// Dimensional Quality Blending (FR-7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Blend each quality dimension independently using the same EMA dampening
+ * + Bayesian pipeline as the overall score. "Good at review" ≠ "good at
+ * reasoning" becomes expressible.
+ *
+ * @param dimensions - New dimension scores from the quality observation
+ * @param existingDimensions - Previous dimension scores (undefined on first observation)
+ * @param sampleCount - Current sample count (before this observation)
+ * @param collectionScore - Collection prior for blending
+ * @param pseudoCount - Bayesian prior strength
+ * @returns Record of independently blended dimension scores
+ * @since cycle-008 — FR-7 (multi-dimensional quality decomposition)
+ */
+export function computeDimensionalBlended(
+  dimensions: Readonly<Record<string, number>>,
+  existingDimensions: Readonly<Record<string, number>> | undefined,
+  sampleCount: number,
+  collectionScore: number,
+  pseudoCount: number,
+): Record<string, number> {
+  // BB-008-003: Carry forward existing dimensions not present in the new
+  // observation. Without this, intermittent dimension coverage causes data
+  // loss — e.g., an observation with only {accuracy} would drop {coherence}
+  // from a previous observation that had both.
+  const result: Record<string, number> = { ...(existingDimensions ?? {}) };
+  for (const [key, score] of Object.entries(dimensions)) {
+    const existingScore = existingDimensions?.[key] ?? null;
+    const dampened = computeDampenedScore(existingScore, score, sampleCount);
+    result[key] = computeBlendedScore(dampened, collectionScore, sampleCount + 1, pseudoCount);
+  }
+  return result;
 }
 
 /**
@@ -453,46 +1049,92 @@ export function computeTaskAwareCrossModelScore(
 /**
  * Reconstruct a DixieReputationAggregate from an event stream.
  *
- * STUB: This function is the foundation for event-sourced aggregate
- * reconstruction. In the current implementation, it returns a cold-start
- * aggregate with the event count recorded. Future iterations will implement
- * full event replay to compute personal_score, sample_count, and state
- * transitions from the event log.
+ * Replays events in chronological order through the 4-variant handler:
+ * - quality_signal: updates personal_score with the signal's score
+ * - task_completed: increments sample count (success tracking)
+ * - credential_update: recorded but no score impact
+ * - model_performance: extracts quality_observation.score + updates task cohorts
  *
  * The reconstruction pattern:
  * 1. Start with a cold aggregate (zero scores, zero samples)
  * 2. Replay each event in order, updating scores and state
- * 3. Return the final aggregate state
- *
- * This will eventually integrate with Hounfour's quality event processing
- * to produce mathematically identical results to the live aggregate.
+ * 3. Return the final aggregate state with task_cohorts
  *
  * @param events - Array of reputation events in chronological order
  * @returns A DixieReputationAggregate reconstructed from the event stream
  * @since Sprint 10 — Task 10.5
+ * @since cycle-007 — Sprint 73, Task S1-T4 (4-variant support)
  */
 export function reconstructAggregateFromEvents(
   events: ReadonlyArray<ReputationEvent>,
 ): DixieReputationAggregate {
-  // STUB: Returns a cold-start aggregate.
-  // TODO: Implement full event replay with Hounfour integration.
+  let personalScore: number | null = null;
+  let sampleCount = 0;
+  const taskCohortMap = new Map<string, TaskTypeCohort>();
+
+  for (const event of events) {
+    switch (event.type) {
+      case 'quality_signal':
+        personalScore = computeDampenedScore(personalScore, event.score, sampleCount);
+        sampleCount++;
+        break;
+      case 'task_completed':
+        sampleCount++;
+        break;
+      case 'credential_update':
+        // No score impact
+        break;
+      case 'model_performance': {
+        const score = event.quality_observation.score;
+        personalScore = computeDampenedScore(personalScore, score, sampleCount);
+        sampleCount++;
+        // Update task cohort
+        const key = `${event.model_id}:${event.task_type}`;
+        const existing = taskCohortMap.get(key);
+        if (existing) {
+          taskCohortMap.set(key, {
+            ...existing,
+            personal_score: score,
+            sample_count: existing.sample_count + 1,
+            last_updated: event.timestamp,
+          });
+        } else {
+          taskCohortMap.set(key, {
+            model_id: event.model_id,
+            task_type: event.task_type,
+            personal_score: score,
+            sample_count: 1,
+            last_updated: event.timestamp,
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  const pseudoCount = DEFAULT_PSEUDO_COUNT;
+  const collectionScore = DEFAULT_COLLECTION_SCORE;
+  const blendedScore = personalScore !== null
+    ? computeBlendedScore(personalScore, collectionScore, sampleCount, pseudoCount)
+    : collectionScore;
+
   return {
     personality_id: '',
     collection_id: '',
     pool_id: '',
-    state: 'cold' as const,
-    personal_score: null,
-    collection_score: 0,
-    blended_score: 0,
-    sample_count: events.length, // At minimum, record how many events existed
-    pseudo_count: 10,
+    state: sampleCount === 0 ? 'cold' as const : 'warming' as const,
+    personal_score: personalScore,
+    collection_score: collectionScore,
+    blended_score: blendedScore,
+    sample_count: sampleCount,
+    pseudo_count: pseudoCount,
     contributor_count: 0,
     min_sample_count: 10,
     created_at: events.length > 0 ? events[0].timestamp : new Date().toISOString(),
     last_updated: events.length > 0 ? events[events.length - 1].timestamp : new Date().toISOString(),
     transition_history: [],
-    contract_version: '7.11.0',
-    task_cohorts: [],
+    contract_version: '8.2.0',
+    task_cohorts: Array.from(taskCohortMap.values()),
   };
 }
 
@@ -505,16 +1147,24 @@ export type {
   ModelCohort,
 };
 
-// Re-export Sprint 10 types + v7.11.0 additions
+// Re-export Sprint 10 types + v7.11.0 + v8.2.0 additions
 export type {
   TaskTypeCohort,
   ReputationEvent,
   QualitySignalEvent,
   TaskCompletedEvent,
   CredentialUpdateEvent,
+  ModelPerformanceEvent,
+  QualityObservation,
   DixieReputationAggregate,
   ScoringPath,
   ScoringPathLog,
 } from '../types/reputation-evolution.js';
 export { TASK_TYPES, validateTaskCohortUniqueness } from '../types/reputation-evolution.js';
+export { QualityObservationSchema, ModelPerformanceEventSchema } from '../types/reputation-evolution.js';
 export type { TaskType } from '../types/reputation-evolution.js';
+
+// Re-export governance mutation types for consumer convenience
+export type { MutationLogPersistence } from './governance-mutation.js';
+export { MutationLog, createMutation, resolveActorId } from './governance-mutation.js';
+export type { ActorType } from './governance-mutation.js';

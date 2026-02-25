@@ -8,20 +8,31 @@
  *
  * The feedback loop:
  * 1. Review produces findings (bridge/flatline/audit)
- * 2. Findings are converted to QualityEvent
- * 3. emitQualityEvent() appends to reputation event store
+ * 2. Findings are converted to QualityObservation (v8.2.0)
+ * 3. emitQualityEvent() / emitModelPerformanceEvent() appends to reputation event store
  * 4. Next enrichment context reflects updated reputation trajectory
  *
  * Guard against infinite recursion: quality events are one-directional.
  * Enrichment context assembly reads reputation but never emits events.
  * Event emission happens only at review completion, not during enrichment.
  *
- * See: SDD §2.3 (Autopoietic Loop), PRD FR-3 (Self-Improving Quality)
+ * v8.2.0 changes:
+ * - QualityEvent replaced with QualityObservation (protocol schema)
+ * - buildQualityObservation() produces structured quality results with dimensions
+ * - emitModelPerformanceEvent() closes the autopoietic feedback loop (4th variant)
+ * - emitQualityEvent() updated to construct v8.2.0 flat QualitySignalEvent format
+ *
+ * See: SDD §2.3 (Autopoietic Loop), PRD FR-1 (ModelPerformanceEvent), FR-2 (QualityObservation)
  * @since Sprint 11 (Global 53) — Task 11.4
+ * @since cycle-007 — Sprint 73, Tasks S1-T2, S1-T3 (v8.2.0 adoption)
  */
 
 import type { ReputationService } from './reputation-service.js';
-import type { ReputationEvent } from '../types/reputation-evolution.js';
+import type {
+  ReputationEvent,
+  QualityObservation,
+  ModelPerformanceEvent,
+} from '../types/reputation-evolution.js';
 
 // ---------------------------------------------------------------------------
 // Quality Event Types
@@ -31,23 +42,44 @@ import type { ReputationEvent } from '../types/reputation-evolution.js';
 export type QualityEventSource = 'bridge' | 'flatline' | 'audit';
 
 /**
- * QualityEvent — a discrete quality observation from a review process.
+ * Envelope context for v8.2.0 reputation events.
+ * Provides the required envelope fields (agent_id, collection_id) that
+ * the v8.2.0 flat discriminated union requires on all event variants.
  *
- * Captures the output of a review cycle: how many findings, their severity
- * distribution, and which agent produced the reviewed artifact. These events
- * feed into the reputation system to adjust the agent's reputation trajectory.
+ * @since cycle-007 — Sprint 73, Task S1-T2
  */
-export interface QualityEvent {
-  /** Which review system produced this event. */
-  readonly source: QualityEventSource;
-  /** Total number of findings in the review. */
-  readonly finding_count: number;
-  /** Distribution of findings by severity level. */
-  readonly severity_distribution: Record<string, number>;
-  /** The dNFT ID of the agent whose work was reviewed. */
-  readonly nft_id: string;
-  /** ISO 8601 timestamp of the review completion. */
-  readonly timestamp: string;
+export interface QualityEventContext {
+  /** The agent dNFT ID (personality_id). */
+  readonly agent_id: string;
+  /** The collection this agent belongs to. */
+  readonly collection_id: string;
+  /** Optional task type for the quality signal. */
+  readonly task_type?: string;
+}
+
+/**
+ * Input for model-specific quality feedback (4th variant: model_performance).
+ * Provides all fields needed to construct a ModelPerformanceEvent.
+ *
+ * @since cycle-007 — Sprint 73, Task S1-T3
+ */
+export interface ModelQualityInput {
+  /** Model alias (e.g., "gpt-4o", "claude-opus-4-20250514"). */
+  readonly model_id: string;
+  /** Provider name (e.g., "openai", "anthropic"). */
+  readonly provider: string;
+  /** Model pool identifier. */
+  readonly pool_id: string;
+  /** Task type for this inference. */
+  readonly task_type: string;
+  /** Inference latency in milliseconds. */
+  readonly latency_ms?: number;
+  /** Request ID for tracing. */
+  readonly request_id?: string;
+  /** Agent dNFT ID (personality_id). */
+  readonly agent_id: string;
+  /** Collection ID. */
+  readonly collection_id: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +102,7 @@ const SEVERITY_WEIGHTS: Record<string, number> = {
 };
 
 /**
- * Compute a quality score [0, 1] from a quality event.
+ * Compute a quality score [0, 1] from a severity distribution.
  *
  * The score is derived from the severity-weighted finding count:
  * - 0 findings → score = 1.0 (perfect)
@@ -81,10 +113,10 @@ const SEVERITY_WEIGHTS: Record<string, number> = {
  * increase, but never reaches exactly 0 (no amount of findings should
  * permanently destroy reputation — Ostrom's graduated sanctions).
  */
-export function computeQualityScore(event: QualityEvent): number {
+export function computeQualityScore(severityDistribution: Record<string, number>): number {
   let weightedCount = 0;
 
-  for (const [severity, count] of Object.entries(event.severity_distribution)) {
+  for (const [severity, count] of Object.entries(severityDistribution)) {
     const weight = SEVERITY_WEIGHTS[severity.toLowerCase()] ?? 0.1;
     weightedCount += count * weight;
   }
@@ -93,68 +125,168 @@ export function computeQualityScore(event: QualityEvent): number {
   return 1 / (1 + weightedCount);
 }
 
+/**
+ * Build per-severity dimension scores from a severity distribution.
+ *
+ * Each dimension represents the quality impact of a single severity level,
+ * using the same sigmoid formula as the overall score but scoped to that
+ * severity's contribution. Dimension names use lowercase to match
+ * hounfour's cross-variant dimension name pattern.
+ *
+ * @since cycle-007 — Sprint 73, Task S1-T2
+ */
+export function buildDimensionBreakdown(
+  severityDistribution: Record<string, number>,
+): Record<string, number> {
+  const dimensions: Record<string, number> = {};
+  for (const [severity, count] of Object.entries(severityDistribution)) {
+    const key = severity.toLowerCase();
+    const weight = SEVERITY_WEIGHTS[key] ?? 0.1;
+    dimensions[key] = 1 / (1 + count * weight);
+  }
+  return dimensions;
+}
+
 // ---------------------------------------------------------------------------
-// Quality Event Emission
+// Quality Observation Builder (v8.2.0)
 // ---------------------------------------------------------------------------
 
 /**
- * Emit a quality event into the reputation system.
+ * Build a QualityObservation from review findings.
  *
- * Converts the QualityEvent into a ReputationEvent and appends it to
- * the agent's event log via ReputationService. This closes the feedback
- * loop: review findings → reputation update → future enrichment context.
+ * Converts review output (source, finding count, severity distribution)
+ * into the protocol QualityObservation schema. Preserves the existing
+ * severity-weighted scoring algorithm (computeQualityScore).
+ *
+ * The QualityObservation is a reusable sub-schema that appears in:
+ * - ModelPerformanceEvent.quality_observation (embedded)
+ * - Standalone in batch evaluation reports
+ *
+ * @param source - Which review system produced the findings
+ * @param severityDistribution - Distribution of findings by severity
+ * @param latencyMs - Optional evaluation latency in milliseconds
+ * @returns A protocol-conformant QualityObservation
+ * @since cycle-007 — Sprint 73, Task S1-T2
+ */
+export function buildQualityObservation(
+  source: QualityEventSource,
+  severityDistribution: Record<string, number>,
+  latencyMs?: number,
+): QualityObservation {
+  return {
+    score: computeQualityScore(severityDistribution),
+    dimensions: buildDimensionBreakdown(severityDistribution),
+    latency_ms: latencyMs,
+    evaluated_by: `dixie-quality-feedback:${source}`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Quality Event Emission (v8.2.0 flat format)
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit a quality signal event into the reputation system.
+ *
+ * Constructs a v8.2.0 flat QualitySignalEvent (discriminated union variant)
+ * and appends it to the agent's event log via ReputationService.
  *
  * Guard: This function does NOT trigger enrichment context assembly.
  * It only writes to the event store. The enrichment service reads from
  * the store independently, preventing infinite recursion.
  *
- * @param event - The quality event from a review process
+ * @param source - Which review system produced the findings
+ * @param nftId - The dNFT ID of the agent whose work was reviewed
+ * @param severityDistribution - Distribution of findings by severity
+ * @param context - Envelope context (agent_id, collection_id, optional task_type)
  * @param reputationService - The reputation service for event storage
+ * @since cycle-007 — Sprint 73, Task S1-T2 (updated to v8.2.0 flat format)
  */
 export async function emitQualityEvent(
-  event: QualityEvent,
+  source: QualityEventSource,
+  nftId: string,
+  severityDistribution: Record<string, number>,
+  context: QualityEventContext,
   reputationService: ReputationService,
 ): Promise<void> {
-  const score = computeQualityScore(event);
+  const observation = buildQualityObservation(source, severityDistribution);
 
   const reputationEvent: ReputationEvent = {
     type: 'quality_signal',
-    timestamp: event.timestamp,
-    payload: {
-      source: event.source,
-      finding_count: event.finding_count,
-      severity_distribution: event.severity_distribution,
-      score,
-    },
+    score: observation.score,
+    dimensions: observation.dimensions,
+    task_type: context.task_type,
+    event_id: crypto.randomUUID(),
+    agent_id: context.agent_id,
+    collection_id: context.collection_id,
+    timestamp: new Date().toISOString(),
   };
 
-  await reputationService.store.appendEvent(event.nft_id, reputationEvent);
+  await reputationService.store.appendEvent(nftId, reputationEvent);
+}
+
+/**
+ * Emit a model performance event into the reputation system.
+ *
+ * Creates the 4th ReputationEvent variant (model_performance) that closes
+ * the autopoietic feedback loop: model inference → quality evaluation →
+ * reputation update → future routing decisions.
+ *
+ * The event embeds a QualityObservation (built from review findings) and
+ * identifies the specific model, provider, and pool that produced the
+ * evaluated output.
+ *
+ * Emission is fire-and-forget: the Promise resolves once the event is
+ * appended to the store. No latency impact on the response path.
+ *
+ * @param input - Model identification and context (model_id, provider, pool_id, etc.)
+ * @param source - Which review system produced the findings
+ * @param severityDistribution - Distribution of findings by severity
+ * @param nftId - The dNFT ID of the agent
+ * @param reputationService - The reputation service for event storage
+ * @since cycle-007 — Sprint 73, Task S1-T3
+ */
+export async function emitModelPerformanceEvent(
+  input: ModelQualityInput,
+  source: QualityEventSource,
+  severityDistribution: Record<string, number>,
+  nftId: string,
+  reputationService: ReputationService,
+): Promise<void> {
+  const observation = buildQualityObservation(source, severityDistribution, input.latency_ms);
+
+  const event: ModelPerformanceEvent = {
+    type: 'model_performance',
+    model_id: input.model_id,
+    provider: input.provider,
+    pool_id: input.pool_id,
+    task_type: input.task_type as ModelPerformanceEvent['task_type'],
+    quality_observation: observation,
+    request_context: input.request_id ? { request_id: input.request_id } : undefined,
+    event_id: crypto.randomUUID(),
+    agent_id: input.agent_id,
+    collection_id: input.collection_id,
+    timestamp: new Date().toISOString(),
+  };
+
+  await reputationService.store.appendEvent(nftId, event);
 }
 
 /**
  * Create a quality event from review findings.
  *
- * Convenience factory that constructs a QualityEvent with the current
- * timestamp. Callers provide the source, finding count, and severity
- * breakdown.
+ * Convenience factory that constructs a QualityObservation with the current
+ * timestamp. Callers provide the source, finding count, and severity breakdown.
  *
  * @param source - Which review system produced the findings
- * @param nftId - The dNFT ID of the agent whose work was reviewed
- * @param findingCount - Total number of findings
  * @param severityDistribution - Distribution of findings by severity
- * @returns A timestamped QualityEvent
+ * @param latencyMs - Optional evaluation latency
+ * @returns A timestamped QualityObservation
  */
-export function createQualityEvent(
+export function createQualityObservation(
   source: QualityEventSource,
-  nftId: string,
-  findingCount: number,
   severityDistribution: Record<string, number>,
-): QualityEvent {
-  return {
-    source,
-    finding_count: findingCount,
-    severity_distribution: severityDistribution,
-    nft_id: nftId,
-    timestamp: new Date().toISOString(),
-  };
+  latencyMs?: number,
+): QualityObservation {
+  return buildQualityObservation(source, severityDistribution, latencyMs);
 }

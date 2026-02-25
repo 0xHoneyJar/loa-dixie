@@ -2,10 +2,16 @@ import { describe, it, expect } from 'vitest';
 import {
   validateTransition,
   assertTransition,
+  TransitionError,
   CircuitStateMachine,
   MemoryEncryptionMachine,
   AutonomousModeMachine,
   ScheduleLifecycleMachine,
+  toStateMachineConfig,
+  CIRCUIT_STATE_CONFIG,
+  MEMORY_ENCRYPTION_CONFIG,
+  AUTONOMOUS_MODE_CONFIG,
+  SCHEDULE_LIFECYCLE_CONFIG,
 } from '../../src/services/state-machine.js';
 import { validateAccessPolicy } from '../../src/services/access-policy-validator.js';
 import { BridgeInsightsGenerator } from '../../src/services/bridge-insights.js';
@@ -108,14 +114,32 @@ describe('state machine validation', () => {
       expect(() => assertTransition(CircuitStateMachine, 'closed', 'open')).not.toThrow();
     });
 
-    it('throws 409 for invalid transition', () => {
+    it('throws TransitionError for invalid transition', () => {
       try {
         assertTransition(CircuitStateMachine, 'closed', 'half_open');
         expect.unreachable('Should have thrown');
       } catch (err) {
-        const e = err as { status: number; body: { error: string } };
+        expect(err).toBeInstanceOf(TransitionError);
+        expect(err).toBeInstanceOf(Error);
+        const e = err as TransitionError;
         expect(e.status).toBe(409);
         expect(e.body.error).toBe('invalid_transition');
+        expect(e.name).toBe('TransitionError');
+        expect(e.message).toContain('Invalid transition');
+        // Stack trace available (Error subclass)
+        expect(e.stack).toBeDefined();
+      }
+    });
+
+    it('TransitionError carries from/to/machine in body (Hono backward compat)', () => {
+      try {
+        assertTransition(CircuitStateMachine, 'open', 'closed');
+        expect.unreachable('Should have thrown');
+      } catch (err) {
+        const e = err as TransitionError;
+        expect(e.body.from).toBe('open');
+        expect(e.body.to).toBe('closed');
+        expect(e.body.machine).toBe('CircuitState');
       }
     });
   });
@@ -230,5 +254,87 @@ describe('BridgeInsightsGenerator', () => {
     expect(yaml).toContain('cycle_id: cycle-002');
     expect(yaml).toContain('BI-001');
     expect(yaml).toContain('category: "architectural"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// StateMachineConfig Tests — cycle-007 Sprint 76 Task S4-T6
+// ---------------------------------------------------------------------------
+
+describe('StateMachineConfig conversion', () => {
+  describe('CIRCUIT_STATE_CONFIG', () => {
+    it('has correct initial_state', () => {
+      expect(CIRCUIT_STATE_CONFIG.initial_state).toBe('closed');
+    });
+
+    it('has no terminal states', () => {
+      expect(CIRCUIT_STATE_CONFIG.terminal_states).toHaveLength(0);
+    });
+
+    it('has all 3 states', () => {
+      const stateNames = CIRCUIT_STATE_CONFIG.states.map((s) => s.name).sort();
+      expect(stateNames).toEqual(['closed', 'half_open', 'open']);
+    });
+
+    it('has correct transitions', () => {
+      const transitions = CIRCUIT_STATE_CONFIG.transitions;
+      expect(transitions).toContainEqual({ from: 'closed', to: 'open' });
+      expect(transitions).toContainEqual({ from: 'open', to: 'half_open' });
+      expect(transitions).toContainEqual({ from: 'half_open', to: 'closed' });
+      expect(transitions).toContainEqual({ from: 'half_open', to: 'open' });
+    });
+  });
+
+  describe('MEMORY_ENCRYPTION_CONFIG', () => {
+    it('has correct initial_state', () => {
+      expect(MEMORY_ENCRYPTION_CONFIG.initial_state).toBe('unsealed');
+    });
+
+    it('has all 4 states', () => {
+      const stateNames = MEMORY_ENCRYPTION_CONFIG.states.map((s) => s.name).sort();
+      expect(stateNames).toEqual(['sealed', 'sealing', 'unsealed', 'unsealing']);
+    });
+  });
+
+  describe('AUTONOMOUS_MODE_CONFIG', () => {
+    it('has correct initial_state', () => {
+      expect(AUTONOMOUS_MODE_CONFIG.initial_state).toBe('disabled');
+    });
+
+    it('has all 4 states', () => {
+      const stateNames = AUTONOMOUS_MODE_CONFIG.states.map((s) => s.name).sort();
+      expect(stateNames).toEqual(['confirming', 'disabled', 'enabled', 'suspended']);
+    });
+  });
+
+  describe('SCHEDULE_LIFECYCLE_CONFIG', () => {
+    it('has correct initial_state', () => {
+      expect(SCHEDULE_LIFECYCLE_CONFIG.initial_state).toBe('pending');
+    });
+
+    it('has terminal states', () => {
+      expect(SCHEDULE_LIFECYCLE_CONFIG.terminal_states).toContain('completed');
+      expect(SCHEDULE_LIFECYCLE_CONFIG.terminal_states).toContain('cancelled');
+    });
+
+    it('has all 6 states', () => {
+      const stateNames = SCHEDULE_LIFECYCLE_CONFIG.states.map((s) => s.name).sort();
+      expect(stateNames).toEqual(['active', 'cancelled', 'completed', 'failed', 'paused', 'pending']);
+    });
+  });
+
+  describe('toStateMachineConfig', () => {
+    it('preserves transition count', () => {
+      // CircuitStateMachine: closed→open, open→half_open, half_open→closed, half_open→open = 4
+      expect(CIRCUIT_STATE_CONFIG.transitions).toHaveLength(4);
+    });
+
+    it('handles terminal states with empty transition arrays', () => {
+      // completed and cancelled have empty transitions arrays
+      const completedTransitions = SCHEDULE_LIFECYCLE_CONFIG.transitions.filter(
+        (t) => t.from === 'completed',
+      );
+      expect(completedTransitions).toHaveLength(0);
+    });
   });
 });

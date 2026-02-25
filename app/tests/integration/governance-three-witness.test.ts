@@ -114,12 +114,12 @@ describe('Three-Witness Governance Integration (Task 6.2)', () => {
     expect(types).toEqual(['knowledge', 'knowledge_corpus', 'reputation']);
   });
 
-  it('verifyAllResources returns health + self-knowledge for each witness', () => {
+  it('verifyAllGovernors returns health + self-knowledge for each witness', () => {
     registry.register(corpusMeta);
     registry.register(knowledgeGov);
     registry.register(reputationGov);
 
-    const verifications = registry.verifyAllResources();
+    const verifications = registry.verifyAllGovernors();
     expect(verifications).toHaveLength(3);
 
     for (const v of verifications) {
@@ -208,7 +208,7 @@ describe('Three-Witness Governance Integration (Task 6.2)', () => {
     expect(reputationGov.getEventLog().length).toBeGreaterThanOrEqual(1);
   });
 
-  it('verifyAllResources shows degraded when a witness is degraded', () => {
+  it('verifyAllGovernors shows degraded when a witness is degraded', () => {
     const degradedGov: ResourceGovernor<unknown> = {
       resourceType: 'degraded_resource',
       getHealth: () => ({ status: 'degraded', totalItems: 10, staleItems: 5, version: 2 }),
@@ -222,7 +222,7 @@ describe('Three-Witness Governance Integration (Task 6.2)', () => {
     registry.register(corpusMeta);
     registry.register(degradedGov);
 
-    const verifications = registry.verifyAllResources();
+    const verifications = registry.verifyAllGovernors();
     const degraded = verifications.find((v) => v.resourceType === 'degraded_resource');
     expect(degraded?.health?.status).toBe('degraded');
   });

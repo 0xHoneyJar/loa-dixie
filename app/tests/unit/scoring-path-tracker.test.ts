@@ -220,3 +220,112 @@ describe('ScoringPathTracker', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// AuditTrail Composition Tests — cycle-007 Sprint 75 Task S3-T7
+// ---------------------------------------------------------------------------
+
+describe('ScoringPathTracker — AuditTrail composition', () => {
+  let tracker: ScoringPathTracker;
+
+  beforeEach(() => {
+    tracker = new ScoringPathTracker();
+  });
+
+  it('auditTrail is initialized with empty entries and genesis hash', () => {
+    const trail = tracker.auditTrail;
+
+    expect(trail.entries).toHaveLength(0);
+    expect(trail.hash_algorithm).toBe('sha256');
+    expect(trail.genesis_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(trail.integrity_status).toBe('verified');
+  });
+
+  it('record() mirrors entries to audit trail', () => {
+    tracker.record({ path: 'tier_default', reason: 'Cold start' });
+    tracker.record({ path: 'aggregate', reason: 'Score found' });
+    tracker.record({
+      path: 'task_cohort',
+      model_id: 'gpt-4o',
+      task_type: 'code_review',
+      reason: 'Match',
+    });
+
+    const trail = tracker.auditTrail;
+    expect(trail.entries).toHaveLength(3);
+
+    // Event types match scoring path
+    expect(trail.entries[0].event_type).toBe('scoring_path:tier_default');
+    expect(trail.entries[1].event_type).toBe('scoring_path:aggregate');
+    expect(trail.entries[2].event_type).toBe('scoring_path:task_cohort');
+  });
+
+  it('audit trail entries have correct structure', () => {
+    tracker.record({ path: 'aggregate', model_id: 'native', reason: 'Test' });
+
+    const entry = tracker.auditTrail.entries[0];
+
+    expect(entry.entry_id).toBe('scoring-path-1');
+    expect(entry.timestamp).toBeDefined();
+    expect(entry.event_type).toBe('scoring_path:aggregate');
+    expect(entry.payload).toBeDefined();
+    expect(entry.entry_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(entry.previous_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(entry.hash_domain_tag).toContain('ScoringPathLog');
+    expect(entry.hash_domain_tag).toContain('8.2.0');
+  });
+
+  it('audit trail entries chain correctly', () => {
+    tracker.record({ path: 'tier_default' });
+    tracker.record({ path: 'aggregate' });
+
+    const entries = tracker.auditTrail.entries;
+    // First entry links to genesis
+    expect(entries[0].previous_hash).toBe(tracker.auditTrail.genesis_hash);
+    // Second entry links to first
+    expect(entries[1].previous_hash).toBe(entries[0].entry_hash);
+  });
+
+  it('verifyIntegrity() returns valid for clean chain', () => {
+    tracker.record({ path: 'tier_default', reason: 'Test 1' });
+    tracker.record({ path: 'aggregate', reason: 'Test 2' });
+    tracker.record({ path: 'task_cohort', model_id: 'gpt-4o', task_type: 'code_review' });
+
+    const result = tracker.verifyIntegrity();
+    expect(result.valid).toBe(true);
+  });
+
+  it('verifyIntegrity() returns valid for empty trail', () => {
+    const result = tracker.verifyIntegrity();
+    expect(result.valid).toBe(true);
+  });
+
+  it('reset clears audit trail', () => {
+    tracker.record({ path: 'tier_default' });
+    tracker.record({ path: 'aggregate' });
+    expect(tracker.auditTrail.entries).toHaveLength(2);
+
+    tracker.reset();
+
+    expect(tracker.auditTrail.entries).toHaveLength(0);
+    expect(tracker.auditTrail.integrity_status).toBe('verified');
+  });
+
+  it('audit trail entries match scoring path entry count', () => {
+    for (let i = 0; i < 5; i++) {
+      tracker.record({ path: 'tier_default', reason: `Entry ${i}` });
+    }
+
+    expect(tracker.length).toBe(5);
+    expect(tracker.auditTrail.entries).toHaveLength(5);
+  });
+
+  it('domain tag format matches ScoringPathLog:8.2.0', () => {
+    tracker.record({ path: 'tier_default' });
+
+    const entry = tracker.auditTrail.entries[0];
+    // Domain tag built by buildDomainTag('ScoringPathLog', '8.2.0')
+    expect(entry.hash_domain_tag).toContain('ScoringPathLog');
+    expect(entry.hash_domain_tag).toContain('8.2.0');
+  });
+});

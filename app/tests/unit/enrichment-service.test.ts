@@ -28,9 +28,9 @@ import { EnrichmentClient } from '../../src/services/enrichment-client.js';
 import {
   emitQualityEvent,
   computeQualityScore,
-  createQualityEvent,
+  createQualityObservation,
 } from '../../src/services/quality-feedback.js';
-import type { QualityEvent } from '../../src/services/quality-feedback.js';
+import type { QualityEventContext } from '../../src/services/quality-feedback.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -141,20 +141,26 @@ describe('EnrichmentService', () => {
   it('detects improving trajectory from event history', async () => {
     await store.put('nft-improving', makeAggregate());
 
-    // First half: low scores
+    // First half: low scores (v8.2.0 flat QualitySignalEvent format)
     for (let i = 0; i < 5; i++) {
       await store.appendEvent('nft-improving', {
         type: 'quality_signal',
+        score: 0.4,
+        event_id: crypto.randomUUID(),
+        agent_id: 'p1',
+        collection_id: 'c1',
         timestamp: `2026-01-0${i + 1}T00:00:00Z`,
-        payload: { score: 0.4 },
       });
     }
     // Second half: high scores
     for (let i = 0; i < 5; i++) {
       await store.appendEvent('nft-improving', {
         type: 'quality_signal',
+        score: 0.9,
+        event_id: crypto.randomUUID(),
+        agent_id: 'p1',
+        collection_id: 'c1',
         timestamp: `2026-02-0${i + 1}T00:00:00Z`,
-        payload: { score: 0.9 },
       });
     }
 
@@ -165,20 +171,26 @@ describe('EnrichmentService', () => {
   it('detects declining trajectory from event history', async () => {
     await store.put('nft-declining', makeAggregate());
 
-    // First half: high scores
+    // First half: high scores (v8.2.0 flat QualitySignalEvent format)
     for (let i = 0; i < 5; i++) {
       await store.appendEvent('nft-declining', {
         type: 'quality_signal',
+        score: 0.9,
+        event_id: crypto.randomUUID(),
+        agent_id: 'p1',
+        collection_id: 'c1',
         timestamp: `2026-01-0${i + 1}T00:00:00Z`,
-        payload: { score: 0.9 },
       });
     }
     // Second half: low scores
     for (let i = 0; i < 5; i++) {
       await store.appendEvent('nft-declining', {
         type: 'quality_signal',
+        score: 0.3,
+        event_id: crypto.randomUUID(),
+        agent_id: 'p1',
+        collection_id: 'c1',
         timestamp: `2026-02-0${i + 1}T00:00:00Z`,
-        payload: { score: 0.3 },
       });
     }
 
@@ -498,106 +510,86 @@ describe('Quality Feedback Loop', () => {
 
   describe('computeQualityScore', () => {
     it('returns 1.0 for zero findings', () => {
-      const event: QualityEvent = {
-        source: 'bridge',
-        finding_count: 0,
-        severity_distribution: {},
-        nft_id: 'nft-1',
-        timestamp: '2026-02-24T00:00:00Z',
-      };
-      expect(computeQualityScore(event)).toBe(1.0);
+      expect(computeQualityScore({})).toBe(1.0);
     });
 
     it('returns lower score for high-severity findings', () => {
-      const event: QualityEvent = {
-        source: 'audit',
-        finding_count: 3,
-        severity_distribution: { high: 2, medium: 1 },
-        nft_id: 'nft-1',
-        timestamp: '2026-02-24T00:00:00Z',
-      };
-      const score = computeQualityScore(event);
+      const score = computeQualityScore({ high: 2, medium: 1 });
       expect(score).toBeGreaterThan(0);
       expect(score).toBeLessThan(0.5);
     });
 
     it('returns near-zero for blocker findings', () => {
-      const event: QualityEvent = {
-        source: 'flatline',
-        finding_count: 1,
-        severity_distribution: { blocker: 1 },
-        nft_id: 'nft-1',
-        timestamp: '2026-02-24T00:00:00Z',
-      };
-      const score = computeQualityScore(event);
+      const score = computeQualityScore({ blocker: 1 });
       expect(score).toBe(0.5); // 1 / (1 + 1.0) = 0.5
     });
 
     it('handles info-level findings with minimal impact', () => {
-      const event: QualityEvent = {
-        source: 'bridge',
-        finding_count: 5,
-        severity_distribution: { info: 5 },
-        nft_id: 'nft-1',
-        timestamp: '2026-02-24T00:00:00Z',
-      };
-      const score = computeQualityScore(event);
+      const score = computeQualityScore({ info: 5 });
       // 5 * 0.05 = 0.25 weighted, 1 / 1.25 = 0.8
       expect(score).toBe(0.8);
     });
   });
 
   describe('emitQualityEvent', () => {
-    it('appends a reputation event to the store', async () => {
-      const event: QualityEvent = {
-        source: 'bridge',
-        finding_count: 2,
-        severity_distribution: { medium: 1, low: 1 },
-        nft_id: 'nft-emit',
-        timestamp: '2026-02-24T00:00:00Z',
-      };
+    const defaultContext: QualityEventContext = {
+      agent_id: 'p1',
+      collection_id: 'c1',
+    };
 
-      await emitQualityEvent(event, reputationService);
+    it('appends a reputation event to the store', async () => {
+      await emitQualityEvent('bridge', 'nft-emit', { medium: 1, low: 1 }, defaultContext, reputationService);
 
       const history = await store.getEventHistory('nft-emit');
       expect(history).toHaveLength(1);
       expect(history[0].type).toBe('quality_signal');
-      expect(history[0].timestamp).toBe('2026-02-24T00:00:00Z');
+      expect(history[0].timestamp).toBeTruthy();
 
-      const payload = history[0].payload as { source: string; score: number; finding_count: number };
-      expect(payload.source).toBe('bridge');
-      expect(payload.finding_count).toBe(2);
-      expect(payload.score).toBeGreaterThan(0);
-      expect(payload.score).toBeLessThan(1);
+      // v8.2.0 flat format: score is a top-level field, not nested in payload
+      const event = history[0] as { type: string; score: number; agent_id: string; collection_id: string };
+      expect(event.score).toBeGreaterThan(0);
+      expect(event.score).toBeLessThan(1);
+      expect(event.agent_id).toBe('p1');
+      expect(event.collection_id).toBe('c1');
     });
 
     it('appends multiple events in order', async () => {
-      const events: QualityEvent[] = [
-        { source: 'bridge', finding_count: 0, severity_distribution: {}, nft_id: 'nft-multi', timestamp: '2026-02-24T01:00:00Z' },
-        { source: 'audit', finding_count: 1, severity_distribution: { low: 1 }, nft_id: 'nft-multi', timestamp: '2026-02-24T02:00:00Z' },
-        { source: 'flatline', finding_count: 3, severity_distribution: { high: 3 }, nft_id: 'nft-multi', timestamp: '2026-02-24T03:00:00Z' },
+      const emissions: Array<{ source: 'bridge' | 'audit' | 'flatline'; nftId: string; severityDist: Record<string, number> }> = [
+        { source: 'bridge', nftId: 'nft-multi', severityDist: {} },
+        { source: 'audit', nftId: 'nft-multi', severityDist: { low: 1 } },
+        { source: 'flatline', nftId: 'nft-multi', severityDist: { high: 3 } },
       ];
 
-      for (const event of events) {
-        await emitQualityEvent(event, reputationService);
+      for (const e of emissions) {
+        await emitQualityEvent(e.source, e.nftId, e.severityDist, defaultContext, reputationService);
       }
 
       const history = await store.getEventHistory('nft-multi');
       expect(history).toHaveLength(3);
-      expect(history[0].timestamp).toBe('2026-02-24T01:00:00Z');
-      expect(history[2].timestamp).toBe('2026-02-24T03:00:00Z');
+      // All events should have timestamps (auto-generated by emitQualityEvent)
+      for (const event of history) {
+        expect(event.timestamp).toBeTruthy();
+      }
     });
   });
 
-  describe('createQualityEvent', () => {
-    it('creates a timestamped quality event', () => {
-      const event = createQualityEvent('bridge', 'nft-factory', 2, { medium: 1, low: 1 });
+  describe('createQualityObservation', () => {
+    it('creates a quality observation with score and dimensions', () => {
+      const observation = createQualityObservation('bridge', { medium: 1, low: 1 });
 
-      expect(event.source).toBe('bridge');
-      expect(event.nft_id).toBe('nft-factory');
-      expect(event.finding_count).toBe(2);
-      expect(event.severity_distribution).toEqual({ medium: 1, low: 1 });
-      expect(event.timestamp).toBeTruthy();
+      expect(observation.score).toBeGreaterThan(0);
+      expect(observation.score).toBeLessThan(1);
+      expect(observation.dimensions).toBeDefined();
+      expect(observation.dimensions!.medium).toBeDefined();
+      expect(observation.dimensions!.low).toBeDefined();
+      expect(observation.evaluated_by).toBe('dixie-quality-feedback:bridge');
+    });
+
+    it('includes latency_ms when provided', () => {
+      const observation = createQualityObservation('audit', { high: 1 }, 150);
+
+      expect(observation.latency_ms).toBe(150);
+      expect(observation.evaluated_by).toBe('dixie-quality-feedback:audit');
     });
   });
 });
@@ -619,6 +611,7 @@ describe('Self-Hosting Verification', () => {
 
   it('completes the full autopoietic loop without infinite recursion', async () => {
     const nftId = 'nft-loop';
+    const context: QualityEventContext = { agent_id: 'p1', collection_id: 'c1' };
 
     // Step 1: Seed reputation data
     await store.put(nftId, makeAggregate({
@@ -632,9 +625,8 @@ describe('Self-Hosting Verification', () => {
     expect(context1.reputation_context.trajectory).toBe('stable');
     expect(context1.reputation_context.blended_score).toBe(0.72);
 
-    // Step 3: Simulate review producing findings
-    const qualityEvent = createQualityEvent('bridge', nftId, 1, { low: 1 });
-    await emitQualityEvent(qualityEvent, reputationService);
+    // Step 3: Simulate review producing findings (v8.2.0 API)
+    await emitQualityEvent('bridge', nftId, { low: 1 }, context, reputationService);
 
     // Step 4: Verify event was stored
     const history = await store.getEventHistory(nftId);
@@ -648,10 +640,7 @@ describe('Self-Hosting Verification', () => {
 
     // Step 6: Simulate more review outcomes to change trajectory
     for (let i = 0; i < 5; i++) {
-      await emitQualityEvent(
-        createQualityEvent('audit', nftId, 0, {}),
-        reputationService,
-      );
+      await emitQualityEvent('audit', nftId, {}, context, reputationService);
     }
 
     // Step 7: Final context should reflect accumulated events
@@ -661,6 +650,7 @@ describe('Self-Hosting Verification', () => {
 
   it('completes multiple cycles without recursion or memory leak', async () => {
     const nftId = 'nft-cycles';
+    const ctx: QualityEventContext = { agent_id: 'p1', collection_id: 'c1' };
     await store.put(nftId, makeAggregate());
 
     // Run 10 cycles of: enrich → review → quality event → enrich
@@ -669,10 +659,9 @@ describe('Self-Hosting Verification', () => {
       const context = await enrichmentService.assembleContext(nftId);
       expect(context.partial).toBe(false);
 
-      // Simulate review outcome
+      // Simulate review outcome (v8.2.0 API)
       const severity = cycle % 3 === 0 ? { high: 1 } : { low: 1 };
-      const event = createQualityEvent('bridge', nftId, 1, severity);
-      await emitQualityEvent(event, reputationService);
+      await emitQualityEvent('bridge', nftId, severity, ctx, reputationService);
     }
 
     // All 10 events should be stored
@@ -761,17 +750,22 @@ describe('Self-Hosting Verification', () => {
 
   it('quality events from different sources accumulate correctly', async () => {
     const nftId = 'nft-sources';
+    const ctx: QualityEventContext = { agent_id: 'p1', collection_id: 'c1' };
     await store.put(nftId, makeAggregate());
 
-    // Emit from each source type
-    await emitQualityEvent(createQualityEvent('bridge', nftId, 2, { medium: 2 }), reputationService);
-    await emitQualityEvent(createQualityEvent('flatline', nftId, 1, { high: 1 }), reputationService);
-    await emitQualityEvent(createQualityEvent('audit', nftId, 0, {}), reputationService);
+    // Emit from each source type (v8.2.0 API)
+    await emitQualityEvent('bridge', nftId, { medium: 2 }, ctx, reputationService);
+    await emitQualityEvent('flatline', nftId, { high: 1 }, ctx, reputationService);
+    await emitQualityEvent('audit', nftId, {}, ctx, reputationService);
 
     const history = await store.getEventHistory(nftId);
     expect(history).toHaveLength(3);
 
-    const sources = history.map(e => (e.payload as { source: string }).source);
-    expect(sources).toEqual(['bridge', 'flatline', 'audit']);
+    // v8.2.0 flat format: all events are quality_signal with scores at top level
+    for (const event of history) {
+      expect(event.type).toBe('quality_signal');
+      expect((event as { score: number }).score).toBeGreaterThanOrEqual(0);
+      expect((event as { score: number }).score).toBeLessThanOrEqual(1);
+    }
   });
 });

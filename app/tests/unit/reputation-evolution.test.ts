@@ -488,19 +488,23 @@ describe('Reputation Evolution — Sprint 10', () => {
     });
 
     describe('reconstructAggregateFromEvents (stub)', () => {
-      it('returns a cold-start aggregate from events', () => {
+      it('returns a warming aggregate from quality_signal events', () => {
+        // Use properly-shaped quality_signal events with score at top level
         const events: ReputationEvent[] = [
-          makeEvent({ timestamp: '2026-02-01T00:00:00Z' }),
-          makeEvent({ timestamp: '2026-02-02T00:00:00Z' }),
-          makeEvent({ timestamp: '2026-02-03T00:00:00Z' }),
+          { type: 'quality_signal', score: 0.7, event_id: '1', agent_id: 'a', collection_id: 'c', timestamp: '2026-02-01T00:00:00Z' } as ReputationEvent,
+          { type: 'quality_signal', score: 0.8, event_id: '2', agent_id: 'a', collection_id: 'c', timestamp: '2026-02-02T00:00:00Z' } as ReputationEvent,
+          { type: 'quality_signal', score: 0.9, event_id: '3', agent_id: 'a', collection_id: 'c', timestamp: '2026-02-03T00:00:00Z' } as ReputationEvent,
         ];
 
         const aggregate = reconstructAggregateFromEvents(events);
-        expect(aggregate.state).toBe('cold');
-        expect(aggregate.personal_score).toBeNull();
-        expect(aggregate.sample_count).toBe(3); // Event count recorded
+        expect(aggregate.state).toBe('warming');
+        // Dampened: first=0.7 (cold start), second and third blended via EMA
+        expect(aggregate.personal_score).toBeGreaterThanOrEqual(0.7);
+        expect(aggregate.personal_score).toBeLessThanOrEqual(0.9);
+        expect(aggregate.sample_count).toBe(3);
         expect(aggregate.created_at).toBe('2026-02-01T00:00:00Z');
         expect(aggregate.last_updated).toBe('2026-02-03T00:00:00Z');
+        expect(aggregate.contract_version).toBe('8.2.0');
         expect(aggregate.task_cohorts).toEqual([]);
       });
 
@@ -508,7 +512,7 @@ describe('Reputation Evolution — Sprint 10', () => {
         const aggregate = reconstructAggregateFromEvents([]);
         expect(aggregate.state).toBe('cold');
         expect(aggregate.sample_count).toBe(0);
-        expect(aggregate.contract_version).toBe('7.11.0');
+        expect(aggregate.contract_version).toBe('8.2.0');
       });
     });
   });
