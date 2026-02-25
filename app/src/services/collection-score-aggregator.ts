@@ -56,7 +56,6 @@ export class CollectionScoreAggregator {
    */
   update(observation: Record<string, number>): void {
     this.globalCount++;
-    const n = this.globalCount;
     const dims = Object.keys(observation);
 
     // Store old means for covariance update
@@ -126,26 +125,27 @@ export class CollectionScoreAggregator {
     const countB = this.counts.get(dimB);
     if (countA === undefined || countB === undefined) return undefined;
 
-    const count = Math.min(countA, countB);
-    if (count < 2) {
+    const pairedCount = Math.min(countA, countB);
+    if (pairedCount < 2) {
       return {
         dim_a: dimA,
         dim_b: dimB,
         covariance: 0,
         correlation: 0,
-        sample_count: count,
+        sample_count: pairedCount,
       };
     }
 
     const key = pairKey(dimA, dimB);
     const coM2 = this.co_m2s.get(key) ?? 0;
-    const covariance = coM2 / (count - 1);
+    const covariance = coM2 / (pairedCount - 1);
 
     // Pearson's r = cov(A,B) / (std_A * std_B)
+    // Each dimension uses its own count for variance (correct for ragged observations)
     const m2A = this.m2s.get(dimA) ?? 0;
     const m2B = this.m2s.get(dimB) ?? 0;
-    const stdA = Math.sqrt(m2A / (count - 1));
-    const stdB = Math.sqrt(m2B / (count - 1));
+    const stdA = Math.sqrt(m2A / (countA - 1));
+    const stdB = Math.sqrt(m2B / (countB - 1));
 
     const correlation =
       stdA > 0 && stdB > 0 ? covariance / (stdA * stdB) : 0;
@@ -155,7 +155,7 @@ export class CollectionScoreAggregator {
       dim_b: dimB,
       covariance,
       correlation,
-      sample_count: count,
+      sample_count: pairedCount,
     };
   }
 

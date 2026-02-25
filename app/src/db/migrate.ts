@@ -191,7 +191,11 @@ export async function migrate(pool: DbPool): Promise<MigrationResult> {
       await client.query('COMMIT');
       result.applied.push(filename);
     } catch (err) {
-      await client.query('ROLLBACK');
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // ROLLBACK failure must not mask the original migration error
+      }
       throw new Error(
         `Migration ${filename} failed: ${err instanceof Error ? err.message : String(err)}`,
       );

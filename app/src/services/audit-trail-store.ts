@@ -96,6 +96,7 @@ export class AuditTrailStore {
    *
    * @since cycle-009 Sprint 2 — Task 2.4 (FR-3)
    * @since bridge-iter1: Fixed HIGH-1 (chain-bound hash) and HIGH-2 (TOCTOU serialization)
+   * @since bridge-iter2: Added UNIQUE(resource_type, previous_hash) guard for genesis race
    */
   async append(
     resourceType: string,

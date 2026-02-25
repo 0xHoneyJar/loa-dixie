@@ -99,6 +99,38 @@ describe('PostgreSQLReputationStore', () => {
 
       await expect(store.put('nft-1', agg)).resolves.toBeUndefined();
     });
+
+    it('succeeds with correct expectedVersion', async () => {
+      const agg = makeAggregate({ blended_score: 0.9 });
+
+      // UPDATE with version match succeeds
+      pool._setResponse('UPDATE reputation_aggregates', {
+        rows: [{ version: 6 }],
+        rowCount: 1,
+      });
+
+      await expect(store.put('nft-1', agg, 5)).resolves.toBeUndefined();
+
+      // Verify the query included the version parameter
+      const updateQuery = pool._queries.find(
+        (q) => q.text.includes('UPDATE') && q.text.includes('version'),
+      );
+      expect(updateQuery).toBeDefined();
+      expect(updateQuery!.values).toContain(5);
+    });
+
+    it('throws ConflictError when expectedVersion is stale', async () => {
+      const agg = makeAggregate({ blended_score: 0.9 });
+
+      // UPDATE with stale version returns 0 rows
+      pool._setResponse('UPDATE reputation_aggregates', {
+        rows: [],
+        rowCount: 0,
+      });
+
+      await expect(store.put('nft-1', agg, 3)).rejects.toThrow(ConflictError);
+      await expect(store.put('nft-1', agg, 3)).rejects.toThrow('nft-1');
+    });
   });
 
   describe('listCold()', () => {
