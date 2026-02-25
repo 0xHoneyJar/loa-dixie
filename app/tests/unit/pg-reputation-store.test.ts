@@ -299,6 +299,22 @@ describe('PostgresReputationStore', () => {
       expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
       expect(mockClient.release).toHaveBeenCalled();
     });
+
+    it('propagates original error when ROLLBACK also fails', async () => {
+      const event = makeEvent('quality_signal');
+      const mockClient = {
+        query: vi.fn()
+          .mockResolvedValueOnce(undefined) // BEGIN
+          .mockRejectedValueOnce(new Error('insert failed')) // INSERT fails
+          .mockRejectedValueOnce(new Error('rollback failed')), // ROLLBACK fails
+        release: vi.fn(),
+      };
+      (pool as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockClient);
+
+      // Original error propagated, not the ROLLBACK error
+      await expect(store.appendEvent('nft-1', event)).rejects.toThrow('insert failed');
+      expect(mockClient.release).toHaveBeenCalled();
+    });
   });
 
   describe('compactSnapshot', () => {
@@ -333,6 +349,22 @@ describe('PostgresReputationStore', () => {
 
       await expect(store.compactSnapshot('nft-1', aggregate)).rejects.toThrow('db error');
       expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('propagates original error when ROLLBACK also fails', async () => {
+      const aggregate = makeAggregate();
+      const mockClient = {
+        query: vi.fn()
+          .mockResolvedValueOnce(undefined) // BEGIN
+          .mockRejectedValueOnce(new Error('upsert failed')) // UPSERT fails
+          .mockRejectedValueOnce(new Error('rollback failed')), // ROLLBACK fails
+        release: vi.fn(),
+      };
+      (pool as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockClient);
+
+      // Original error propagated, not the ROLLBACK error
+      await expect(store.compactSnapshot('nft-1', aggregate)).rejects.toThrow('upsert failed');
       expect(mockClient.release).toHaveBeenCalled();
     });
   });
