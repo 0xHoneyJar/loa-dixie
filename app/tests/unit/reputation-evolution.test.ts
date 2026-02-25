@@ -89,15 +89,16 @@ function makeEvent(overrides: Partial<ReputationEvent> = {}): ReputationEvent {
 
 describe('Reputation Evolution — Sprint 10', () => {
   describe('Task 10.1: TaskTypeCohort types and TASK_TYPES taxonomy', () => {
-    it('TASK_TYPES contains the 5 expected task categories', () => {
+    it('TASK_TYPES contains the expected task categories', () => {
       expect(TASK_TYPES).toEqual([
         'code_review',
         'creative_writing',
         'analysis',
         'summarization',
         'general',
+        'unspecified',
       ]);
-      expect(TASK_TYPES).toHaveLength(5);
+      expect(TASK_TYPES).toHaveLength(6);
     });
 
     it('TASK_TYPES is readonly (frozen at type level)', () => {
