@@ -1,4 +1,4 @@
-import type { ResourceGovernor, ResourceHealth } from './resource-governor.js';
+import type { ResourceGovernor, ResourceHealth, ResourceSelfKnowledge } from './resource-governor.js';
 import type { GovernedResource, InvariantResult } from './governed-resource.js';
 
 /**
@@ -37,6 +37,13 @@ export interface GovernorSnapshot {
    * @since cycle-007 — Sprint 75, Task S3-T5
    */
   readonly governedResource?: GovernedResourceState;
+}
+
+/** Extended snapshot with self-knowledge for verifyAllGovernors() */
+export interface GovernorVerification {
+  readonly resourceType: string;
+  readonly health: ResourceHealth | null;
+  readonly selfKnowledge: ResourceSelfKnowledge | null;
 }
 
 export class GovernorRegistry {
@@ -85,6 +92,18 @@ export class GovernorRegistry {
     return [...this.governors.entries()].map(([type, gov]) => ({
       resourceType: type,
       health: gov.getHealth(),
+    }));
+  }
+
+  /**
+   * Verify all registered governors — health + self-knowledge.
+   * @since cycle-009 Sprint 6 — Task 6.1 (FR-11)
+   */
+  verifyAllGovernors(): ReadonlyArray<GovernorVerification> {
+    return [...this.governors.entries()].map(([type, gov]) => ({
+      resourceType: type,
+      health: gov.getHealth(),
+      selfKnowledge: gov.getGovernorSelfKnowledge(),
     }));
   }
 

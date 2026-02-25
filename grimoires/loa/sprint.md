@@ -1,900 +1,413 @@
-# Sprint Plan: Governance Isomorphism — Unified GovernedResource<T> Platform
+# Sprint Plan: Architectural Excellence — ADR Coverage, Vision Exploration & Knowledge Sovereignty
 
-**Version**: 8.0.0
-**Date**: 2026-02-25
-**Cycle**: cycle-008
-**PRD**: `grimoires/loa/prd.md` v8.0.0
-**SDD**: `grimoires/loa/sdd.md` v8.0.0
-**Status**: Ready
+**Version**: 10.0.0
+**Date**: 2026-02-26
+**Cycle**: cycle-010
+**PRD**: v9.0.0 (continued) | **SDD**: v9.0.0 (continued)
+**Sprints**: 3 (global IDs: 79-81)
+**Estimated Tasks**: 18
+**Estimated New Tests**: ~15
 
 ---
 
-## Overview
+## Sprint Overview
 
-| Metric | Value |
-|--------|-------|
-| **Sprints** | 6 |
-| **Total Tasks** | 35 |
-| **FRs Covered** | 14 (all) |
-| **Tiers** | 5 (Consistency → Integrity → Self-Calibration → Platform → Intelligence) |
-| **Estimated New Tests** | ≥55 |
-| **Target Test Total** | ≥1346 (1291 existing + ≥55 new) |
-| **Branch** | `feature/cycle-008-governance-isomorphism` |
-| **Base** | `main` (after PR #15 merge) |
+| Sprint | Global ID | Label | Focus | Tasks | New Tests |
+|--------|-----------|-------|-------|-------|-----------|
+| sprint-1 | 79 | ADR Coverage — Documenting the Architecture We Built | ADR gap closure for 5 undocumented patterns | 8 | 0 |
+| sprint-2 | 80 | Invariant & Governance Documentation Hardening | INV-009/010 in invariants.yaml, ADR cross-refs | 5 | ~5 |
+| sprint-3 | 81 | Vision Exploration Issues & Propose-Learning | GitHub issues for vision items + learning proposals | 5 | ~10 |
 
-### Team
+---
 
-| Role | Assignment |
-|------|-----------|
-| Architect | Claude (autonomous) |
-| Implementer | Claude (autonomous) |
-| Reviewer | Bridgebuilder (post-sprint) |
-| Auditor | Claude (per-sprint audit) |
+## Context: Why This Cycle
 
-### Dependency Graph
+Nine development cycles and 14 Bridgebuilder reviews have produced an architectural ecosystem of remarkable depth. But documentation has not kept pace with implementation. The gap analysis reveals:
+
+- **5 major architectural patterns** lack ADR documentation despite being foundational to the codebase
+- **2 new invariants** (INV-009, INV-010) are enforced in code but missing from `invariants.yaml`
+- **7 vision items** are captured but none have been surfaced as actionable GitHub issues
+- **6 learning proposals** from cycle-009 deserve upstream consideration
+- **16 SPECULATION findings** across bridge reviews represent unexplored architectural possibilities
+
+This cycle closes the documentation gap, surfaces vision items for community engagement, and ensures the institutional memory we built in cycle-009 is itself well-documented.
+
+---
+
+## Sprint 1: ADR Coverage — Documenting the Architecture We Built
+
+**Global ID**: 79
+**Goal**: Write 5 new ADRs for the most significant undocumented architectural patterns. Each ADR documents the decision, alternatives considered, FAANG parallels, and codebase references. Priority order follows architectural significance.
+**Priority**: P1
+**Success Criteria**: All 5 ADRs written, cross-referenced, and internally consistent with existing ADRs.
+
+### Task 1.1: ADR-015 — GovernedResource\<T\>: The Kubernetes CRD Moment
+
+**File**: `grimoires/loa/context/adr-governed-resource.md`
+**Priority**: P0
+
+**Description**: Document the most architecturally significant pattern in the codebase — the discovery that billing, reputation, knowledge, scoring paths, and access are all isomorphic governance problems solved by a single `GovernedResource<TState, TEvent, TInvariant>` interface. This is the "Kubernetes CRD moment" identified by Bridgebuilder in PR #15's Deep Meditation Part I.
+
+**Content Requirements**:
+- **Context**: How cycle-007 created `GovernedResourceBase` unused, cycle-008 proved it with 2 implementations, cycle-009 completed the proof with 3 witnesses
+- **Decision**: Unified governance protocol abstraction over per-resource ad-hoc governance
+- **Alternatives Rejected**: (1) Per-resource governance (status quo ante), (2) Single god-class `GovernanceEngine`, (3) Trait-based mixin composition
+- **FAANG Parallel**: Kubernetes Custom Resource Definitions — generic governance with specialized controllers
+- **Consequences**: INV-008 declared, GovernorRegistry verifies all instances, new resources get governance "for free"
+- **Cross-references**: INV-008, `governed-resource.ts`, `governor-registry.ts`, ADR-003 (Separation of Powers), Bridgebuilder PR #15 Part I
+- **Ostrom mapping**: How GovernedResource embodies Ostrom's design principles (clear boundaries = `resourceType`, collective choice = `transition()`, monitoring = `verify()`, graduated sanctions = state machine)
+
+**Acceptance Criteria**:
+- [ ] ADR follows existing format (Status, Date, Context, Decision, Alternatives, Consequences)
+- [ ] All code references use `file:line` or `file:symbol` format
+- [ ] Cross-references to INV-008, ADR-003, ADR-009
+- [ ] FAANG parallel is specific and substantive (not generic)
+- [ ] Ostrom principle mapping is included
+
+### Task 1.2: ADR-016 — Dual-Track Hash Chain with Cross-Chain Verification
+
+**File**: `grimoires/loa/context/adr-dual-track-hash-chain.md`
+**Priority**: P1
+
+**Description**: Document the Certificate Transparency pattern used in `ScoringPathTracker` — two independent hash chains that act as mutual witnesses. The chains use different hash algorithms (`computeScoringPathHash` vs `computeAuditEntryHash` with domain tags), providing defense-in-depth against single-chain tampering.
+
+**Content Requirements**:
+- **Context**: How PR #15 identified dual-chain divergence risk (Deep Meditation Part II, Gap 5), and cycle-009 Sprint 2 implemented cross-chain verification
+- **Decision**: Two independent hash chains verified structurally (entry count + tip existence), not by direct hash comparison
+- **Alternatives Rejected**: (1) Single hash chain (no redundancy), (2) Identical hash chains (correlated failure), (3) Merkle tree (overcomplicated for sequential audit)
+- **FAANG Parallel**: Google Certificate Transparency (RFC 6962) — multiple independent logs that cross-verify
+- **Chain-bound hashing**: The `computeChainBoundHash()` pattern that cryptographically binds `previous_hash` into the entry hash, preventing chain linkage tampering
+- **Genesis race**: The UNIQUE constraint on `(resource_type, previous_hash)` that prevents chain forking during concurrent first-appends
+- **Cross-references**: `scoring-path-tracker.ts`, `audit-trail-store.ts`, bridge-iter1 HIGH-1/HIGH-2
+
+**Acceptance Criteria**:
+- [ ] Explains chain-bound hashing with formula: `hash(contentHash + ":" + previousHash)`
+- [ ] Documents the TOCTOU fix (FOR UPDATE + serialized transactions)
+- [ ] Documents the genesis race fix (UNIQUE constraint)
+- [ ] FAANG parallel references RFC 6962 specifically
+- [ ] Cross-references bridge iteration findings that motivated the design
+
+### Task 1.3: ADR-017 — Conservation Laws as First-Class Protocol Objects
+
+**File**: `grimoires/loa/context/adr-conservation-laws.md`
+**Priority**: P1
+
+**Description**: Document the evolution from inline invariant comments (I-1, I-2, I-3) to protocol-backed `ConservationLaw` instances using Hounfour v8.0.0 commons factories. This transforms the "social contract expressed as verifiable properties" from documentation into executable code.
+
+**Content Requirements**:
+- **Context**: Original invariants (cycle-001) were inline comments. Cycle-007 introduced the social contract framing. Cycle-008 moved to typed `ConservationLaw` instances.
+- **Decision**: Every economic invariant is a first-class `ConservationLaw` object, not a comment
+- **Alternatives Rejected**: (1) Inline comments (status quo, no enforcement), (2) Runtime assertions (crash on violation), (3) Property-based testing only (no production enforcement)
+- **FAANG Parallel**: Stripe's double-entry bookkeeping — conservation as a mathematical property of the system, not a policy check
+- **The 5 laws**: BUDGET_CONSERVATION, PRICING_CONSERVATION, CACHE_COHERENCE, NON_NEGATIVE_SPEND, BUDGET_MONOTONICITY
+- **Cross-references**: `conservation-laws.ts`, `invariants.yaml` INV-001 through INV-004, Bridgebuilder Part II "social contract"
+
+**Acceptance Criteria**:
+- [ ] Lists all 5 conservation laws with their mathematical properties
+- [ ] Explains the progression: comments → YAML → typed protocol objects
+- [ ] FAANG parallel is Stripe-specific (double-entry, not generic)
+- [ ] Cross-references invariants.yaml entries
+
+### Task 1.4: ADR-018 — DynamicContract Monotonic Expansion
+
+**File**: `grimoires/loa/context/adr-dynamic-contract.md`
+**Priority**: P1
+
+**Description**: Document the decision that protocol surfaces only expand with reputation progression, never contract. This is the "capability ratchet" — once an agent earns a capability, downgrade requires explicit governance action (quarantine), not silent regression.
+
+**Content Requirements**:
+- **Context**: Cycle-004's static tier system → cycle-008's DynamicContract pattern → cycle-009's persistent store with monotonic verification
+- **Decision**: `verifyMonotonicExpansion()` runs before every contract save; violations are rejected
+- **Alternatives Rejected**: (1) Unrestricted contract modification (allows downgrade attacks), (2) Append-only contract history (storage cost), (3) Soft-delete with versioning (complex)
+- **FAANG Parallel**: Kubernetes feature gates — features graduate from alpha → beta → GA but never de-graduate
+- **Forward-only alignment**: How monotonic expansion mirrors the forward-only migration framework (ADR for migrate.ts, D-022)
+- **Cross-references**: `protocol-version.ts`, `dynamic-contract-store.ts`, D-022 (forward-only migrations)
+
+**Acceptance Criteria**:
+- [ ] Explains the 4-tier surface: cold < warming < established < authoritative
+- [ ] Documents the monotonic expansion verification algorithm
+- [ ] Connects to the forward-only migration philosophy
+- [ ] Cross-references D-022 and protocol-version middleware
+
+### Task 1.5: ADR-019 — Feedback Dampening via EMA in the Autopoietic Loop
+
+**File**: `grimoires/loa/context/adr-feedback-dampening.md`
+**Priority**: P1
+
+**Description**: Document the decision to bound the autopoietic feedback loop with exponential moving average (EMA) dampening. Without dampening, the loop from `quality signal → reputation update → routing change → quality signal` can enter runaway convergence or death spirals.
+
+**Content Requirements**:
+- **Context**: Cycle-007 introduced the autopoietic loop (ADR-009). Bridgebuilder review identified the risk of unbounded feedback. Cycle-008 implemented EMA dampening with INV-006.
+- **Decision**: EMA with adaptive alpha ramp from `ALPHA_MIN` to `ALPHA_MAX` over `RAMP_SAMPLES`
+- **Alternatives Rejected**: (1) No dampening (runaway risk), (2) Fixed-window moving average (memory-hungry, loses recency), (3) Kalman filter (overcomplicated for scalar scores), (4) Hard clamp on delta (discontinuous)
+- **FAANG Parallel**: Google explore/exploit ramp in ad systems — new signals are distrusted until sufficient samples confirm the pattern
+- **INV-006 formalization**: `|dampened - old| <= ALPHA_MAX * |new - old|`
+- **Cross-references**: `reputation-service.ts:computeDampenedScore`, INV-006, ADR-009 (autopoietic property), `feedback-dampening.test.ts`
+
+**Acceptance Criteria**:
+- [ ] EMA formula documented with alpha ramp mechanism
+- [ ] Cold start behavior documented (null old_score → no dampening)
+- [ ] Death spiral prevention mechanism explained
+- [ ] INV-006 property included with mathematical expression
+- [ ] Cross-references ADR-009 (autopoietic loop that this dampens)
+
+### Task 1.6: ADR Cross-Reference Index Update
+
+**Priority**: P1
+
+**Description**: Update all existing ADRs that reference the newly documented patterns. Add cross-references from ADR-003 (Separation of Powers) to ADR-015 (GovernedResource), from ADR-009 (Autopoietic) to ADR-019 (Feedback Dampening), from ADR-013 (Hounfour Alignment) to ADR-016 (Dual-Track Hash Chain).
+
+**Acceptance Criteria**:
+- [ ] ADR-003 references ADR-015 in "Related Decisions"
+- [ ] ADR-009 references ADR-019 in "Related Decisions"
+- [ ] ADR-013 references ADR-016 (hash chain as Level 5+ evidence)
+- [ ] ADR-012 (Conviction-to-Currency) references ADR-018 (DynamicContract)
+- [ ] No broken cross-references
+
+### Task 1.7: ADR Coverage Verification
+
+**Priority**: P1
+
+**Description**: Verify that every service file in `app/src/services/` with a module-level JSDoc comment referencing an architectural pattern has a corresponding ADR. Generate a coverage matrix mapping services → ADRs.
+
+**Acceptance Criteria**:
+- [ ] Coverage matrix created as section in NOTES.md
+- [ ] Every service with 100+ lines has at least one ADR reference
+- [ ] Gap list identifies any remaining undocumented patterns (for future cycles)
+
+### Task 1.8: Sprint 1 Completion Gate
+
+**Priority**: P0
+
+**Description**: Verify all 5 new ADRs are syntactically consistent (same format, sections, cross-references) and that no existing ADR cross-references are broken.
+
+**Acceptance Criteria**:
+- [ ] All 5 new ADRs follow the Status/Date/Context/Decision/Alternatives/Consequences format
+- [ ] All `file:symbol` references are valid (files exist, symbols exist)
+- [ ] No dangling cross-references between ADRs
+- [ ] NOTES.md updated with ADR coverage matrix
+
+---
+
+## Sprint 2: Invariant & Governance Documentation Hardening
+
+**Global ID**: 80
+**Goal**: Ensure the invariants we enforce in code are fully declared in `invariants.yaml`, add the missing INV-009 and INV-010 entries, and harden the three-witness governance documentation.
+**Priority**: P1
+**Success Criteria**: `invariants.yaml` has 10+ entries. All invariants have `verified_in` references. Three-witness pattern is fully documented.
+
+### Task 2.1: Add INV-009 and INV-010 to invariants.yaml
+
+**File**: `grimoires/loa/invariants.yaml`
+**Priority**: P1
+
+**Description**: Add the two cycle-009 invariants that are enforced in code but missing from the YAML declaration:
+- **INV-009**: Knowledge freshness bound — `freshness_score` decreases monotonically between ingestion events (exponential decay with `lambda = 0.023`)
+- **INV-010**: Citation integrity — every knowledge citation references an existing source in the corpus
+
+**Acceptance Criteria**:
+- [ ] INV-009 entry with `id`, `description`, `severity: important`, `category: bounded`, `properties`, `verified_in`
+- [ ] INV-010 entry with `id`, `description`, `severity: important`, `category: referential`, `properties`, `verified_in`
+- [ ] `verified_in` references point to `knowledge-governor.ts` symbols
+- [ ] Total invariant count is now 10
+- [ ] YAML validates cleanly (no syntax errors)
+
+### Task 2.2: Add INV-011 (Chain Integrity) and INV-012 (Three-Witness Quorum)
+
+**File**: `grimoires/loa/invariants.yaml`
+**Priority**: P1
+
+**Description**: Declare two additional invariants identified during bridge reviews:
+- **INV-011**: Chain integrity — `computeChainBoundHash(entry, domainTag, previousHash)` is deterministic and tamper-evident. Recomputing any entry's hash from its content and predecessor must match the stored hash.
+- **INV-012**: Three-witness quorum — The GovernorRegistry must have `>= 3` registered resource types for the governance isomorphism to provide Byzantine fault tolerance. (Proposed by Bridgebuilder Meditation on PR #26.)
+
+**Acceptance Criteria**:
+- [ ] INV-011 entry with verified_in references to `audit-trail-store.ts:computeChainBoundHash` and `scoring-path-tracker.ts:verifyIntegrity`
+- [ ] INV-012 entry with verified_in references to `governor-registry.ts:verifyAllGovernors` and `governance-three-witness.test.ts`
+- [ ] Total invariant count is now 12
+- [ ] YAML validates cleanly
+
+### Task 2.3: Invariant Test Coverage Verification
+
+**Priority**: P1
+
+**Description**: For each invariant in `invariants.yaml`, verify that the `verified_in` references point to actual test files and symbols that exercise the invariant property. Add test references where missing.
+
+**Acceptance Criteria**:
+- [ ] Every invariant has at least one test file in `verified_in`
+- [ ] All test file references exist and contain the referenced symbol
+- [ ] Coverage report: "12/12 invariants have test coverage"
+- [ ] Any gaps documented in NOTES.md
+
+### Task 2.4: Three-Witness Governance Documentation
+
+**Priority**: P1
+
+**Description**: Add a section to NOTES.md documenting the three-witness governance pattern as implemented: Reputation (ReputationService), Knowledge (KnowledgeGovernor), and Corpus Meta (CorpusMetaGovernor). Include the governor registry verification flow and the Bridgebuilder's "Byzantine fault tolerance minimum quorum" framing.
+
+**Acceptance Criteria**:
+- [ ] Three witnesses listed with their `resourceType` values
+- [ ] GovernedResource interface contract summarized
+- [ ] INV-008 (isomorphism) and INV-012 (quorum) referenced
+- [ ] Bridgebuilder meditation cited as source of the pattern name
+
+### Task 2.5: Sprint 2 Completion Gate
+
+**Priority**: P0
+
+**Description**: Verify all invariants.yaml changes are syntactically valid and that test references resolve.
+
+**Acceptance Criteria**:
+- [ ] `invariants.yaml` parses as valid YAML
+- [ ] All 12 invariants have complete entries
+- [ ] All `verified_in` file references exist
+- [ ] Tests pass: `npx vitest run` (all existing + any new tests)
+
+---
+
+## Sprint 3: Vision Exploration Issues & Propose-Learning
+
+**Global ID**: 81
+**Goal**: Surface vision items, speculation findings, and learning proposals as GitHub issues for community engagement and future cycle planning. Transform captured institutional knowledge into actionable backlog items.
+**Priority**: P2
+**Success Criteria**: All vision items filed as issues. Learning proposals filed. Issues are labeled and cross-referenced.
+
+### Task 3.1: File Vision Items as GitHub Issues
+
+**Priority**: P2
+
+**Description**: Create GitHub issues for each of the 7 captured vision items. Each issue should include the full vision description, origin context (which PR/bridge review captured it), FAANG parallel if available, and a "How to Explore" section suggesting next steps.
+
+**Vision Items to File**:
+1. **vision-001**: Pluggable credential provider registry
+2. **vision-002**: Bash Template Rendering Anti-Pattern (safety fix)
+3. **vision-003**: Context Isolation as Prompt Injection Defense
+4. **vision-004**: Conditional Constraints for Feature-Flagged Behavior (already exploring)
+5. **vision-005**: Pre-Swarm Research Planning (`/plan-research`)
+6. **vision-006**: Symbiotic Layer — Convergence Detection & Intent Modeling
+7. **vision-007**: Operator Skill Curve & Progressive Orchestration Disclosure
+
+**Acceptance Criteria**:
+- [ ] 7 GitHub issues created with `[VISION]` prefix
+- [ ] Each issue references the vision entry file
+- [ ] Each issue has a "How to Explore" section
+- [ ] Issues labeled with `vision` and `enhancement`
+- [ ] Vision index.md updated with issue URLs
+
+### Task 3.2: File Bridge Speculation Findings as GitHub Issues
+
+**Priority**: P2
+
+**Description**: Create GitHub issues for the most architecturally significant SPECULATION findings from bridge reviews that haven't been addressed. These represent ideas the Bridgebuilder identified as worth exploring in future cycles.
+
+**Top Speculation Items to File**:
+1. **Advisory lock for audit chain serialization** — `pg_advisory_xact_lock(hashtext(resource_type))` to serialize per-chain without blocking other chains
+2. **PG-backed KnowledgeGovernor** — Complete the persistence story using the existing `knowledge_freshness` table
+3. **Chain verification pagination** — Large chains need paginated verification to avoid memory issues
+4. **Event-sourced MutationLog** — Append-only semantics for the PG adapter (Kafka compacted topics pattern)
+5. **Cross-governor event coordination** — Publish-subscribe on GovernorRegistry for reactive governance
+6. **Meta-governor** — Governance of governance (deferred from cycle-009, D-023)
+7. **Adaptive retrieval from self-knowledge** — Oracle hedging responses based on epistemic state
+
+**Acceptance Criteria**:
+- [ ] 7 GitHub issues created with `[SPECULATION]` prefix
+- [ ] Each issue references the bridge review that identified it
+- [ ] Each issue includes the FAANG parallel where available
+- [ ] Issues labeled with `speculation` and `enhancement`
+
+### Task 3.3: File Propose-Learning Issue
+
+**Priority**: P2
+
+**Description**: Create a GitHub issue proposing that key learnings from cycle-009 be contributed upstream to the Loa framework. The learnings cover patterns that are generalizable beyond this specific project.
+
+**Learnings to Propose**:
+- **L-023**: Forward-only migrations align with DynamicContract monotonic expansion — the pattern that "governance decisions don't roll back" applies to database schema, protocol surfaces, and institutional memory alike
+- **L-024**: Mock pool pattern for PG store testing — `createMockPool()` with query-text matching enables full ReputationStore testing without a database. Generalizable to any project with PG stores.
+- **L-025**: Welford's algorithm extends cleanly to pairwise covariance — the co-moment update pattern is a reusable statistical primitive
+- **L-026**: Hash chain verification with domain separation — using Hounfour's `computeAuditEntryHash` with domain tags enables multi-chain verification without exposing crypto internals
+
+**Acceptance Criteria**:
+- [ ] GitHub issue created with `[PROPOSE-LEARNING]` prefix
+- [ ] Each learning includes: discovery context, generalization argument, code reference
+- [ ] Issue suggests which learnings might become Loa framework patterns vs project-specific
+- [ ] Issue labeled with `learning` and `upstream`
+
+### Task 3.4: File Bridgebuilder Deep Meditation Gaps as Issues
+
+**Priority**: P2
+
+**Description**: Create GitHub issues for the remaining gaps identified in the Bridgebuilder's Deep Meditation on PR #15 that haven't been fully resolved. These represent known architectural improvements with specific implementation guidance.
+
+**Gaps to File**:
+1. **Blended score staleness** — `handleQualitySignal()` updates personal_score but not blended_score. Needs recompute in both paths.
+2. **Collection score as empirical running mean** — Replace `DEFAULT_COLLECTION_SCORE = 0` with Welford's population mean (infrastructure built in cycle-009, wiring deferred)
+3. **Auto-checkpoint in ScoringPathTracker** — `checkpointInterval` parameter accepted but never auto-triggered in `record()`
+
+**Acceptance Criteria**:
+- [ ] 3 GitHub issues created with `[BRIDGE-GAP]` prefix
+- [ ] Each issue references the specific Bridgebuilder meditation section
+- [ ] Each issue includes implementation guidance (the Bridgebuilder already specified the fix)
+- [ ] Issues labeled with `bridge-gap` and `bug` or `enhancement` as appropriate
+
+### Task 3.5: Sprint 3 Completion Gate
+
+**Priority**: P0
+
+**Description**: Verify all GitHub issues are created, properly labeled, and cross-referenced. Update NOTES.md with the issue URLs.
+
+**Acceptance Criteria**:
+- [ ] Total of ~20 GitHub issues created across Tasks 3.1-3.4
+- [ ] All issues have appropriate labels
+- [ ] NOTES.md updated with "Filed Issues" section listing all new issue URLs
+- [ ] Vision index.md updated with issue cross-references
+- [ ] Tests pass: `npx vitest run` (no regressions from documentation changes)
+
+---
+
+## Dependencies
 
 ```
-Sprint 1 (Consistency) ──→ Sprint 2 (Integrity)
-         │                          │
-         ├──→ Sprint 3 (Self-Calibration)
-         │                          │
-         └──→ Sprint 4 (Adaptive Routing)
-                                    │
-Sprint 2 + 3 + 4 ──→ Sprint 5 (GovernedResource Platform)
-                                    │
-         All ──→ Sprint 6 (Integration & Hardening)
+Sprint 1 (ADR Coverage)
+    |
+    +---> Sprint 2 (Invariants + Governance Docs)
+    |         |
+    |         +---> Sprint 3 (GitHub Issues)
+    |
+    +---> Sprint 3 (GitHub Issues) [partially independent]
 ```
 
-### Prioritization Rationale
-
-**Tiers 1–2 (Sprints 1–2)** are MVP — they fix the 6 Bridgebuilder gaps with small, targeted changes. Each task is independent within its sprint. If cycle-008 were cut short, these alone would resolve all known architectural debts.
-
-**Tier 3 (Sprints 3–4)** transforms from self-observing to self-calibrating. These build on the consistent blended score (FR-1) and clear API (FR-3) from Sprint 1.
-
-**Tier 4 (Sprint 5)** establishes the GovernedResource<T> platform. This depends on all foundations being in place — the protocol abstraction captures what Sprints 1–4 build.
-
-**Tier 5 (Sprint 6)** is the capstone — integration tests proving the complete autopoietic loop and the INV-008 declaration.
+**Critical path**: Sprint 1 → Sprint 2 → Sprint 3
+**Note**: Sprint 3 tasks 3.1, 3.2, 3.3 can begin in parallel with Sprint 2 since they don't depend on invariants.yaml changes.
 
 ---
 
-## Sprint 1: Consistency Foundations
+## Risk Assessment
 
-**Global ID**: sprint-81
-**FRs**: FR-1, FR-2, FR-3
-**Goal**: Fix the three consistency gaps where the code already knows what it wants to be. Every event path produces consistent state. The checkpoint fires. The API is legible.
-**Dependencies**: None
-**Estimated Tasks**: 7
-
-### Task 1.1: Extract buildUpdatedAggregate() shared helper
-
-**File**: `app/src/services/reputation-service.ts`
-**FR**: FR-1
-
-**Description**: Extract the common pattern from `handleModelPerformance()` — `computeDampenedScore()` → `computeBlendedScore()` → construct updated aggregate — into a shared `buildUpdatedAggregate()` helper. This helper will be called by both `handleQualitySignal()` and `handleModelPerformance()`, ensuring every event path produces a fully consistent aggregate with fresh blended_score.
-
-**Acceptance Criteria**:
-- [ ] `buildUpdatedAggregate(existing, newPersonalScore, collectionScore, pseudoCount)` helper function extracted
-- [ ] Helper computes blended_score via `computeBlendedScore()` (same formula as handleModelPerformance)
-- [ ] `handleModelPerformance()` refactored to use the shared helper
-- [ ] No behavioral change to `handleModelPerformance()` (existing tests pass)
-- [ ] Helper is a private method on ReputationService (not exported)
-
-**Testing**:
-- [ ] Existing `handleModelPerformance()` tests pass unchanged
-
-**Effort**: Small (refactor, no new behavior)
+| Risk | Sprint | Likelihood | Impact | Mitigation |
+|------|--------|------------|--------|------------|
+| ADR format inconsistency across 19 ADRs | 1 | Medium | Low | Use template from existing ADR-001, review at gate |
+| Cross-reference rot (ADRs referencing moved/renamed files) | 1 | Low | Medium | Verify all file:symbol refs with grep |
+| invariants.yaml schema version incompatibility | 2 | Low | Low | Extend existing schema, don't change version |
+| GitHub issue creation rate-limited | 3 | Low | Medium | Batch creation with delays between calls |
+| Vision items too vague for actionable issues | 3 | Medium | Low | Each issue includes "How to Explore" section |
 
 ---
 
-### Task 1.2: Fix blended score staleness in handleQualitySignal()
+## Success Metrics
 
-**File**: `app/src/services/reputation-service.ts`
-**FR**: FR-1
-
-**Description**: Update `handleQualitySignal()` to use the shared `buildUpdatedAggregate()` helper, ensuring `blended_score` is recomputed after every quality signal event. Currently, `handleQualitySignal()` (lines 550-569) updates `personal_score` and increments `sample_count` but leaves `blended_score` stale.
-
-**Acceptance Criteria**:
-- [ ] `handleQualitySignal()` calls `buildUpdatedAggregate()` after computing new personal score
-- [ ] `blended_score` is always fresh after quality signal processing
-- [ ] Test: 10 quality signals in sequence → blended_score reflects ALL 10 observations
-- [ ] Test: interleave quality signals and model performance events → blended_score always consistent
-- [ ] Test: single quality signal changes both personal_score AND blended_score
-
-**Testing**:
-- [ ] 3 new tests for blended score consistency after quality signals
-- [ ] All existing quality signal tests pass unchanged
-
-**Effort**: Small (use existing helper from Task 1.1)
-**Depends on**: Task 1.1
+| # | Criterion | Sprint | Verification |
+|---|-----------|--------|-------------|
+| 1 | 5 new ADRs covering undocumented patterns | 1 | File count in grimoires/loa/context/adr-*.md |
+| 2 | All ADR cross-references valid | 1 | Completion gate verification |
+| 3 | invariants.yaml has 12 entries | 2 | YAML parse + count |
+| 4 | All invariants have test coverage refs | 2 | Coverage report in NOTES.md |
+| 5 | ~20 GitHub issues filed | 3 | `gh issue list` count |
+| 6 | Vision index updated with issue URLs | 3 | Vision index.md verification |
+| 7 | All existing tests still pass | 1-3 | vitest regression gates |
 
 ---
 
-### Task 1.3: Implement auto-checkpoint in record()
+*"The architecture knows what it wants to be. Our job is to write it down before we forget."*
 
-**File**: `app/src/services/scoring-path-tracker.ts`
-**FR**: FR-2
-
-**Description**: Add auto-checkpoint triggering to `record()`. When `this.length % this._options.checkpointInterval === 0` after appending an entry, call `this.checkpoint()`. The checkpoint must come AFTER the audit trail append so the checkpoint covers the current entry.
-
-**Acceptance Criteria**:
-- [ ] `record()` auto-triggers `checkpoint()` when `length % checkpointInterval === 0`
-- [ ] Check happens AFTER the entry is added and after `appendToAuditTrail()`
-- [ ] Default interval of 100 entries preserved
-- [ ] `checkpointInterval: 0` disables auto-checkpointing
-- [ ] Test: record 100 entries → checkpoint exists after entry 100
-- [ ] Test: record 250 entries → 2 checkpoints exist (at 100 and 200)
-- [ ] Test: `checkpointInterval: 0` → no auto-checkpoint even after 200 entries
-
-**Testing**:
-- [ ] 3 new tests for auto-checkpoint behavior
-- [ ] All existing scoring path tests pass unchanged
-
-**Effort**: Small (3 lines of code + tests)
-
----
-
-### Task 1.4: Create evaluateEconomicBoundaryCanonical() with clear signature
-
-**File**: `app/src/services/conviction-boundary.ts`
-**FR**: FR-3
-
-**Description**: Create a new `evaluateEconomicBoundaryCanonical()` function with a clear, non-overloaded signature. This is the canonical API that accepts `EconomicBoundaryOptions` directly. Named `Canonical` to avoid collision with the `evaluateEconomicBoundary` import from `@0xhoneyjar/loa-hounfour` at line 20.
-
-**Acceptance Criteria**:
-- [ ] `evaluateEconomicBoundaryCanonical(wallet, tier, budgetRemainingMicroUsd, options: EconomicBoundaryOptions)` function created
-- [ ] No union type or runtime type discrimination in the parameter list
-- [ ] Contains the core boundary evaluation logic (extracted from existing function)
-- [ ] Test: canonical function produces correct results for all tier levels
-- [ ] Test: canonical function with exploration options works correctly
-
-**Testing**:
-- [ ] 3 new tests for canonical boundary evaluation
-- [ ] Covers all tier levels and option combinations
-
-**Effort**: Medium (extract + restructure logic)
-
----
-
-### Task 1.5: Create evaluateEconomicBoundaryLegacy() adapter
-
-**File**: `app/src/services/conviction-boundary.ts`
-**FR**: FR-3
-
-**Description**: Create `evaluateEconomicBoundaryLegacy()` that adapts the old `QualificationCriteria` parameter format to `EconomicBoundaryOptions` and delegates to the canonical function. The existing `evaluateEconomicBoundaryForWallet()` becomes a thin deprecated wrapper that calls the legacy adapter.
-
-**Acceptance Criteria**:
-- [ ] `evaluateEconomicBoundaryLegacy(wallet, tier, budgetRemainingMicroUsd, criteria?, budgetPeriodDays?)` function created
-- [ ] Legacy function maps `QualificationCriteria` to `EconomicBoundaryOptions` internally
-- [ ] `evaluateEconomicBoundaryForWallet()` marked `@deprecated`, delegates to canonical
-- [ ] All existing callers work unchanged (backward compatible)
-- [ ] Test: legacy function produces identical results to previous implementation
-
-**Testing**:
-- [ ] 2 new tests verifying legacy adapter equivalence
-- [ ] All existing boundary evaluation tests pass unchanged
-
-**Effort**: Small (adapter pattern)
-**Depends on**: Task 1.4
-
----
-
-### Task 1.6: Update exports and re-export barrel
-
-**File**: `app/src/services/conviction-boundary.ts`, type files
-**FR**: FR-3
-
-**Description**: Update the module exports to include the new canonical and legacy functions. Ensure all existing imports continue to work. Add deprecation JSDoc to the old function.
-
-**Acceptance Criteria**:
-- [ ] `evaluateEconomicBoundaryCanonical` exported
-- [ ] `evaluateEconomicBoundaryLegacy` exported
-- [ ] `evaluateEconomicBoundaryForWallet` still exported (deprecated)
-- [ ] No breaking changes to existing imports
-
-**Testing**:
-- [ ] All existing import-dependent tests pass
-
-**Effort**: Trivial
-
----
-
-### Task 1.7: Sprint 1 regression validation
-
-**Description**: Run full test suite to validate zero regressions from Sprint 1 changes. Verify all 1291 existing tests pass plus new tests from Tasks 1.1–1.6.
-
-**Acceptance Criteria**:
-- [ ] All 1291 existing tests pass
-- [ ] ≥8 new tests pass (from Tasks 1.2, 1.3, 1.4, 1.5)
-- [ ] No TypeScript compilation errors
-- [ ] No lint warnings in modified files
-
-**Effort**: Validation only
-
----
-
-## Sprint 2: Integrity Infrastructure
-
-**Global ID**: sprint-82
-**FRs**: FR-4, FR-5
-**Goal**: Make institutional guarantees real — transaction safety and cross-chain tamper detection. Crash between store operations can't corrupt state. Two independent hash chains verify each other.
-**Dependencies**: Sprint 1 (buildUpdatedAggregate helper from FR-1)
-**Estimated Tasks**: 6
-
-### Task 2.1: Add transact<T>() to ReputationStore interface
-
-**File**: `app/src/services/reputation-service.ts`
-**FR**: FR-4
-
-**Description**: Add `transact<T>(fn: (store: ReputationStore) => Promise<T>): Promise<T>` to the `ReputationStore` interface. This is the minimal interface change that makes the store transaction-aware without forcing all callers to change.
-
-**Acceptance Criteria**:
-- [ ] `transact<T>()` method added to `ReputationStore` interface
-- [ ] Method signature: `transact<T>(fn: (store: ReputationStore) => Promise<T>): Promise<T>`
-- [ ] JSDoc documents: in-memory = snapshot/restore; PostgreSQL = BEGIN/COMMIT
-
-**Testing**:
-- [ ] Interface-only change, no runtime tests yet
-
-**Effort**: Trivial (interface addition)
-
----
-
-### Task 2.2: Implement transact<T>() in InMemoryReputationStore
-
-**File**: `app/src/services/reputation-service.ts`
-**FR**: FR-4
-
-**Description**: Implement `transact<T>()` in `InMemoryReputationStore` using snapshot/restore semantics. Before calling `fn`, snapshot the current state of both the aggregates Map and task cohorts Map. If `fn` throws, restore from snapshots. If `fn` succeeds, keep the mutations.
-
-**Acceptance Criteria**:
-- [ ] `transact<T>()` takes snapshot of aggregates and task cohorts before calling fn
-- [ ] On success: returns fn result, state reflects mutations
-- [ ] On error: restores pre-transaction state, re-throws error
-- [ ] Snapshot is a shallow clone of Maps (sufficient for single-writer in-memory)
-- [ ] Test: successful transaction persists both aggregate and cohort updates
-- [ ] Test: failed transaction rolls back aggregate state to pre-transaction
-- [ ] Test: failed transaction rolls back cohort state to pre-transaction
-- [ ] Test: error from fn is re-thrown to caller
-
-**Testing**:
-- [ ] 4 new tests for transaction semantics
-
-**Effort**: Medium (snapshot/restore logic)
-**Depends on**: Task 2.1
-
----
-
-### Task 2.3: Wrap handleModelPerformance() in transact()
-
-**File**: `app/src/services/reputation-service.ts`
-**FR**: FR-4
-
-**Description**: Update `handleModelPerformance()` to wrap its aggregate + cohort updates inside `this.store.transact()`. Also wrap `handleQualitySignal()` for consistency (even though it currently has a single put, wrapping it ensures future cohort additions are automatically atomic).
-
-**Acceptance Criteria**:
-- [ ] `handleModelPerformance()` wraps `store.put()` + `store.putTaskCohort()` in `transact()`
-- [ ] `handleQualitySignal()` wraps its `store.put()` in `transact()`
-- [ ] All existing model performance and quality signal tests pass unchanged
-- [ ] Test: inject failure between put and putTaskCohort → state rolled back
-
-**Testing**:
-- [ ] 1 new test for transactional rollback in model performance path
-- [ ] All existing tests pass
-
-**Effort**: Small (wrap existing calls)
-**Depends on**: Task 2.2
-
----
-
-### Task 2.4: Implement verifyCrossChainConsistency()
-
-**File**: `app/src/services/scoring-path-tracker.ts`
-**FR**: FR-5
-
-**Description**: Add `verifyCrossChainConsistency(): CrossChainVerificationResult` method that confirms the two independent hash chains (original scoring path chain and commons AuditTrail chain) agree. Verification checks: (1) entry count matches between chains, (2) tip hashes are consistent with their respective chains, (3) sample point hashes agree.
-
-**Acceptance Criteria**:
-- [ ] `CrossChainVerificationResult` type: `{ consistent: boolean; divergence_point?: number; detail: string }`
-- [ ] `verifyCrossChainConsistency()` method added
-- [ ] Checks entry count agreement between chains
-- [ ] Checks tip hash consistency
-- [ ] Returns `consistent: true` for normal operation
-- [ ] Returns `consistent: false` with `divergence_point` when tampered
-- [ ] Test: normal operation → consistent
-- [ ] Test: tamper with audit trail entry → divergence detected
-- [ ] Test: empty chains → consistent (vacuously true)
-
-**Testing**:
-- [ ] 3 new tests for cross-chain verification
-
-**Effort**: Medium (two-chain comparison logic)
-
----
-
-### Task 2.5: Add periodic cross-verification in record()
-
-**File**: `app/src/services/scoring-path-tracker.ts`
-**FR**: FR-5
-
-**Description**: Add periodic cross-chain verification in `record()`. Every N entries (configurable via `crossVerifyInterval` in options, default: 10), call `verifyCrossChainConsistency()`. If divergence detected, trigger quarantine via existing `enterQuarantine()` mechanism.
-
-**Acceptance Criteria**:
-- [ ] `crossVerifyInterval` added to `ScoringPathTrackerOptions` (default: 10)
-- [ ] `record()` calls `verifyCrossChainConsistency()` every `crossVerifyInterval` entries
-- [ ] Divergence triggers `enterQuarantine()` with discontinuity info
-- [ ] `crossVerifyInterval: 0` disables periodic verification
-- [ ] Test: 15 normal entries → cross-verify at entry 10, passes
-- [ ] Test: tampered chain → cross-verify triggers quarantine
-- [ ] Test: interval 0 → no cross-verification
-
-**Testing**:
-- [ ] 3 new tests for periodic cross-verification
-- [ ] All existing scoring path tests pass
-
-**Effort**: Small (periodic check + quarantine trigger)
-**Depends on**: Task 2.4
-
----
-
-### Task 2.6: Sprint 2 regression validation
-
-**Description**: Run full test suite to validate zero regressions from Sprint 2 changes.
-
-**Acceptance Criteria**:
-- [ ] All existing tests pass (including new Sprint 1 tests)
-- [ ] ≥11 new tests from Sprint 2 (Tasks 2.2, 2.3, 2.4, 2.5)
-- [ ] No TypeScript compilation errors
-- [ ] No lint warnings in modified files
-
-**Effort**: Validation only
-
----
-
-## Sprint 3: Self-Calibration Core
-
-**Global ID**: sprint-83
-**FRs**: FR-6, FR-7
-**Goal**: Transform from empirical ignorance to empirical wisdom. New agents start at population mean, not zero. Quality is multi-dimensional — "good at review" ≠ "good at reasoning" becomes expressible.
-**Dependencies**: Sprint 1 (FR-1 buildUpdatedAggregate helper, consistent blending)
-**Estimated Tasks**: 6
-
-### Task 3.1: Implement CollectionScoreAggregator
-
-**File**: `app/src/services/reputation-service.ts`
-**FR**: FR-6
-
-**Description**: Implement `CollectionScoreAggregator` using Welford's online algorithm for numerically stable running mean and variance computation. The aggregator tracks the empirical collection score — the population mean of all personal scores across all agents.
-
-**Acceptance Criteria**:
-- [ ] `CollectionScoreAggregator` class with `update(personalScore)`, `mean`, `populationSize`, `variance` properties
-- [ ] Uses Welford's online algorithm (numerically stable for large populations)
-- [ ] `mean` returns 0 when `count === 0` (fallback to DEFAULT_COLLECTION_SCORE)
-- [ ] `variance` available for future adaptive pseudo_count
-- [ ] Serializable to `{ count, mean, m2 }` for persistence
-- [ ] Test: empty aggregator returns mean=0, count=0
-- [ ] Test: 100 observations with mean 0.7 → aggregator mean ≈ 0.7
-- [ ] Test: extreme observation with large population barely moves mean
-- [ ] Test: Welford's produces same result as naive algorithm for small N
-
-**Testing**:
-- [ ] 4 new tests for CollectionScoreAggregator
-
-**Effort**: Medium (Welford's algorithm implementation)
-
----
-
-### Task 3.2: Wire CollectionScoreAggregator into ReputationService
-
-**File**: `app/src/services/reputation-service.ts`
-**FR**: FR-6
-
-**Description**: Integrate `CollectionScoreAggregator` into `ReputationService`. Both `handleQualitySignal()` and `handleModelPerformance()` update the aggregator when personal scores change. `buildUpdatedAggregate()` uses `aggregator.mean` as the collection_score instead of `DEFAULT_COLLECTION_SCORE`.
-
-**Acceptance Criteria**:
-- [ ] `ReputationService` holds a `CollectionScoreAggregator` instance
-- [ ] `handleQualitySignal()` calls `aggregator.update()` after computing new personal score
-- [ ] `handleModelPerformance()` calls `aggregator.update()` after computing new personal score
-- [ ] `buildUpdatedAggregate()` uses `aggregator.mean` for collection_score
-- [ ] When `aggregator.count === 0`, falls back to `DEFAULT_COLLECTION_SCORE` (0)
-- [ ] Test: after 100 observations with mean 0.7, new agent blended_score starts near 0.7
-- [ ] Test: empty population → new agent still starts at 0 (backward compatible)
-- [ ] `ReputationStore` extended with optional `getCollectionMetrics()` / `putCollectionMetrics()` for persistence
-
-**Testing**:
-- [ ] 3 new tests for integrated collection score behavior
-- [ ] All existing tests pass (when population is empty, behavior identical to before)
-
-**Effort**: Small (wiring into existing event paths)
-**Depends on**: Task 3.1, Task 1.1 (buildUpdatedAggregate)
-
----
-
-### Task 3.3: Define DimensionalBlendInput/Output types
-
-**File**: `app/src/types/reputation-evolution.ts`
-**FR**: FR-7
-
-**Description**: Define the types for multi-dimensional quality blending. Each dimension gets its own blended score computed independently.
-
-**Acceptance Criteria**:
-- [ ] `DimensionalBlendInput` type: `{ overall: BlendInput; dimensions: Record<string, BlendInput> }`
-- [ ] `DimensionalBlendOutput` type: `{ overall: number; dimensions: Record<string, number> }`
-- [ ] `BlendInput` type: `{ personalScore: number; collectionScore: number; sampleCount: number; pseudoCount: number }`
-- [ ] Types exported from reputation-evolution barrel
-- [ ] `DixieReputationAggregate` extended with `dimension_scores?: Record<string, number>`
-
-**Testing**:
-- [ ] Type-only change; compilation validates
-
-**Effort**: Small (type definitions)
-
----
-
-### Task 3.4: Implement computeDimensionalBlended()
-
-**File**: `app/src/services/reputation-service.ts`
-**FR**: FR-7
-
-**Description**: Implement `computeDimensionalBlended()` that blends each quality dimension independently using the same EMA dampening as the overall score. Dimensions are optional — when no dimensions are provided, only the overall score is computed (backward compatible).
-
-**Acceptance Criteria**:
-- [ ] `computeDimensionalBlended(input: DimensionalBlendInput): DimensionalBlendOutput` function
-- [ ] Each dimension blended independently with its own EMA dampening pipeline
-- [ ] Overall score computed from dimensions if present (configurable weights, default: equal)
-- [ ] Missing dimensions fall back to overall score
-- [ ] Test: model with accuracy=0.9, coherence=0.3 → dimensions blended independently
-- [ ] Test: no dimensions provided → overall-only result (backward compatible)
-- [ ] Test: equal weight default produces correct aggregation
-
-**Testing**:
-- [ ] 3 new tests for dimensional blending
-
-**Effort**: Medium (per-dimension EMA computation)
-
----
-
-### Task 3.5: Thread dimensions through handleModelPerformance()
-
-**File**: `app/src/services/reputation-service.ts`
-**FR**: FR-7
-
-**Description**: Update `handleModelPerformance()` to extract `quality_observation.dimensions` from the event and pass them through the dimensional blending pipeline. Store resulting dimension_scores in the aggregate.
-
-**Acceptance Criteria**:
-- [ ] `handleModelPerformance()` extracts `dimensions` from `quality_observation`
-- [ ] Dimensions passed to `computeDimensionalBlended()` when present
-- [ ] `dimension_scores` stored in `DixieReputationAggregate`
-- [ ] Events without dimensions work identically to before (backward compatible)
-- [ ] Test: event with dimensions → aggregate has dimension_scores
-- [ ] Test: event without dimensions → aggregate has no dimension_scores (unchanged)
-
-**Testing**:
-- [ ] 2 new tests for dimension threading
-- [ ] All existing model performance tests pass unchanged
-
-**Effort**: Small (wire existing computation)
-**Depends on**: Tasks 3.3, 3.4
-
----
-
-### Task 3.6: Sprint 3 regression validation
-
-**Description**: Run full test suite to validate zero regressions from Sprint 3 changes.
-
-**Acceptance Criteria**:
-- [ ] All existing tests pass (including Sprint 1 and 2 tests)
-- [ ] ≥12 new tests from Sprint 3
-- [ ] No TypeScript compilation errors
-- [ ] Collection score behavior verified: empty population = backward compatible
-
-**Effort**: Validation only
-
----
-
-## Sprint 4: Adaptive Routing
-
-**Global ID**: sprint-84
-**FRs**: FR-8, FR-9
-**Goal**: Record routing decisions for feedback attribution. Add ε-greedy exploration to prevent the exploitation trap. The autopoietic loop gains routing intelligence.
-**Dependencies**: Sprint 1 (FR-3 canonical API)
-**Estimated Tasks**: 6
-
-### Task 4.1: Define RoutingAttribution type
-
-**File**: `app/src/services/scoring-path-tracker.ts` (or types file)
-**FR**: FR-8
-
-**Description**: Define the `RoutingAttribution` type that records routing context — which model was recommended, which was actually routed, the pool, the reason, and whether this was an exploration decision.
-
-**Acceptance Criteria**:
-- [ ] `RoutingAttribution` type defined with fields: `recommended_model?`, `routed_model`, `pool_id?`, `routing_reason?`, `exploration?`
-- [ ] Type exported for use by conviction-boundary and scoring-path-tracker
-- [ ] `RecordOptions` extended with `routing?: RoutingAttribution`
-
-**Testing**:
-- [ ] Type-only change; compilation validates
-
-**Effort**: Small (type definition)
-
----
-
-### Task 4.2: Record routing attribution in scoring path
-
-**File**: `app/src/services/scoring-path-tracker.ts`
-**FR**: FR-8
-
-**Description**: Update `record()` to include routing attribution in scoring path entries and the audit trail. The routing data should be included as structured metadata in the log entry and propagated to the commons audit trail.
-
-**Acceptance Criteria**:
-- [ ] `record()` accepts `routing` in options and includes it in the log entry
-- [ ] Routing attribution appears in `ScoringPathLogEntry` as `routing_attribution`
-- [ ] Routing data included in audit trail entry metadata
-- [ ] `logScoringPath()` formats routing attribution in structured output
-- [ ] Hash chain includes routing data (tamper-evident routing decisions)
-- [ ] Test: routing attribution appears in scoring path log
-- [ ] Test: routing divergence (recommended ≠ routed) recorded with reason
-- [ ] Test: entry without routing attribution works unchanged
-
-**Testing**:
-- [ ] 3 new tests for routing attribution recording
-
-**Effort**: Medium (extend record + hash + log)
-**Depends on**: Task 4.1
-
----
-
-### Task 4.3: Define ExplorationConfig type
-
-**File**: `app/src/services/conviction-boundary.ts`
-**FR**: FR-9
-
-**Description**: Define `ExplorationConfig` with epsilon (probability of exploring), warmup (minimum observations before exploration), and optional seed (for deterministic testing via seeded PRNG). Extend `EconomicBoundaryOptions` with `exploration?: ExplorationConfig`.
-
-**Acceptance Criteria**:
-- [ ] `ExplorationConfig` type: `{ epsilon: number; warmup: number; seed?: string }`
-- [ ] `EconomicBoundaryOptions` extended with `exploration?: ExplorationConfig`
-- [ ] Type exported
-
-**Testing**:
-- [ ] Type-only change; compilation validates
-
-**Effort**: Trivial
-
----
-
-### Task 4.4: Implement seeded PRNG (Mulberry32)
-
-**File**: `app/src/services/conviction-boundary.ts`
-**FR**: FR-9
-
-**Description**: Implement Mulberry32 seeded PRNG for deterministic exploration decisions in tests. When `seed` is provided, use seeded PRNG. When no seed, use `Math.random()`. The PRNG must be lightweight (< 0.01ms per call).
-
-**Acceptance Criteria**:
-- [ ] `mulberry32(seed: number): () => number` function (returns 0-1 float generator)
-- [ ] `seedFromString(s: string): number` function (deterministic string-to-seed)
-- [ ] Test: seeded PRNG produces deterministic sequence
-- [ ] Test: same seed always produces same sequence
-
-**Testing**:
-- [ ] 2 new tests for PRNG determinism
-
-**Effort**: Small (well-known algorithm)
-
----
-
-### Task 4.5: Implement ε-greedy exploration in evaluateEconomicBoundaryCanonical()
-
-**File**: `app/src/services/conviction-boundary.ts`
-**FR**: FR-9
-
-**Description**: Add ε-greedy exploration to the canonical boundary evaluation. With probability ε (after warmup), select a non-optimal model from the cohort. Record `exploration: true` in the result and provide routing attribution for the scoring path.
-
-**Acceptance Criteria**:
-- [ ] When `exploration.epsilon > 0` and sample_count >= warmup: with probability ε, select non-optimal
-- [ ] Exploration records `exploration: true` in the evaluation result
-- [ ] Warmup period: no exploration until minimum observations met
-- [ ] `epsilon: 0.0` → never explores (existing behavior, backward compatible)
-- [ ] `epsilon: 1.0` → always explores (for testing)
-- [ ] Deterministic with seed (seeded PRNG from Task 4.4)
-- [ ] Test: `epsilon: 1.0` → always explores
-- [ ] Test: `epsilon: 0.0` → never explores
-- [ ] Test: warmup not met → no exploration regardless of epsilon
-- [ ] Test: `epsilon: 0.1` over 1000 seeded evaluations → ~10% exploration (statistical)
-
-**Testing**:
-- [ ] 4 new tests for exploration behavior
-
-**Effort**: Medium (exploration logic + PRNG integration)
-**Depends on**: Tasks 4.3, 4.4, 1.4 (canonical API)
-
----
-
-### Task 4.6: Sprint 4 regression validation
-
-**Description**: Run full test suite to validate zero regressions from Sprint 4 changes.
-
-**Acceptance Criteria**:
-- [ ] All existing tests pass (including Sprints 1–3 tests)
-- [ ] ≥9 new tests from Sprint 4
-- [ ] No TypeScript compilation errors
-- [ ] Exploration mechanism verified with deterministic seeds
-
-**Effort**: Validation only
-
----
-
-## Sprint 5: GovernedResource<T> Platform
-
-**Global ID**: sprint-85
-**FRs**: FR-10, FR-11, FR-12, FR-13
-**Goal**: Name the isomorphism. Create the unified `GovernedResource<T>` protocol abstraction. Reputation and ScoringPath become implementations. The GovernorRegistry manages them uniformly. This is the CRD moment.
-**Dependencies**: Sprints 1–4 (all foundations must be in place)
-**Estimated Tasks**: 6
-
-### Task 5.1: Define GovernedResource<T> protocol and GovernedResourceBase
-
-**File**: `app/src/services/governed-resource.ts` (NEW)
-**FR**: FR-10
-
-**Description**: Create the unified governance abstraction — `GovernedResource<TState, TEvent, TInvariant>` interface and `GovernedResourceBase` abstract class. This is the protocol-level abstraction that makes the governance isomorphism explicit across reputation, scoring paths, and future domains.
-
-**Acceptance Criteria**:
-- [ ] `GovernedResource<TState, TEvent, TInvariant>` interface defined per SDD §6.1
-- [ ] `TransitionResult<TState>` discriminated union type (success | failure)
-- [ ] `InvariantResult` type with invariant_id, satisfied, detail, checked_at
-- [ ] `GovernedResourceBase` abstract class with `verifyAll()` default implementation
-- [ ] Imports from `@0xhoneyjar/loa-hounfour/commons` for AuditTrail and GovernanceMutation
-- [ ] Test: interface compiles and is importable
-- [ ] Test: GovernedResourceBase subclass can be instantiated
-
-**Testing**:
-- [ ] 2 new tests for protocol abstraction
-
-**Effort**: Medium (new file, interface design)
-
----
-
-### Task 5.2: Implement GovernedResource on ReputationService
-
-**File**: `app/src/services/reputation-service.ts`
-**FR**: FR-11
-
-**Description**: `ReputationService` implements `GovernedResource<ReputationAggregate | undefined, ReputationEvent, ReputationInvariant>`. The `transition()` method dispatches to existing handlers. `verify()` checks INV-006 (dampening bounded) and INV-007 (session scoped). All existing methods and behavior preserved.
-
-**Acceptance Criteria**:
-- [ ] `ReputationService` class declaration includes `implements GovernedResource<...>`
-- [ ] `resourceId`, `resourceType`, `current`, `version` properties added
-- [ ] `transition()` records mutation and delegates to `processEvent()`
-- [ ] `verify('INV-006')` checks dampening bounds
-- [ ] `verify('INV-007')` checks session scope
-- [ ] `verifyAll()` returns results for both invariants
-- [ ] `auditTrail` and `mutationLog` getters implemented
-- [ ] All 1291+ existing tests pass unchanged
-- [ ] Test: transition with quality_signal event → success with updated state
-- [ ] Test: verifyAll returns 2 results (INV-006, INV-007), both satisfied
-
-**Testing**:
-- [ ] 3 new tests for GovernedResource implementation on ReputationService
-
-**Effort**: Medium (interface implementation, delegation to existing code)
-
----
-
-### Task 5.3: Implement GovernedResource on ScoringPathTracker
-
-**File**: `app/src/services/scoring-path-tracker.ts`
-**FR**: FR-12
-
-**Description**: `ScoringPathTracker` implements `GovernedResource<ScoringPathState, ScoringPathEvent, ScoringPathInvariant>`. The `transition()` method maps event types to existing operations (record, checkpoint, quarantine). `verify()` includes chain integrity, cross-chain consistency (FR-5), and checkpoint coverage checks.
-
-**Acceptance Criteria**:
-- [ ] `ScoringPathTracker` class declaration includes `implements GovernedResource<...>`
-- [ ] `ScoringPathState` type defined per SDD §6.3
-- [ ] `ScoringPathEvent` and `ScoringPathInvariant` types defined
-- [ ] `transition()` dispatches to record(), checkpoint(), enterQuarantine()
-- [ ] `verify('chain_integrity')` delegates to verifyIntegrity()
-- [ ] `verify('cross_chain_consistency')` delegates to verifyCrossChainConsistency() (FR-5)
-- [ ] `verify('checkpoint_coverage')` checks checkpoint exists when expected
-- [ ] All existing scoring path tests pass unchanged
-- [ ] Test: transition with record event → success with updated state
-- [ ] Test: verifyAll returns 3 invariant results
-
-**Testing**:
-- [ ] 2 new tests for GovernedResource implementation on ScoringPathTracker
-
-**Effort**: Medium (interface implementation, delegation)
-**Depends on**: Task 5.1, Task 2.4 (cross-chain verification)
-
----
-
-### Task 5.4: Unify GovernorRegistry for GovernedResource<T>
-
-**File**: `app/src/services/governor-registry.ts`
-**FR**: FR-13
-
-**Description**: Update `GovernorRegistry` to manage `GovernedResource<T>` instances alongside legacy `ResourceGovernor<T>`. Add `registerResource()`, `verifyAllResources()`, `getAuditSummary()`, and `getResource()` methods per SDD §6.4. Maintain backward compatibility with existing `register()` API.
-
-**Acceptance Criteria**:
-- [ ] `registerResource(resource: GovernedResource<...>)` method added
-- [ ] `verifyAllResources()` returns `Map<string, InvariantResult[]>` across all resources
-- [ ] `getAuditSummary()` aggregates version, entry count, mutation count per resource
-- [ ] `getResource(type)` retrieves a registered GovernedResource
-- [ ] Legacy `register()` still works (deprecated alias)
-- [ ] Duplicate registration throws descriptive error
-- [ ] Test: register reputation + scoring-path → verifyAllResources returns both
-- [ ] Test: getAuditSummary returns entry for each registered resource
-- [ ] Test: getResource returns correct resource by type
-
-**Testing**:
-- [ ] 3 new tests for unified GovernorRegistry
-
-**Effort**: Small (additive methods on existing class)
-**Depends on**: Tasks 5.1, 5.2, 5.3
-
----
-
-### Task 5.5: Register resources at initialization
-
-**File**: `app/src/services/reputation-service.ts` or initialization code
-**FR**: FR-13
-
-**Description**: At ReputationService construction, register both `ReputationService` and `ScoringPathTracker` as GovernedResource instances in the GovernorRegistry singleton.
-
-**Acceptance Criteria**:
-- [ ] ReputationService registers itself in GovernorRegistry on construction
-- [ ] ScoringPathTracker registers itself in GovernorRegistry on construction
-- [ ] `governorRegistry.verifyAllResources()` returns results for both resources
-- [ ] Test: after construction, both resources are registered
-
-**Testing**:
-- [ ] 1 new test for auto-registration
-
-**Effort**: Small
-
----
-
-### Task 5.6: Sprint 5 regression validation
-
-**Description**: Run full test suite to validate zero regressions from Sprint 5 changes.
-
-**Acceptance Criteria**:
-- [ ] All existing tests pass (including Sprints 1–4 tests)
-- [ ] ≥11 new tests from Sprint 5
-- [ ] New `governed-resource.ts` file has no lint warnings
-- [ ] GovernedResource protocol is fully functional
-
-**Effort**: Validation only
-
----
-
-## Sprint 6: Integration & Hardening
-
-**Global ID**: sprint-86
-**FRs**: FR-14, INV-008
-**Goal**: Prove the complete autopoietic loop is genuinely self-calibrating. Declare INV-008 in invariants.yaml. The constitution is written.
-**Dependencies**: All previous sprints
-**Estimated Tasks**: 4
-
-### Task 6.1: Create autopoietic-loop-v2 integration test
-
-**File**: `app/src/services/__tests__/autopoietic-loop-v2.test.ts` (NEW)
-**FR**: FR-14
-
-**Description**: End-to-end integration test that traces the complete self-calibrating loop: stake → evaluate → route → observe → score → re-evaluate. Verifies all FRs compose correctly: consistent blended score (FR-1), transaction safety (FR-4), empirical collection score (FR-6), dimensional blending (FR-7), routing attribution (FR-8), exploration budget (FR-9), and GovernedResource verification (FR-10–13).
-
-**Acceptance Criteria**:
-- [ ] `loop converges to observation mean over 100 iterations`: blended_score → 0.8 after 100 events with score 0.8
-- [ ] `exploration discovers improved model`: model B discovered via ε-greedy and reputation tracks
-- [ ] `dimensional scores diverge by task type`: accuracy ≈ 0.9, coherence ≈ 0.3 after dimensional events
-- [ ] `cross-chain verification catches tampering`: tampered chain → quarantine triggered
-- [ ] `transaction rollback prevents partial state`: injected failure → aggregate rolls back
-- [ ] `GovernedResource.verifyAll() covers all resources`: INV-006, INV-007, chain_integrity, cross_chain_consistency, checkpoint_coverage all verified
-- [ ] `collection score provides welcoming cold-start`: new agent starts at population mean, not 0
-
-**Testing**:
-- [ ] 7 new integration tests covering the complete loop
-
-**Effort**: Large (comprehensive integration test suite)
-
----
-
-### Task 6.2: Declare INV-008 in invariants.yaml
-
-**File**: `app/src/invariants.yaml`
-**FR**: INV-008
-
-**Description**: Add INV-008 (governance isomorphism) to the invariants registry. This declares that all governed resources implement the `GovernedResource<T>` protocol with identity, transitions, invariants, and audit trail. Cross-references the implementations in reputation-service.ts and scoring-path-tracker.ts.
-
-**Acceptance Criteria**:
-- [ ] INV-008 added to invariants.yaml per SDD §8.3
-- [ ] Category: structural
-- [ ] Severity: important
-- [ ] Properties list all GovernedResource interface requirements
-- [ ] `verified_in` references governed-resource.ts, reputation-service.ts, scoring-path-tracker.ts
-- [ ] YAML valid and lint-clean
-
-**Testing**:
-- [ ] YAML validation passes
-
-**Effort**: Small (YAML addition)
-
----
-
-### Task 6.3: Update NOTES.md with cycle-008 observations
-
-**File**: `grimoires/loa/NOTES.md`
-
-**Description**: Record architectural observations from cycle-008 implementation: the governance isomorphism pattern, the empirical collection score discovery, the cross-chain verification approach, and any insights that emerged during implementation.
-
-**Acceptance Criteria**:
-- [ ] Key observations from cycle-008 recorded
-- [ ] Bridgebuilder gap resolutions documented
-- [ ] GovernedResource<T> adoption notes for future cycles
-- [ ] Any deferred items noted for cycle-009
-
-**Effort**: Small
-
----
-
-### Task 6.4: Sprint 6 final validation
-
-**Description**: Complete regression and integration validation. Verify all success metrics from PRD §3 are met.
-
-**Acceptance Criteria**:
-- [ ] M-1: All 6 Bridgebuilder gaps resolved ✓
-- [ ] M-2: Blended score consistent after every event type ✓
-- [ ] M-3: Transaction safety with rollback ✓
-- [ ] M-4: Cold-start at empirical population mean ✓
-- [ ] M-5: Auto-checkpoint fires at interval boundary ✓
-- [ ] M-6: Cross-chain verification detects divergence ✓
-- [ ] M-7: No union type discrimination in boundary API ✓
-- [ ] M-8: ≥2 resource types implement GovernedResource<T> ✓ (reputation + scoring-path)
-- [ ] M-9: Multi-dimensional scores propagate through pipeline ✓
-- [ ] M-10: Routing attribution in scoring path ✓
-- [ ] M-11: ε-greedy exploration functional ✓
-- [ ] M-12: All 1291 existing tests pass ✓
-- [ ] M-13: ≥55 new tests (total ≥1346) ✓
-- [ ] No TypeScript compilation errors
-- [ ] No lint warnings in modified files
-
-**Effort**: Validation only
-
----
-
-## Risk Mitigation
-
-| Risk | Sprint | Mitigation |
-|------|--------|------------|
-| Welford's precision at scale | 3 | Validated against naive algorithm in tests; used by PostgreSQL |
-| Cross-chain false positives | 2 | Conservative interval (10); quarantine is recoverable |
-| GovernedResource interface bloat | 5 | Base class provides defaults; interface stays minimal |
-| Exploration quality dip | 4 | Warmup period (50 obs); small default ε (5%); scoring path records context |
-| Transaction rollback losing writes | 2 | Snapshot/restore is deterministic; tested with injected failures |
-| Collection score inflation loop | 3 | EMA dampening on individual scores bounds interaction; monitor mean |
-
-## Buffer & Contingency
-
-- **Sprint buffer**: Each sprint includes a regression validation task that also serves as buffer time for unexpected issues
-- **Cut point**: If cycle must be shortened, Sprints 1–2 (Tiers 1–2) are independently valuable as MVP
-- **Second cut point**: Sprints 1–4 (Tiers 1–3) deliver self-calibration without the platform abstraction
-- **Full cycle**: All 6 sprints deliver the complete governance isomorphism platform
-
----
-
-## Success Criteria Summary
-
-| Sprint | Key Deliverable | New Tests |
-|--------|----------------|-----------|
-| 1 | Consistent blended score, auto-checkpoint, clear API | ≥8 |
-| 2 | Transaction safety, cross-chain verification | ≥11 |
-| 3 | Empirical collection score, dimensional blending | ≥12 |
-| 4 | Routing attribution, ε-greedy exploration | ≥9 |
-| 5 | GovernedResource<T> protocol, unified registry | ≥11 |
-| 6 | Autopoietic loop integration, INV-008 | ≥7 |
-| **Total** | **14 FRs, 8 invariants, self-calibrating loop** | **≥58** |
-
----
-
-*"The code knows what it wants to be. The sprint plan makes that journey explicit."*
-
-*Sprint Plan v8.0.0 — Governance Isomorphism, cycle-008*
+*— cycle-010 Sprint Plan*

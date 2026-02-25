@@ -73,13 +73,29 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     if (redisHealth) infraServices.redis = redisHealth;
     if (natsHealth) infraServices.nats = natsHealth;
 
-    const response: HealthResponse & { reputation_service?: { initialized: boolean; aggregate_count: number } } = {
+    // cycle-009 Task 6.4: Governance summary in health response
+    const governorSnapshots = governorRegistry.getAll();
+    const governanceSummary = governorSnapshots.length > 0
+      ? {
+          governor_count: governorSnapshots.length,
+          resource_types: governorSnapshots.map((g) => g.resourceType),
+          health: governorSnapshots.every((g) => g.health?.status === 'healthy')
+            ? 'healthy' as const
+            : 'degraded' as const,
+        }
+      : undefined;
+
+    const response: HealthResponse & {
+      reputation_service?: { initialized: boolean; aggregate_count: number };
+      governance?: { governor_count: number; resource_types: string[]; health: 'healthy' | 'degraded' };
+    } = {
       status: overallStatus,
       version: VERSION,
       uptime_seconds: Math.floor((Date.now() - startedAt) / 1000),
       services,
       infrastructure: Object.keys(infraServices).length > 0 ? infraServices : undefined,
       reputation_service: reputationStatus,
+      governance: governanceSummary,
       timestamp: new Date().toISOString(),
     };
 
