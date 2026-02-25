@@ -5,6 +5,7 @@
  * mutation log append, and version tracking.
  */
 import { describe, it, expect } from 'vitest';
+import type { GovernanceMutation } from '@0xhoneyjar/loa-hounfour/commons';
 import {
   resolveActorId,
   createMutation,
@@ -146,5 +147,104 @@ describe('MutationLog', () => {
     expect(log.version).toBe(0);
     expect(log.history).toHaveLength(0);
     expect(log.latest).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MutationLog — Session Lifecycle (Sprint 78, S1-T4)
+// ---------------------------------------------------------------------------
+
+describe('MutationLog session lifecycle', () => {
+  it('sessionId is a valid UUID', () => {
+    const log = new MutationLog();
+    expect(log.sessionId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+  });
+
+  it('sessionId is stable across appends within the same instance', () => {
+    const log = new MutationLog();
+    const id1 = log.sessionId;
+    log.append(createMutation('system:dixie-bff', 0));
+    log.append(createMutation('system:dixie-bff', 1));
+    expect(log.sessionId).toBe(id1);
+  });
+
+  it('different MutationLog instances have different sessionIds', () => {
+    const log1 = new MutationLog();
+    const log2 = new MutationLog();
+    expect(log1.sessionId).not.toBe(log2.sessionId);
+  });
+
+  it('without persistence works identically to original behavior', () => {
+    const log = new MutationLog();
+    const m = createMutation('system:dixie-bff', 0);
+    log.append(m);
+    expect(log.version).toBe(1);
+    expect(log.history).toHaveLength(1);
+    expect(log.latest).toBe(m);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MutationLog — Persistence Interface (Sprint 78, S1-T4)
+// ---------------------------------------------------------------------------
+
+describe('MutationLog persistence', () => {
+  it('calls save() on each append when persistence is provided', async () => {
+    const saved: GovernanceMutation[][] = [];
+    const mockPersistence = {
+      save: async (log: ReadonlyArray<GovernanceMutation>) => {
+        saved.push([...log]);
+      },
+      load: async () => [],
+    };
+
+    const log = new MutationLog(mockPersistence);
+    log.append(createMutation('system:dixie-bff', 0));
+    log.append(createMutation('0xABCD', 1));
+
+    // Allow fire-and-forget promises to resolve
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(saved).toHaveLength(2);
+    expect(saved[0]).toHaveLength(1);
+    expect(saved[1]).toHaveLength(2);
+  });
+
+  it('persistence.save() failure is logged but does not throw', async () => {
+    const errors: unknown[] = [];
+    const origError = console.error;
+    console.error = (...args: unknown[]) => errors.push(args);
+
+    const failingPersistence = {
+      save: async () => { throw new Error('disk full'); },
+      load: async () => [],
+    };
+
+    const log = new MutationLog(failingPersistence);
+    // Should not throw
+    log.append(createMutation('system:dixie-bff', 0));
+
+    // Version still incremented (fire-and-forget)
+    expect(log.version).toBe(1);
+
+    // Allow the promise rejection to be caught
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(errors.length).toBeGreaterThan(0);
+    console.error = origError;
+  });
+
+  it('getGovernedState() includes session_id', async () => {
+    // Dynamic import for ESM compatibility
+    const { ReputationService } = await import('../reputation-service.js');
+    const service = new ReputationService();
+    const state = service.getGovernedState();
+
+    expect(state.session_id).toBeDefined();
+    expect(state.session_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
   });
 });

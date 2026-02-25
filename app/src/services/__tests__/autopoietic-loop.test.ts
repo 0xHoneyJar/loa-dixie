@@ -251,7 +251,9 @@ describe('processEvent — 4-variant exhaustive handling', () => {
 
     const updated = await store.get('nft-loop');
     expect(updated).toBeDefined();
-    expect(updated!.personal_score).toBe(0.95);
+    // Dampened: alpha = 0.1 + 0.4*(5/50) = 0.14, score = 0.14*0.95 + 0.86*0.5 = 0.563
+    expect(updated!.personal_score).toBeGreaterThan(initial.personal_score!);
+    expect(updated!.personal_score).toBeLessThan(0.95); // dampened, not raw
     expect(updated!.sample_count).toBe(6);
     expect(updated!.blended_score).not.toBe(initial.blended_score);
   });
@@ -293,7 +295,9 @@ describe('processEvent — 4-variant exhaustive handling', () => {
     });
 
     const updated = await store.get('nft-qs');
-    expect(updated!.personal_score).toBe(0.9);
+    // Dampened: alpha = 0.1 + 0.4*(10/50) = 0.18, score = 0.18*0.9 + 0.82*0.5 = 0.572
+    expect(updated!.personal_score).toBeGreaterThan(0.5);
+    expect(updated!.personal_score).toBeLessThan(0.9); // dampened, not raw
     expect(updated!.sample_count).toBe(11); // was 10, +1
   });
 
@@ -484,7 +488,9 @@ describe('reconstructAggregateFromEvents', () => {
 
     const aggregate = reconstructAggregateFromEvents(events);
 
-    expect(aggregate.personal_score).toBe(0.90); // last event's score
+    // Dampened: first=0.85 (cold start), second blended with alpha ramp
+    expect(aggregate.personal_score).toBeGreaterThan(0.85);
+    expect(aggregate.personal_score).toBeLessThanOrEqual(0.90);
     expect(aggregate.sample_count).toBe(2);
     expect(aggregate.state).toBe('warming');
     expect(aggregate.contract_version).toBe('8.2.0');
@@ -548,7 +554,77 @@ describe('reconstructAggregateFromEvents', () => {
 
     // quality_signal=1, task_completed=1, credential_update=0, model_performance=1 = 3 sample increments
     expect(aggregate.sample_count).toBe(3);
-    expect(aggregate.personal_score).toBe(0.92); // last score-setting event
+    // With dampening: first event score=0.85 (cold start), third event dampened
+    expect(aggregate.personal_score).not.toBeNull();
     expect(aggregate.task_cohorts).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. credential_update — audit-only no-op (Sprint 79, S2-T5, Bridgebuilder F5)
+// ---------------------------------------------------------------------------
+
+describe('credential_update event processing (audit-only no-op)', () => {
+  let service: ReputationService;
+  let store: InMemoryReputationStore;
+
+  beforeEach(() => {
+    store = new InMemoryReputationStore();
+    service = new ReputationService(store);
+  });
+
+  it('processEvent with credential_update does not change aggregate personal_score', async () => {
+    const agg = makeAggregate({ personal_score: 0.75 });
+    await store.put('nft-1', agg);
+
+    await service.processEvent('nft-1', {
+      type: 'credential_update',
+      credential_id: 'api-key-001',
+      action: 'issued',
+      event_id: 'evt-1',
+      agent_id: 'nft-1',
+      collection_id: 'c1',
+      timestamp: new Date().toISOString(),
+    } as ReputationEvent);
+
+    const updated = await store.get('nft-1');
+    expect(updated!.personal_score).toBe(0.75); // unchanged
+  });
+
+  it('processEvent with credential_update does not change aggregate sample_count', async () => {
+    const agg = makeAggregate({ sample_count: 20 });
+    await store.put('nft-1', agg);
+
+    await service.processEvent('nft-1', {
+      type: 'credential_update',
+      credential_id: 'api-key-001',
+      action: 'revoked',
+      event_id: 'evt-2',
+      agent_id: 'nft-1',
+      collection_id: 'c1',
+      timestamp: new Date().toISOString(),
+    } as ReputationEvent);
+
+    const updated = await store.get('nft-1');
+    expect(updated!.sample_count).toBe(20); // unchanged
+  });
+
+  it('processEvent with credential_update IS recorded in event history (audit trail)', async () => {
+    const agg = makeAggregate();
+    await store.put('nft-1', agg);
+
+    await service.processEvent('nft-1', {
+      type: 'credential_update',
+      credential_id: 'api-key-001',
+      action: 'issued',
+      event_id: 'evt-3',
+      agent_id: 'nft-1',
+      collection_id: 'c1',
+      timestamp: '2026-02-25T10:00:00Z',
+    } as ReputationEvent);
+
+    const history = await store.getEventHistory('nft-1');
+    expect(history).toHaveLength(1);
+    expect(history[0].type).toBe('credential_update');
   });
 });

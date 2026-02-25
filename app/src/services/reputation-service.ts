@@ -52,6 +52,88 @@ import type {
   DixieReputationAggregate,
 } from '../types/reputation-evolution.js';
 import { MutationLog, createMutation } from './governance-mutation.js';
+import type { MutationLogPersistence } from './governance-mutation.js';
+
+// ---------------------------------------------------------------------------
+// Feedback Dampening (Bridgebuilder F1 — autopoietic loop safety)
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimum dampening alpha — applied to cold/new agents with few observations.
+ * Low alpha = conservative: new observations have minimal impact on the score.
+ * This prevents a single outlier observation from dominating early reputation.
+ * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
+ */
+export const FEEDBACK_DAMPENING_ALPHA_MIN = 0.1;
+
+/**
+ * Maximum dampening alpha — applied to mature agents with many observations.
+ * High alpha = responsive: the score tracks recent performance more closely.
+ * Mature agents have enough history that individual observations matter more.
+ * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
+ */
+export const FEEDBACK_DAMPENING_ALPHA_MAX = 0.5;
+
+/**
+ * Number of samples needed to ramp alpha from MIN to MAX.
+ * At 50 samples, alpha reaches ALPHA_MAX and the agent is fully responsive.
+ * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
+ */
+export const DAMPENING_RAMP_SAMPLES = 50;
+
+/**
+ * Compute a dampened reputation score using exponential moving average.
+ *
+ * Prevents runaway convergence or death spirals in the autopoietic feedback loop.
+ * Alpha grows linearly with sample count:
+ *   alpha = ALPHA_MIN + (ALPHA_MAX - ALPHA_MIN) * min(1, sampleCount / RAMP)
+ *   dampened = alpha * newScore + (1 - alpha) * oldScore
+ *
+ * On cold start (oldScore === null), returns newScore directly — no dampening
+ * applies because there's no running average to blend with.
+ *
+ * @param oldScore - Current personal score (null for first observation)
+ * @param newScore - New observation score from quality signal or model performance
+ * @param sampleCount - Current sample count (before this observation)
+ * @returns Dampened score in [0, 1]
+ * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
+ */
+export function computeDampenedScore(
+  oldScore: number | null,
+  newScore: number,
+  sampleCount: number,
+): number {
+  // Cold start: no previous score to blend with
+  if (oldScore === null) return newScore;
+
+  const rampFraction = Math.min(1, sampleCount / DAMPENING_RAMP_SAMPLES);
+  const alpha = FEEDBACK_DAMPENING_ALPHA_MIN
+    + (FEEDBACK_DAMPENING_ALPHA_MAX - FEEDBACK_DAMPENING_ALPHA_MIN) * rampFraction;
+
+  return alpha * newScore + (1 - alpha) * oldScore;
+}
+
+// ---------------------------------------------------------------------------
+// Default Economic Parameters (Bridgebuilder F4 — single source of truth)
+// ---------------------------------------------------------------------------
+
+/**
+ * Default pseudo count for Bayesian reputation blending.
+ * Represents the strength of the collection prior: higher values make the
+ * system more conservative (slower to deviate from the collection score).
+ * A value of 10 means an agent needs ~10 observations before its personal
+ * score starts significantly outweighing the collection prior.
+ * @since cycle-007 — Sprint 78, Task S1-T5 (Bridgebuilder F4)
+ */
+export const DEFAULT_PSEUDO_COUNT = 10;
+
+/**
+ * Default collection score for Bayesian reputation blending.
+ * The prior mean — what we assume an agent's quality is before any observations.
+ * Zero represents "no information" — the neutral starting point.
+ * @since cycle-007 — Sprint 78, Task S1-T5 (Bridgebuilder F4)
+ */
+export const DEFAULT_COLLECTION_SCORE = 0;
 
 /** Result of a reputation reliability check. */
 export interface ReliabilityResult {
@@ -301,6 +383,7 @@ export class ReputationService {
     mutation_count: number;
     latest_mutation: GovernanceMutation | undefined;
     mutation_history: ReadonlyArray<GovernanceMutation>;
+    session_id: string;
   }> {
     return {
       version: this._mutationLog.version,
@@ -309,6 +392,7 @@ export class ReputationService {
       mutation_count: this._mutationLog.history.length,
       latest_mutation: this._mutationLog.latest,
       mutation_history: this._mutationLog.history,
+      session_id: this._mutationLog.sessionId,
     };
   }
   /**
@@ -467,9 +551,14 @@ export class ReputationService {
     const aggregate = await this.store.get(nftId);
     if (!aggregate) return;
 
+    const dampenedScore = computeDampenedScore(
+      aggregate.personal_score,
+      event.score,
+      aggregate.sample_count,
+    );
     const updated: ReputationAggregate = {
       ...aggregate,
-      personal_score: event.score,
+      personal_score: dampenedScore,
       sample_count: aggregate.sample_count + 1,
       last_updated: event.timestamp,
     };
@@ -500,14 +589,30 @@ export class ReputationService {
 
   /**
    * Handle credential_update event — record in event log (no aggregate change).
+   *
+   * **Current behavior**: Event recorded in event log (via processEvent's
+   * appendEvent call above). No aggregate computation change.
+   *
+   * **Architectural rationale**: Credentials operate on the trust layer
+   * (access policy evaluation via DynamicContract surfaces), while scores
+   * operate on the quality layer (Bayesian blending via computeBlendedScore).
+   * Mixing them couples "who you are" with "how well you perform."
+   * This mirrors the OIDC separation between identity claims and authorization scopes.
+   *
+   * **Future consideration**: If credentials should contribute to reputation
+   * (e.g., verified API key as trust signal), add a `credential_weight`
+   * parameter to the blending function rather than mixing into quality scores.
+   *
    * @since cycle-007 — Sprint 73, Task S1-T4
+   * @since cycle-007 — Sprint 79, Task S2-T2 (Bridgebuilder F5: decision trail)
    */
   private async handleCredentialUpdate(
     _nftId: string,
     _event: Extract<ReputationEvent, { type: 'credential_update' }>,
   ): Promise<void> {
-    // Credential updates are recorded in the event log (already done in processEvent)
-    // No aggregate computation change needed — credentials affect access policy, not scores
+    // ADR: credentials ⊥ scores — see Bridgebuilder F5 (PR #15)
+    // Credential updates are recorded in the event log (already done in processEvent).
+    // No aggregate computation change — credentials affect access policy, not scores.
   }
 
   /**
@@ -527,11 +632,16 @@ export class ReputationService {
     const aggregate = await this.store.get(nftId);
     if (!aggregate) return;
 
-    const score = event.quality_observation.score;
+    const rawScore = event.quality_observation.score;
+    const dampenedScore = computeDampenedScore(
+      aggregate.personal_score,
+      rawScore,
+      aggregate.sample_count,
+    );
 
-    // Update aggregate with the observation score
+    // Update aggregate with the dampened observation score
     const blended = this.computeBlended({
-      personalScore: score,
+      personalScore: dampenedScore,
       collectionScore: aggregate.collection_score,
       sampleCount: aggregate.sample_count + 1,
       pseudoCount: aggregate.pseudo_count,
@@ -539,7 +649,7 @@ export class ReputationService {
 
     const updated: ReputationAggregate = {
       ...aggregate,
-      personal_score: score,
+      personal_score: dampenedScore,
       blended_score: blended,
       sample_count: aggregate.sample_count + 1,
       last_updated: event.timestamp,
@@ -551,7 +661,7 @@ export class ReputationService {
     if (existingCohort) {
       await this.store.putTaskCohort(nftId, {
         ...existingCohort,
-        personal_score: score,
+        personal_score: rawScore,
         sample_count: existingCohort.sample_count + 1,
         last_updated: event.timestamp,
       });
@@ -560,7 +670,7 @@ export class ReputationService {
       await this.store.putTaskCohort(nftId, {
         model_id: event.model_id,
         task_type: event.task_type,
-        personal_score: score,
+        personal_score: rawScore,
         sample_count: 1,
         last_updated: event.timestamp,
       });
@@ -700,7 +810,7 @@ export function reconstructAggregateFromEvents(
   for (const event of events) {
     switch (event.type) {
       case 'quality_signal':
-        personalScore = event.score;
+        personalScore = computeDampenedScore(personalScore, event.score, sampleCount);
         sampleCount++;
         break;
       case 'task_completed':
@@ -711,7 +821,7 @@ export function reconstructAggregateFromEvents(
         break;
       case 'model_performance': {
         const score = event.quality_observation.score;
-        personalScore = score;
+        personalScore = computeDampenedScore(personalScore, score, sampleCount);
         sampleCount++;
         // Update task cohort
         const key = `${event.model_id}:${event.task_type}`;
@@ -737,8 +847,8 @@ export function reconstructAggregateFromEvents(
     }
   }
 
-  const pseudoCount = 10;
-  const collectionScore = 0;
+  const pseudoCount = DEFAULT_PSEUDO_COUNT;
+  const collectionScore = DEFAULT_COLLECTION_SCORE;
   const blendedScore = personalScore !== null
     ? computeBlendedScore(personalScore, collectionScore, sampleCount, pseudoCount)
     : collectionScore;
@@ -788,3 +898,8 @@ export type {
 export { TASK_TYPES, validateTaskCohortUniqueness } from '../types/reputation-evolution.js';
 export { QualityObservationSchema, ModelPerformanceEventSchema } from '../types/reputation-evolution.js';
 export type { TaskType } from '../types/reputation-evolution.js';
+
+// Re-export governance mutation types for consumer convenience
+export type { MutationLogPersistence } from './governance-mutation.js';
+export { MutationLog, createMutation, resolveActorId } from './governance-mutation.js';
+export type { ActorType } from './governance-mutation.js';

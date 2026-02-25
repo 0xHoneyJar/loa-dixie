@@ -72,27 +72,68 @@ export function createMutation(actorId: string, expectedVersion: number): Govern
 }
 
 // ---------------------------------------------------------------------------
-// Mutation Log (S3-T1)
+// Mutation Log Persistence Interface (S1-T3, Bridgebuilder F3)
 // ---------------------------------------------------------------------------
 
 /**
- * In-memory append-only mutation log.
+ * Persistence interface for MutationLog — defines the contract for
+ * durable storage of governance mutations beyond the current session.
  *
- * Stores governance mutations in chronological order. The log is append-only:
- * entries cannot be modified or deleted. This provides an audit trail of
- * all governance mutations for debugging and compliance.
+ * Implementations:
+ * - None yet (use in-memory MutationLog without persistence for now)
+ * - Future: PostgreSQL adapter, file-based adapter
+ *
+ * @since cycle-007 — Sprint 78, Task S1-T3 (Bridgebuilder F3)
+ */
+export interface MutationLogPersistence {
+  /** Persist the full mutation log to durable storage. */
+  save(log: ReadonlyArray<GovernanceMutation>): Promise<void>;
+  /** Load previously persisted mutations from durable storage. */
+  load(): Promise<GovernanceMutation[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Mutation Log (S3-T1, updated S1-T3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Session-scoped, in-memory, append-only mutation log.
+ *
+ * **Important**: This log is ephemeral — data does NOT survive process restarts.
+ * Each MutationLog instance represents a single session's governance activity,
+ * identified by a unique `sessionId`. The log provides local audit visibility
+ * within a session but is not a durable audit trail on its own.
+ *
+ * For durable persistence across sessions, provide a `MutationLogPersistence`
+ * implementation at construction time. When persistence is provided, each
+ * `append()` call fires-and-forgets a save operation (errors are logged but
+ * do not block the mutation).
  *
  * @since cycle-007 — Sprint 75, Task S3-T1
+ * @since cycle-007 — Sprint 78, Task S1-T3 (session-scoped lifecycle, persistence interface)
  */
 export class MutationLog {
   private readonly entries: GovernanceMutation[] = [];
   private currentVersion: number = 0;
+  private readonly persistence?: MutationLogPersistence;
+
+  /** Unique identifier for this session's mutation log instance. */
+  readonly sessionId: string = crypto.randomUUID();
+
+  /**
+   * @param persistence - Optional durable storage adapter. When provided,
+   *   mutations are fire-and-forget persisted on each append.
+   */
+  constructor(persistence?: MutationLogPersistence) {
+    this.persistence = persistence;
+  }
 
   /**
    * Append a mutation to the log.
    *
    * Validates the expected_version against the current version.
    * If versions mismatch, throws an error (optimistic concurrency conflict).
+   * When persistence is configured, fires-and-forgets a save after appending.
    *
    * @param mutation - The governance mutation to append
    * @throws Error if expected_version does not match current version
@@ -105,6 +146,13 @@ export class MutationLog {
     }
     this.entries.push(mutation);
     this.currentVersion++;
+
+    // Fire-and-forget persistence — errors logged, never thrown
+    if (this.persistence) {
+      this.persistence.save(this.entries).catch((err: unknown) => {
+        console.error('[MutationLog] persistence save failed:', err);
+      });
+    }
   }
 
   /** Get the current version number. */
