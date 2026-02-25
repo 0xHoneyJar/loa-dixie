@@ -106,6 +106,9 @@ export function computeDampenedScore(
   // Cold start: no previous score to blend with
   if (oldScore === null) return newScore;
 
+  // Trust assumption: inputs are in [0, 1] — validated at event ingestion boundary.
+  // This function does not clamp to avoid masking upstream bugs.
+
   const rampFraction = Math.min(1, sampleCount / DAMPENING_RAMP_SAMPLES);
   const alpha = FEEDBACK_DAMPENING_ALPHA_MIN
     + (FEEDBACK_DAMPENING_ALPHA_MAX - FEEDBACK_DAMPENING_ALPHA_MIN) * rampFraction;

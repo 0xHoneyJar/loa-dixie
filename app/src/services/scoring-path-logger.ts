@@ -30,6 +30,8 @@ interface ScoringPathLogEntry {
   readonly task_type?: string;
   readonly entry_hash?: string;
   readonly previous_hash?: string;
+  /** Optional request-level correlation ID (e.g., X-Request-Id) for production log joining. */
+  readonly correlation_id?: string;
   readonly [key: string]: unknown;
 }
 
