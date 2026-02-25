@@ -59,22 +59,41 @@ export interface ReputationFreshness {
  * @since cycle-005 — Sprint 63, Task 4.2
  * @since cycle-005 — Sprint 64, Task 5.2 (routed_model_id)
  */
+/**
+ * Routing attribution — captures the routing decision context.
+ * Records which model was recommended, which was actually routed,
+ * and whether this was an exploration decision (ε-greedy).
+ * @since cycle-008 — FR-8
+ */
+export interface RoutingAttribution {
+  /** Model recommended by the reputation system. */
+  readonly recommended_model?: string;
+  /** Model actually routed to (may differ from recommendation). */
+  readonly routed_model: string;
+  /** Model pool from which the model was selected. */
+  readonly pool_id?: string;
+  /** Reason for the routing decision. */
+  readonly routing_reason?: string;
+  /** Whether this was an exploration decision (ε-greedy). */
+  readonly exploration?: boolean;
+}
+
 export interface RecordOptions {
   reputation_freshness?: ReputationFreshness;
   /**
    * The model actually selected by the router, which may differ from
    * model_id (the model recommended by the reputation system).
    *
-   * The delta between model_id and routed_model_id is a valuable signal:
-   * if they consistently differ, the reputation system's recommendations
-   * are being overridden (budget, capacity, fallback), which should feed
-   * back into reputation calibration.
-   *
-   * Not included in hash input — populated after the scoring decision.
-   *
-   * @since cycle-005 — Sprint 64, Task 5.2 (Bridge deep review Q2: multi-model accountability)
+   * @deprecated Use `routing.routed_model` instead.
+   * @since cycle-005 — Sprint 64, Task 5.2
    */
   routed_model_id?: string;
+  /**
+   * Routing attribution — structured context for the routing decision.
+   * Not included in hash input (populated after the scoring decision).
+   * @since cycle-008 — FR-8
+   */
+  routing?: RoutingAttribution;
 }
 
 /** Domain tag for scoring path audit entries. */

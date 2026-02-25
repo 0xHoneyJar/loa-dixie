@@ -83,6 +83,26 @@ const DEFAULT_CRITERIA: QualificationCriteria = {
 export const DEFAULT_BUDGET_PERIOD_DAYS = 30;
 
 /**
+ * Mulberry32 — simple, fast, deterministic 32-bit PRNG.
+ * Used for reproducible exploration decisions in tests.
+ * In production (no seed), delegates to Math.random().
+ * @since cycle-008 — FR-9
+ */
+export function createPRNG(seed?: string): () => number {
+  if (!seed) return Math.random;
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(31, h) + seed.charCodeAt(i) | 0;
+  }
+  return () => {
+    h |= 0; h = h + 0x6D2B79F5 | 0;
+    let t = Math.imul(h ^ h >>> 15, 1 | h);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/**
  * Resolve the effective budget period in days.
  * Priority: explicit parameter > env var > constant default.
  */
@@ -100,6 +120,22 @@ function resolveBudgetPeriodDays(override?: number): number {
  * Options for evaluateEconomicBoundaryForWallet.
  * @since Sprint 6 — Task 6.2
  */
+/**
+ * Configuration for ε-greedy exploration in model selection.
+ * Prevents the exploitation trap: without exploration, the system
+ * converges to a single model and can never discover if alternatives
+ * have improved.
+ * @since cycle-008 — FR-9
+ */
+export interface ExplorationConfig {
+  /** Probability of selecting non-optimal model [0, 1]. Default: 0.05. */
+  readonly epsilon: number;
+  /** Minimum observations before exploration begins. Default: 50. */
+  readonly warmup: number;
+  /** Seed for deterministic PRNG (for testing). */
+  readonly seed?: string;
+}
+
 export interface EconomicBoundaryOptions {
   /** Override qualification criteria. */
   criteria?: QualificationCriteria;
@@ -140,6 +176,12 @@ export interface EconomicBoundaryOptions {
    * @since cycle-005 — Sprint 61 (Hounfour v7.11.0 hash chain)
    */
   scoringPathTracker?: ScoringPathTracker;
+  /**
+   * ε-greedy exploration configuration. When epsilon > 0 and warmup met,
+   * a fraction of evaluations explore non-optimal model selections.
+   * @since cycle-008 — FR-9
+   */
+  exploration?: ExplorationConfig;
 }
 
 /**
@@ -325,6 +367,23 @@ export function evaluateEconomicBoundaryCanonical(
     }
   }
 
+  // FR-9: ε-greedy exploration budget
+  const exploration = options.exploration;
+  let isExploration = false;
+  if (exploration && exploration.epsilon > 0) {
+    const totalObservations = reputationAggregate?.sample_count ?? 0;
+    if (totalObservations >= exploration.warmup) {
+      const rand = createPRNG(exploration.seed);
+      if (rand() < exploration.epsilon) {
+        isExploration = true;
+        scoringPathInput = {
+          ...scoringPathInput,
+          reason: `${scoringPathInput.reason} [EXPLORATION: ε=${exploration.epsilon}]`,
+        };
+      }
+    }
+  }
+
   // Compute reputation freshness when aggregate is available (Sprint 63 — Q3 temporal blindness)
   const reputationFreshness = reputationAggregate
     ? { sample_count: reputationAggregate.sample_count, newest_event_at: reputationAggregate.last_updated }
@@ -332,7 +391,14 @@ export function evaluateEconomicBoundaryCanonical(
 
   // Record scoring path — with hash chain when tracker is provided, plain object otherwise
   const scoringPath: ScoringPathLog = tracker
-    ? tracker.record(scoringPathInput, { reputation_freshness: reputationFreshness })
+    ? tracker.record(scoringPathInput, {
+        reputation_freshness: reputationFreshness,
+        routing: isExploration ? {
+          routed_model: 'exploration-selected',
+          routing_reason: `ε-greedy exploration (ε=${exploration!.epsilon})`,
+          exploration: true,
+        } : undefined,
+      })
     : scoringPathInput;
 
   // Structured provenance log: what happened, with what data, and how fresh
