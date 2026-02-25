@@ -228,17 +228,17 @@ invariants:
         note: "Tests decay computation, state transitions, and re-ingestion reset"
 
   - id: INV-010
-    description: "Citation integrity — every knowledge citation references an existing source in the corpus. No dangling references permitted."
+    description: "Citation integrity — citation count does not exceed the number of known sources in the corpus. Ensures citation claims are bounded by available evidence."
     severity: important
     category: referential
     properties:
-      - "For all citations c in item.citations: c.source_id exists in known_sources"
-      - "verifyCitationIntegrity() returns satisfied: false for any dangling reference"
+      - "item.citation_count <= knownSources.size"
+      - "verifyCitationIntegrity() returns satisfied: false when citation_count exceeds known source count"
     verified_in:
       - repo: loa-dixie
         file: "app/src/services/knowledge-governor.ts"
         symbol: "verifyCitationIntegrity"
-        note: "Checks all citations resolve to known sources"
+        note: "Checks citation_count does not exceed knownSources.size"
       - repo: loa-dixie
         file: "app/tests/unit/knowledge-governor.test.ts"
         symbol: "INV-010 citation integrity"
@@ -271,7 +271,7 @@ invariants:
         note: "Tests chain integrity and tamper detection"
 
   - id: INV-012
-    description: "Three-witness quorum — the GovernorRegistry maintains >= 3 registered resource types for Byzantine fault tolerance minimum quorum. The governance isomorphism is proven, not claimed."
+    description: "Three-witness quorum — the GovernorRegistry maintains >= 3 registered resource types, proving that the governance abstraction generalizes across independent domains rather than being incidental to a single use case."
     severity: important
     category: structural
     properties:

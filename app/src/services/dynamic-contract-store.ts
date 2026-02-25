@@ -31,6 +31,22 @@ export class MonotonicViolationError extends Error {
   }
 }
 
+/**
+ * Error thrown when a concurrent process wrote a newer contract version,
+ * causing the UPSERT version guard to reject the write.
+ */
+export class StaleContractVersionError extends Error {
+  constructor(
+    readonly nftId: string,
+    readonly attemptedVersion: string,
+  ) {
+    super(
+      `Stale contract version for ${nftId}: attempted to write version ${attemptedVersion} but a newer version already exists`,
+    );
+    this.name = 'StaleContractVersionError';
+  }
+}
+
 export class DynamicContractStore {
   constructor(private readonly pool: DbPool) {}
 
@@ -56,13 +72,14 @@ export class DynamicContractStore {
       throw new MonotonicViolationError(nftId, expansionResult.violations);
     }
 
-    await this.pool.query(
+    const result = await this.pool.query(
       `INSERT INTO dynamic_contracts (nft_id, contract_id, contract_data, contract_version)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (nft_id) DO UPDATE SET
-         contract_data = $3,
-         contract_version = $4,
-         updated_at = now()`,
+         contract_data = EXCLUDED.contract_data,
+         contract_version = EXCLUDED.contract_version,
+         updated_at = now()
+       WHERE dynamic_contracts.contract_version < EXCLUDED.contract_version`,
       [
         nftId,
         contract.contract_id,
@@ -70,6 +87,14 @@ export class DynamicContractStore {
         contract.contract_version,
       ],
     );
+
+    // INSERT returns rowCount 1 for a fresh insert.
+    // ON CONFLICT ... DO UPDATE returns rowCount 1 when the WHERE passes.
+    // If the WHERE clause rejects the update (a newer version already stored),
+    // rowCount is 0 — the UPSERT became a no-op.
+    if (result.rowCount === 0) {
+      throw new StaleContractVersionError(nftId, contract.contract_version);
+    }
   }
 
   /**

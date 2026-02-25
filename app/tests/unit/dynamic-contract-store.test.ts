@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   DynamicContractStore,
   MonotonicViolationError,
+  StaleContractVersionError,
 } from '../../src/services/dynamic-contract-store.js';
 import type { DynamicContract, ProtocolSurface } from '../../src/types/dynamic-contract.js';
 import { createMockPool } from '../fixtures/pg-test.js';
@@ -142,6 +143,40 @@ describe('DynamicContractStore', () => {
       expect(insertQuery!.values).toContain('nft-1');
       expect(insertQuery!.values).toContain(contract.contract_id);
     });
+
+    it('includes version guard WHERE clause in UPSERT', async () => {
+      const contract = makeContract();
+      pool._setResponse('INSERT INTO dynamic_contracts', {
+        rows: [],
+        rowCount: 1,
+      });
+
+      await store.putContract('nft-1', contract);
+
+      const insertQuery = pool._queries.find((q) =>
+        q.text.includes('INSERT INTO dynamic_contracts'),
+      );
+      expect(insertQuery).toBeDefined();
+      expect(insertQuery!.text).toContain(
+        'WHERE dynamic_contracts.contract_version < EXCLUDED.contract_version',
+      );
+    });
+
+    it('throws StaleContractVersionError when rowCount is 0 (concurrent newer write)', async () => {
+      const contract = makeContract({ contract_version: '8.0.0' });
+      // rowCount 0 means the WHERE clause rejected the update
+      pool._setResponse('INSERT INTO dynamic_contracts', {
+        rows: [],
+        rowCount: 0,
+      });
+
+      await expect(store.putContract('nft-1', contract)).rejects.toThrow(
+        StaleContractVersionError,
+      );
+      await expect(store.putContract('nft-1', contract)).rejects.toThrow(
+        /Stale contract version for nft-1/,
+      );
+    });
   });
 
   describe('getSurface()', () => {
@@ -208,6 +243,17 @@ describe('MonotonicViolationError', () => {
     expect(err.nftId).toBe('nft-1');
     expect(err.violations).toHaveLength(1);
     expect(err.message).toContain('nft-1');
+  });
+});
+
+describe('StaleContractVersionError', () => {
+  it('has correct properties', () => {
+    const err = new StaleContractVersionError('nft-1', '8.0.0');
+    expect(err.name).toBe('StaleContractVersionError');
+    expect(err.nftId).toBe('nft-1');
+    expect(err.attemptedVersion).toBe('8.0.0');
+    expect(err.message).toContain('nft-1');
+    expect(err.message).toContain('8.0.0');
   });
 });
 

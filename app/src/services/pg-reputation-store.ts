@@ -17,6 +17,7 @@ import type {
 } from '../types/reputation-evolution.js';
 import type { ReputationStore } from './reputation-service.js';
 import type { DbPool } from '../db/client.js';
+import { withTransaction } from '../db/transaction.js';
 
 /**
  * Error thrown when an optimistic concurrency conflict is detected.
@@ -74,35 +75,38 @@ export class PostgreSQLReputationStore implements ReputationStore {
       return;
     }
 
-    // No expected version: upsert without concurrency check (backward compatible)
-    const updateResult = await this.pool.query(
-      `UPDATE reputation_aggregates
-       SET data = $2, state = $3, blended_score = $4, sample_count = $5,
-           version = version + 1, updated_at = now()
-       WHERE nft_id = $1
-       RETURNING version`,
-      [nftId, JSON.stringify(aggregate), state, blendedScore, sampleCount],
-    );
-
-    if (updateResult.rowCount === 0) {
-      // Row doesn't exist — INSERT
-      const insertResult = await this.pool.query(
-        `INSERT INTO reputation_aggregates (nft_id, data, state, blended_score, sample_count, version)
-         VALUES ($1, $2, $3, $4, $5, 0)
-         ON CONFLICT (nft_id) DO NOTHING
+    // No expected version: upsert without concurrency check (backward compatible).
+    // Wrapped in a transaction to close the TOCTOU window between UPDATE and INSERT.
+    await withTransaction(this.pool, async (client) => {
+      const updateResult = await client.query(
+        `UPDATE reputation_aggregates
+         SET data = $2, state = $3, blended_score = $4, sample_count = $5,
+             version = version + 1, updated_at = now()
+         WHERE nft_id = $1
          RETURNING version`,
         [nftId, JSON.stringify(aggregate), state, blendedScore, sampleCount],
       );
 
-      if (insertResult.rowCount === 0) {
-        // Conflict: another process inserted between our UPDATE and INSERT
-        const current = await this.pool.query<{ version: number }>(
-          'SELECT version FROM reputation_aggregates WHERE nft_id = $1',
-          [nftId],
+      if (updateResult.rowCount === 0) {
+        // Row doesn't exist — INSERT
+        const insertResult = await client.query(
+          `INSERT INTO reputation_aggregates (nft_id, data, state, blended_score, sample_count, version)
+           VALUES ($1, $2, $3, $4, $5, 0)
+           ON CONFLICT (nft_id) DO NOTHING
+           RETURNING version`,
+          [nftId, JSON.stringify(aggregate), state, blendedScore, sampleCount],
         );
-        throw new ConflictError(nftId, current.rows[0]?.version ?? -1);
+
+        if (insertResult.rowCount === 0) {
+          // Conflict: another process inserted between our UPDATE and INSERT
+          const current = await client.query<{ version: number }>(
+            'SELECT version FROM reputation_aggregates WHERE nft_id = $1',
+            [nftId],
+          );
+          throw new ConflictError(nftId, current.rows[0]?.version ?? -1);
+        }
       }
-    }
+    });
   }
 
   async listCold(): Promise<

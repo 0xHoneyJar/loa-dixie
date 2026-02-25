@@ -24,6 +24,14 @@ import type {
 /** Default decay rate: lambda = 0.023 gives ~30 day half-life. */
 export const DEFAULT_DECAY_RATE = 0.023;
 
+/**
+ * Floating-point comparison epsilon for freshness bound verification.
+ * Math.exp() with lambda=0.023 produces IEEE 754 errors on the order of 1e-15.
+ * Number.EPSILON * 100 (~2.2e-14) provides a generous margin while staying
+ * within the actual precision of the computation.
+ */
+export const FRESHNESS_EPSILON = Number.EPSILON * 100;
+
 /** Freshness threshold constants. */
 export const FRESHNESS_THRESHOLDS = {
   FRESH_TO_DECAYING: 0.7,
@@ -116,7 +124,7 @@ export class KnowledgeGovernor implements ResourceGovernor<KnowledgeItem> {
 
     // The decayed score should always be <= the stored score
     // (score can only decrease via decay; increases require ingestion)
-    if (decayedScore > item.freshness_score + 0.0001) {
+    if (decayedScore > item.freshness_score + FRESHNESS_EPSILON) {
       return {
         satisfied: false,
         detail: `INV-009 violation: decayed score ${decayedScore.toFixed(4)} > stored score ${item.freshness_score.toFixed(4)} without ingestion event for corpus ${item.corpus_id}`,
