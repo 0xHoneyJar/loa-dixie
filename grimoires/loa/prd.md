@@ -1,269 +1,474 @@
-# PRD: Hounfour v7.11.0 Full Adoption — Task-Dimensional Protocol Compliance
+# PRD: Institutional Memory — Durable Governance, Knowledge Sovereignty & the Court of Record
 
-**Version**: 5.0.0
-**Date**: 2026-02-24
-**Author**: Merlin (Product), Claude (Synthesis)
-**Cycle**: cycle-005
+**Version**: 9.0.0
+**Date**: 2026-02-25
+**Author**: Merlin (Product), Claude (Synthesis, Bridgebuilder Meditation)
+**Cycle**: cycle-009
 **Status**: Draft
-**Predecessor**: cycle-004 PRD v4.0.0 (Tag Release v2.0.0)
+**Predecessor**: cycle-008 PRD v8.0.0 (Governance Isomorphism — GovernedResource<T> Platform)
 
-> Sources: loa-finn#66 §6 Sprint A (Protocol Adoption), loa-hounfour CHANGELOG v7.10.0–v7.11.0,
-> cycle-003 (Hounfour v7.9.2 Full Adoption, 12 sprints — Level 6 foundation),
-> Migration surface analysis (5 files, 3 critical replacements, 1 new feature)
+> Sources: Bridgebuilder Meditation Parts I–III (PR #15 comments),
+> Bridgebuilder Review Parts I–II (PR #25 comments),
+> Cycle-008 deferred items (NOTES.md), ecosystem context
+> (loa-finn #31/#66/#107, loa-freeside #62/#89/#91,
+> loa-hounfour #22/#29, loa-dixie #17/#18/#22/#24,
+> loa #247/#401), ADRs (soul-memory, constitutional-amendment,
+> dixie-enrichment-tier), meow.bio/web4.html
 
 ---
 
 ## 1. Problem Statement
 
-Dixie achieved Hounfour Level 6 protocol compliance in cycle-003 against v7.9.2. Since then, Hounfour has advanced through three releases (v7.10.0, v7.10.1, v7.11.0) totaling **261 files changed, +4671/-685 lines**. These releases upstream Dixie's own task-dimensional reputation types into the shared protocol — the exact types Dixie defined locally in Sprint 52.
+Cycle-008 established the governance isomorphism: `GovernedResource<TState, TEvent, TInvariant>` with two concrete witnesses (ReputationService, ScoringPathTracker), 8 declared invariants, conservation laws as first-class types, and a complete autopoietic feedback loop with 1307 passing tests.
 
-**The gap**: Dixie has **local stub definitions** for types that now exist as **canonical protocol exports** in Hounfour. Specifically:
+But the governance protocol's own memory is ephemeral. Every session that ends loses all governance state. The code has declared it wants institutional memory — through interfaces, placeholders, and deferred items — but hasn't built it yet.
 
-| Local Type | File | Hounfour Canonical | Gap |
-|---|---|---|---|
-| `TaskType` (fixed 5-type array) | `types/reputation-evolution.ts:36-45` | `TaskTypeSchema` (open enum + namespace:type) | Local is subset of protocol |
-| `TaskTypeCohort` (ModelCohort &) | `types/reputation-evolution.ts:62-65` | `TaskTypeCohortSchema` (+confidence_threshold) | Missing protocol field |
-| `ReputationEvent` (generic payload) | `types/reputation-evolution.ts:104-111` | `ReputationEventSchema` (3-variant discriminated union) | Underspecified stub |
-| `ScoringPathLog` (3 fields) | `types/reputation-evolution.ts:122-129` | `ScoringPathLogSchema` (+hash chain, +reason, +scored_at) | Missing audit trail |
+### The Signals from the Code
 
-Additionally, Hounfour v7.11.0 introduces **hash chain infrastructure** (`computeScoringPathHash()`, `SCORING_PATH_GENESIS_HASH`) for scoring path audit trails — a feature Dixie should implement to complete its economic boundary observability.
+| Signal | Location | What the Code Is Saying |
+|--------|----------|------------------------|
+| `InMemoryReputationStore` only | reputation-service.ts | "My state dies when the process dies" |
+| `auditTrail` returns empty object | reputation-service.ts:GovernedResource | "I declared I want memory but have none" |
+| `mutationLog` returns empty array | scoring-path-tracker.ts | "I track transitions I can't remember" |
+| `MutationLogPersistence` interface exists | governance-mutation.ts | "I designed persistence I haven't built" |
+| `GovernedResourceBase` unused | governed-resource.ts:88 | "I anticipated a third witness that hasn't arrived" |
+| Soul Memory ADRs in Proposed state | context/adr-soul-memory-*.md | "I architectured memory three ways but built none" |
+| `DynamicContract` imported, unused | hounfour/commons | "I'm ready for capability evolution but haven't started" |
 
-**Why this matters**: Running local stubs alongside canonical protocol exports creates **drift risk**. Hounfour's types include validation schemas, conformance vectors, and constitutional constraints that local stubs lack. Every release widens the gap. The types were upstreamed *from* Dixie — adopting them back closes the loop.
+### The Ecosystem Convergence
 
-> Sources: loa-hounfour CHANGELOG v7.10.0 ("upstream shared vocabulary from Dixie"),
-> types/reputation-evolution.ts (local definitions), migration surface analysis
+Three forces are converging on institutional memory:
 
-## 2. Product Vision
+1. **loa-freeside #89**: "Observability First, Revenue Second" — billing needs durable state before payments can flow
+2. **loa-freeside #91/#98**: x402 micropayment integration — economic transactions need a court of record
+3. **loa-dixie #22**: "rebuild a key piece of infra within the specific context of commons protocol" — the community is asking for durable commons infrastructure
+4. **loa-dixie #18**: "MCP all the things" — Model Context Protocol as the interface surface requires persistent state
+5. **loa-finn #107**: Hounfour v8.2.0 upgrade in finn — the ecosystem is converging on shared governance primitives
 
-**Replace Dixie's local reputation type stubs with canonical Hounfour v7.11.0 protocol imports, and implement the scoring path hash chain audit trail.**
+### Why This Matters
 
-This is a **protocol adoption cycle** (like cycle-003), not a feature cycle. The types already exist on both sides — the work is replacing local definitions with shared contract imports, gaining schema validation, conformance vectors, and constitutional constraints for free.
+The Bridgebuilder Meditation (PR #15, Part I) named Dixie as "a constitutional court." The PR #25 review extended the metaphor: "You've built a courthouse with a judge's bench, a witness stand, and a jury box. The court reporter's desk exists but nobody's sitting in it yet."
 
-The hash chain implementation is the one genuinely new feature: each scoring path decision in `conviction-boundary.ts` will produce a hash-linked audit entry, enabling tamper-evident scoring audit trails.
+A court without records is not a court. Institutional memory is not a feature — it is the foundation that makes governance meaningful. Conservation laws that aren't durably recorded can't be verified after the fact. Reputation that evaporates between sessions can't build trust over time. Audit trails that exist only in-memory provide no tamper detection against process restarts.
 
-## 3. Success Metrics
-
-| ID | Metric | Target |
-|----|--------|--------|
-| H-1 | Local type stubs eliminated | 0 local definitions for types available in Hounfour v7.11.0 |
-| H-2 | Hounfour import coverage | All 4 type families imported from `@0xhoneyjar/loa-hounfour/governance` |
-| H-3 | Open enum adoption | TaskType accepts community namespace:type pattern per ADR-003 |
-| H-4 | Hash chain operational | Scoring path decisions produce hash-linked ScoringPathLog entries |
-| H-5 | Conformance vectors | New v7.10.0–v7.11.0 vectors pass in Dixie's conformance suite |
-| H-6 | Zero regressions | All existing tests pass (1011+ baseline) |
-| H-7 | Type audit updated | `types.ts` header comment reflects v7.11.0 import surface |
-
-## 4. Functional Requirements
-
-### FR-1: Replace Local TaskType with Hounfour Open Enum
-
-**Current**: `types/reputation-evolution.ts:36-45` defines `TASK_TYPES` as a fixed 5-element const array and `TaskType` as a derived union type.
-
-**Target**: Import `TaskTypeSchema`, `TASK_TYPES`, and `type TaskType` from `@0xhoneyjar/loa-hounfour/governance`. The Hounfour version is an **open enum** (ADR-003) that accepts:
-- 5 protocol-defined literals: `code_review`, `creative_writing`, `analysis`, `summarization`, `general`
-- Community-defined pattern: `namespace:type` (e.g., `legal-guild:contract_review`)
-
-**Acceptance Criteria**:
-- [ ] Local `TASK_TYPES` const removed from `reputation-evolution.ts`
-- [ ] Local `TaskType` type removed from `reputation-evolution.ts`
-- [ ] `TaskType` and `TASK_TYPES` imported from hounfour governance barrel
-- [ ] All files that import from `reputation-evolution.ts` updated if needed
-- [ ] Community namespace:type pattern accepted by type system
-
-> Sources: loa-hounfour src/governance/task-type.ts:42-76, ADR-003
-
-### FR-2: Replace Local TaskTypeCohort with Hounfour Schema
-
-**Current**: `types/reputation-evolution.ts:62-65` defines `TaskTypeCohort` as `ModelCohort & { readonly task_type: TaskType }`.
-
-**Target**: Import `type TaskTypeCohort` from hounfour governance. The Hounfour version adds:
-- `confidence_threshold` (integer, optional, default 30) — cold-start blending threshold
-- Uses `COHORT_BASE_FIELDS` (shared leaf module, v7.10.1)
-- `validateTaskCohortUniqueness()` helper for composite key validation
-
-**Acceptance Criteria**:
-- [ ] Local `TaskTypeCohort` removed from `reputation-evolution.ts`
-- [ ] Imported from `@0xhoneyjar/loa-hounfour/governance`
-- [ ] `DixieReputationAggregate` updated to use hounfour's `TaskTypeCohort`
-- [ ] `validateTaskCohortUniqueness()` imported and used where task cohorts are constructed
-
-> Sources: loa-hounfour src/governance/task-type-cohort.ts:26-74
-
-### FR-3: Replace Local ReputationEvent with Hounfour Discriminated Union
-
-**Current**: `types/reputation-evolution.ts:104-111` defines `ReputationEvent` as a generic interface with `type` discriminator and `payload: unknown`.
-
-**Target**: Import the full discriminated union from hounfour governance:
-- `ReputationEvent` (union of 3 variants)
-- `QualitySignalEvent` — score (0-1), optional dimensions record, optional task_type
-- `TaskCompletedEvent` — required task_type, success boolean, optional duration_ms
-- `CredentialUpdateEvent` — credential_id (UUID), action enum
-
-All variants share an envelope: `event_id` (UUID), `agent_id`, `collection_id`, `timestamp`, optional `sequence`.
-
-**Acceptance Criteria**:
-- [ ] Local `ReputationEvent` interface removed from `reputation-evolution.ts`
-- [ ] All 4 types imported from hounfour governance barrel
-- [ ] `reputation-service.ts` updated to use typed event variants (not `payload: unknown`)
-- [ ] Event construction sites produce well-typed events with required envelope fields
-- [ ] `reconstructAggregateFromEvents()` stub updated with typed event handling
-
-> Sources: loa-hounfour src/governance/reputation-event.ts:133-145
-
-### FR-4: Replace Local ScoringPathLog with Hounfour Schema
-
-**Current**: `types/reputation-evolution.ts:122-129` defines `ScoringPathLog` with 3 fields (path, model?, task_type?).
-
-**Target**: Import `ScoringPath` and `ScoringPathLog` from hounfour governance. The Hounfour version adds:
-- `model_id` (replaces `model`) — field name alignment
-- `reason` (string, max 500 chars) — human explanation
-- `scored_at` (ISO 8601) — timestamp
-- `entry_hash` (sha256: format) — content hash
-- `previous_hash` (sha256: format) — chain link
-
-**Acceptance Criteria**:
-- [ ] Local `ScoringPathLog` interface removed from `reputation-evolution.ts`
-- [ ] `ScoringPath` and `ScoringPathLog` imported from hounfour governance
-- [ ] Field name `model` updated to `model_id` at all usage sites
-- [ ] `conviction-boundary.ts` produces ScoringPathLog entries with all required fields
-
-> Sources: loa-hounfour src/governance/scoring-path-log.ts:26-81
-
-### FR-5: Implement Scoring Path Hash Chain
-
-**Current**: No hash chain implementation exists. Scoring path decisions are not hash-linked.
-
-**Target**: Implement hash chain audit trail using hounfour's `computeScoringPathHash()` and `SCORING_PATH_GENESIS_HASH`:
-
-1. Each scoring path decision in `conviction-boundary.ts` produces a `ScoringPathLog` entry
-2. `entry_hash` is computed via `computeScoringPathHash()` (RFC 8785 canonical JSON + SHA-256)
-3. `previous_hash` chains to the prior entry's `entry_hash` (or `SCORING_PATH_GENESIS_HASH` for first entry)
-4. `scored_at` timestamp records evaluation time
-5. Hash pair constraint: both `entry_hash` and `previous_hash` present or both absent
-
-**Acceptance Criteria**:
-- [ ] `computeScoringPathHash` and `SCORING_PATH_GENESIS_HASH` imported from hounfour governance
-- [ ] Scoring path hash computed for each economic boundary evaluation
-- [ ] Hash chain links consecutive scoring decisions (previous_hash → prior entry_hash)
-- [ ] Genesis hash used for first entry in a chain
-- [ ] Hash chain entries include `scored_at` timestamp
-- [ ] Tests verify hash chain integrity (determinism, chain linking, genesis sentinel)
-
-> Sources: loa-hounfour src/governance/scoring-path-hash.ts:49-65,
-> constraints/ScoringPathLog.constraints.json (scoring-path-hash-pair, scoring-path-chain-integrity)
-
-### FR-6: Update Conformance Suite
-
-**Current**: Conformance suite validates against v7.9.2 schemas (7 schema types).
-
-**Target**: Extend conformance coverage to include v7.11.0 governance schemas:
-- TaskType validation (protocol + community patterns)
-- TaskTypeCohort validation (including uniqueness constraint)
-- ReputationEvent validation (all 3 variants)
-- ScoringPathLog validation (including hash chain constraints)
-
-**Acceptance Criteria**:
-- [ ] Conformance suite schema enum extended with governance types
-- [ ] Sample payloads added for new schema types
-- [ ] v7.10.0–v7.11.0 conformance vectors referenced in test assertions
-- [ ] `runFullSuite()` includes governance schema validation
-
-> Sources: services/conformance-suite.ts:24-204
-
-### FR-7: Update Type Audit Documentation
-
-**Current**: `types.ts` header comment documents v7.9.2 import surface (12 imports across 8 files).
-
-**Target**: Update the type audit table to reflect v7.11.0 imports, including:
-- New governance barrel imports (TaskType, TaskTypeCohort, ReputationEvent variants, ScoringPathLog)
-- Hash chain utilities (computeScoringPathHash, SCORING_PATH_GENESIS_HASH)
-- ADR-001 aliasing note (GovernanceTaskType vs core TaskType)
-
-**Acceptance Criteria**:
-- [ ] Type audit table in `types.ts` updated with all v7.11.0 imports
-- [ ] Protocol maturity level updated (Level 6 → Level 6+ with task-dimensional vocabulary)
-- [ ] ADR-001 collision resolution documented
-
-## 5. Non-Functional Requirements
-
-### NFR-1: Zero Breaking Changes
-
-All changes are internal type replacements. No public API surface changes. No new routes, no changed response shapes. External consumers see identical behavior.
-
-### NFR-2: Backward Compatibility
-
-- `DixieReputationAggregate.task_cohorts` remains optional (backward compatible with pre-task-type aggregates)
-- Hash chain fields on `ScoringPathLog` are optional per Hounfour schema (existing logs without hashes remain valid)
-- `confidence_threshold` on `TaskTypeCohort` has a default value (30) — existing cohorts without it are valid
-
-### NFR-3: Test Coverage
-
-- All existing 1011+ tests must pass unchanged
-- New tests for: hash chain computation, chain integrity, typed event construction, open enum validation
-- Minimum 3 test scenarios per new feature per EDD policy
-
-## 6. Technical Constraints
-
-| Constraint | Detail |
-|---|---|
-| Hounfour version | v7.11.0 (local: `file:../../loa-hounfour`) |
-| Import barrels | `@0xhoneyjar/loa-hounfour/governance` (primary), root barrel for aliased exports |
-| ADR-001 compliance | Use `GovernanceTaskType` alias when importing from root barrel; unaliased from governance sub-package |
-| ADR-004 compliance | TaskType assigned exogenously by routing layer — Dixie already compliant (no changes needed) |
-| Hash algorithm | SHA-256 via `@noble/hashes` (browser-compatible, not `node:crypto`) |
-| Canonicalization | RFC 8785 (JSON Canonicalization Scheme) for deterministic hash inputs |
-| Native enforcement | Constraints with `expression: "true"` sentinel require runtime validation per ADR-002 |
-
-## 7. Scope
-
-### In Scope
-
-- Replace 4 local type definitions with canonical hounfour imports
-- Implement scoring path hash chain audit trail
-- Extend conformance suite with governance schemas
-- Update type audit documentation
-- Add tests for all new functionality
-
-### Out of Scope
-
-- E2E cross-system integration (loa-finn#66 Sprint B — separate cycle)
-- Production deployment (loa-finn#66 Sprint C — separate cycle)
-- NFT personality surfacing (loa-finn#66 Sprint D — separate cycle)
-- Event sourcing full implementation (`reconstructAggregateFromEvents()` remains stub — requires persistence layer design)
-- Community TaskType registry infrastructure (ADR-003 Tier 2 — future governance feature)
-- New API endpoints or route changes
-
-## 8. Risks & Mitigations
-
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| Type shape mismatch between local stubs and hounfour schemas | Low | Medium | Migration analysis confirmed compatibility; hounfour types are supersets |
-| Hash chain performance overhead | Low | Low | Hash is computed once per scoring decision (~1ms); not on hot path |
-| `@noble/hashes` dependency | Low | Low | Already a transitive dependency of hounfour; no new dep for Dixie |
-| Open enum allowing unexpected community types | Medium | Low | Protocol types validated at schema level; community pattern validated by regex |
-| Conformance suite expansion increases test time | Low | Low | Governance schemas are small; marginal test time increase |
-
-## 9. Dependencies
-
-| Dependency | Type | Status |
-|---|---|---|
-| `@0xhoneyjar/loa-hounfour` v7.11.0 | Local package | Available at `../../loa-hounfour` |
-| `@noble/hashes` | Transitive (via hounfour) | Already installed |
-| Hounfour ADR-001 (barrel precedence) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-002 (native enforcement sentinel) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-003 (TaskType governance) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-004 (exogenous task type) | Meta-constraint | Already compliant |
-| Hounfour ADR-005 (enum governance) | Convention | Published in hounfour docs/adr/ |
-
-## 10. Estimated Effort
-
-| Sprint | Focus | Tasks (est.) |
-|---|---|---|
-| Sprint 1 | Type migration (FR-1 through FR-4) + type audit (FR-7) | 5-7 |
-| Sprint 2 | Hash chain implementation (FR-5) + conformance (FR-6) + hardening | 5-7 |
-
-**Estimated: 2 sprints.** This is a focused adoption cycle — all types are already designed and tested in hounfour. The work is mechanical replacement plus one new feature (hash chain).
+> Sources: Bridgebuilder Review PR #25 §III (BB-MED-002), NOTES.md deferred items,
+> loa-dixie #22, Bridgebuilder Meditation Part I (constitutional court metaphor)
 
 ---
 
-*This PRD scopes the narrow adoption of loa-hounfour v7.11.0 into loa-dixie, replacing local type stubs with canonical protocol imports and implementing the scoring path hash chain audit trail. Broader launch readiness items from loa-finn#66 are deferred to subsequent cycles.*
+## 2. Vision
+
+Transform Dixie from a governance protocol with ephemeral state into an **institutional memory** — a durable court of record where every governance transition is remembered, every invariant verification is auditable, and knowledge itself becomes a governed resource.
+
+By the end of cycle-009:
+- Governance state survives process restarts (PostgreSQL)
+- Every governance action has a durable audit trail
+- Knowledge freshness is a governed resource (the third witness)
+- The governance isomorphism is proven with 3 concrete implementations
+- DynamicContract adoption enables capability evolution
+- The foundation for x402 economic integration exists
+
+---
+
+## 3. Goals & Success Metrics
+
+| Goal | Metric | Target |
+|------|--------|--------|
+| Durable governance state | PostgreSQL ReputationStore passes all existing tests | 100% pass rate |
+| Audit completeness | ReputationService.auditTrail returns real entries | >0 entries per governance action |
+| Third witness | KnowledgeAggregate implements GovernedResource<T> | Verified via GovernorRegistry |
+| Capability evolution | DynamicContract state transitions functional | All 4 contract states reachable |
+| Test coverage | Total app tests | ≥1400 (from current 1307) |
+| Invariant count | Declared invariants in invariants.yaml | ≥10 (from current 8) |
+
+---
+
+## 4. Functional Requirements
+
+### Tier 1 — Court of Record (Persistence Foundation)
+
+These requirements make governance durable. Without them, the governance protocol is a sandcastle.
+
+#### FR-1: PostgreSQL ReputationStore
+
+**Priority**: P0 — Everything else depends on this
+
+Implement a PostgreSQL-backed `ReputationStore` that passes all existing tests. The `InMemoryReputationStore` interface is the contract; the PostgreSQL adapter is the production implementation.
+
+| Capability | Implementation |
+|-----------|---------------|
+| `get(nftId)` | `SELECT` from reputation_aggregates |
+| `put(nftId, aggregate)` | `UPSERT` with version check (optimistic concurrency) |
+| `transact(fn)` | PostgreSQL `BEGIN/COMMIT/ROLLBACK` |
+| `getTaskCohort(nftId)` | `SELECT` from task_cohorts |
+| `putTaskCohort(nftId, cohort)` | `UPSERT` with composite key |
+| `appendEvent(nftId, event)` | `INSERT` into reputation_events (append-only) |
+| `getEvents(nftId)` | `SELECT` ordered by sequence |
+
+**Acceptance Criteria**:
+- All 1307 existing tests pass with PostgreSQL store (integration test mode)
+- `transact()` provides true ACID guarantees
+- Optimistic concurrency via version column prevents lost updates
+- Connection pooling (pg-pool or equivalent)
+- Migration scripts for schema creation
+
+> Source: NOTES.md deferred item "PostgreSQL ReputationStore",
+> Bridgebuilder Meditation Part II §Gap 2 (transaction boundaries)
+
+#### FR-2: Durable Mutation Log
+
+**Priority**: P0
+
+Implement `MutationLogPersistence` (interface already exists in `governance-mutation.ts`) with PostgreSQL backing. Every governance mutation — every state transition, every invariant check, every actor action — gets a durable record.
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `mutation_id` | UUID | Idempotency key |
+| `session_id` | UUID | INV-007 session scoping |
+| `actor_id` | string | Who initiated this action |
+| `resource_type` | string | Which governed resource |
+| `mutation_type` | string | What kind of change |
+| `payload` | JSONB | The mutation details |
+| `created_at` | timestamptz | When it happened |
+
+**Acceptance Criteria**:
+- `MutationLogPersistence.append()` durably stores mutations
+- `MutationLogPersistence.query()` retrieves by session, actor, or resource
+- INV-007 (session-scoped governance) verified against durable log
+- Mutation log participates in `transact()` boundary (same PostgreSQL transaction)
+
+> Source: governance-mutation.ts MutationLogPersistence interface,
+> Bridgebuilder Review PR #25 §III (BB-MED-002: placeholder audit trails)
+
+#### FR-3: Complete Audit Trail on ReputationService
+
+**Priority**: P1
+
+Replace the empty `auditTrail` on ReputationService with a real `AuditTrail` that records every governance action. Each `processEvent()` call should produce an audit entry with hash chain integrity.
+
+**Acceptance Criteria**:
+- `reputationService.auditTrail.entries.length > 0` after any event processing
+- Audit entries hash-chain linked (each entry references previous hash)
+- `verifyAuditTrailIntegrity()` passes on the populated trail
+- Audit trail participates in cross-chain verification with ScoringPathTracker
+
+> Source: Bridgebuilder Review PR #25 §III (BB-MED-002),
+> Bridgebuilder Meditation Part II §Gap 5 (dual-chain as defense-in-depth)
+
+---
+
+### Tier 2 — The Third Witness (Knowledge Governance)
+
+These requirements prove the governance isomorphism by implementing GovernedResource<T> for the knowledge domain — the third concrete witness after reputation and scoring-path.
+
+#### FR-4: KnowledgeAggregate Type
+
+**Priority**: P1
+
+Define `KnowledgeAggregate` as a governed state type with freshness tracking, citation chains, and corpus metadata. This is the `TState` parameter for the knowledge GovernedResource.
+
+```
+KnowledgeAggregate:
+  corpus_id: string
+  freshness_state: 'fresh' | 'aging' | 'stale' | 'expired'
+  source_count: number
+  citation_count: number
+  last_ingested: timestamp
+  freshness_score: number (0-1, decays over time)
+  dimension_scores: { accuracy, coverage, recency }
+```
+
+**Acceptance Criteria**:
+- KnowledgeAggregate type defined in types/knowledge-governance.ts
+- State machine transitions: `fresh → aging → stale → expired` (time-based)
+- Reverse transition: `expired → fresh` (on re-ingestion)
+- Aligns with existing corpus-meta.ts patterns
+
+> Source: Bridgebuilder Meditation Part III (knowledge as GovernedResource),
+> ADR: Dixie Enrichment Tier (Proposed status)
+
+#### FR-5: Knowledge GovernedResource Implementation
+
+**Priority**: P1
+
+Implement `GovernedResource<KnowledgeAggregate, KnowledgeEvent, KnowledgeInvariant>` as a service that governs knowledge freshness, citation integrity, and corpus health.
+
+| Method | Behavior |
+|--------|----------|
+| `transition(event, actorId)` | Process ingest/decay/citation/retraction events |
+| `verify('freshness_bound')` | Check that freshness_score reflects actual age |
+| `verify('citation_integrity')` | Verify citation chain is consistent |
+| `verifyAll()` | All knowledge invariants |
+
+**Acceptance Criteria**:
+- Registered in GovernorRegistry as `resourceType: 'knowledge'`
+- `GovernorRegistry.verifyAllResources()` returns results for 3 resource types
+- GovernedResourceBase can be extended (or confirm interface-only is correct)
+- Freshness decay computed via time-based formula
+- At least 2 invariants declared in invariants.yaml
+
+> Source: Bridgebuilder Meditation Part III §Architecture Proposal,
+> NOTES.md deferred item "GovernedResource for knowledge",
+> Bridgebuilder Review PR #25 BB-SPEC-001 (meta-governor)
+
+#### FR-6: Knowledge Invariants (INV-009, INV-010)
+
+**Priority**: P1
+
+Declare knowledge-domain invariants in invariants.yaml:
+
+- **INV-009**: Freshness Bound — `freshness_score` decreases monotonically between ingestion events
+- **INV-010**: Citation Integrity — every citation references an existing source
+
+**Acceptance Criteria**:
+- Both invariants declared in invariants.yaml with category, properties, verified_in
+- `knowledgeService.verify('INV-009')` returns InvariantResult
+- `knowledgeService.verify('INV-010')` returns InvariantResult
+- Integration test exercises both
+
+> Source: Bridgebuilder Meditation Part III (knowledge invariants),
+> conservation-laws.ts pattern (formal invariant declarations)
+
+---
+
+### Tier 3 — Capability Evolution (DynamicContract)
+
+These requirements adopt the DynamicContract pattern from Hounfour commons, enabling governed capability progression.
+
+#### FR-7: DynamicContract Adoption
+
+**Priority**: P2
+
+Adopt Hounfour's `DynamicContract` type for tracking agent capability evolution. The contract tracks what capabilities an agent has earned (e.g., tool use, autonomous mode, soul memory access) and how those capabilities expand as reputation progresses.
+
+| Contract State | Meaning | Transition Trigger |
+|---------------|---------|-------------------|
+| `negotiating` | New agent, capabilities being determined | First access |
+| `active` | Capabilities defined and enforced | Reputation threshold met |
+| `expanding` | New capabilities being added | Tier progression |
+| `suspended` | Capabilities frozen pending review | Quarantine |
+
+**Acceptance Criteria**:
+- `DynamicContract` state transitions managed via state-machine.ts
+- Contract state persisted in PostgreSQL (new table)
+- Capability expansion is monotonic within a tier (INV-011)
+- Contract suspension triggers quarantine pathway
+
+> Source: NOTES.md deferred item "Dynamic contract negotiation",
+> Hounfour commons DynamicContract type
+
+#### FR-8: Capability-Gated Access Enforcement
+
+**Priority**: P2
+
+Extend `evaluateEconomicBoundaryCanonical()` to check DynamicContract capabilities alongside conviction tier and reputation. An agent needs: correct tier + sufficient reputation + active contract with required capability.
+
+**Acceptance Criteria**:
+- `EconomicBoundaryOptions` extended with `dynamicContract` field
+- Access denied if required capability not in active contract
+- Scoring path records capability check result
+- Backward compatible: missing contract defaults to legacy behavior
+
+> Source: loa-finn #31 (5-pool model routing),
+> Bridgebuilder Meditation Part III §Multi-Model Permission Landscape
+
+---
+
+### Tier 4 — Self-Improvement (Adaptive Learning)
+
+These requirements upgrade the autopoietic loop from self-observing to self-improving.
+
+#### FR-9: Adaptive Exploration (UCB1)
+
+**Priority**: P2
+
+Replace fixed ε-greedy exploration with Upper Confidence Bound (UCB1) algorithm. UCB1 naturally balances exploration and exploitation: it explores models with high uncertainty, exploits models with high confidence. When a new model enters the catalog, its uncertainty is maximum, so it gets explored immediately.
+
+```
+UCB1_score(model) = mean_quality + c * sqrt(ln(total_observations) / model_observations)
+```
+
+**Acceptance Criteria**:
+- `ExplorationConfig` extended with `strategy: 'epsilon-greedy' | 'ucb1'`
+- UCB1 naturally decreases exploration as confidence grows
+- UCB1 resets exploration for new models (high uncertainty)
+- Seeded PRNG still used for tie-breaking (deterministic tests)
+- Backward compatible: default strategy remains `epsilon-greedy`
+
+> Source: Bridgebuilder Review PR #25 §Thread 2 (adaptive epsilon question),
+> Bridgebuilder Meditation Part III §Autopoietic Loop (exploitation trap)
+
+#### FR-10: Dimension Covariance Tracking
+
+**Priority**: P3
+
+Extend `CollectionScoreAggregator` with streaming covariance estimation between quality dimensions. This reveals dimension correlations — e.g., models that score high on accuracy but low on coherence.
+
+**Acceptance Criteria**:
+- `CollectionScoreAggregator` tracks pairwise covariance between dimensions
+- Covariance updates are O(1) per observation (streaming)
+- Serialization round-trips include covariance data
+- At least one test verifies that correlated dimensions produce expected covariance
+
+> Source: Bridgebuilder Review PR #25 BB-SPEC-002 (streaming covariance)
+
+---
+
+### Tier 5 — Integration & Hardening
+
+#### FR-11: GovernorRegistry Unification
+
+**Priority**: P1
+
+Fix GovernorRegistry.size double-counting (BB-MED-003). Unify the two registration paths (legacy ResourceGovernor + new GovernedResource) or provide separate counts.
+
+**Acceptance Criteria**:
+- `registry.size` returns accurate count with no double-counting
+- Either unified Map or separate `governorCount` + `resourceCount` properties
+- Existing GovernorRegistry tests pass
+
+> Source: Bridgebuilder Review PR #25 BB-MED-003
+
+#### FR-12: Three-Resource Integration Test
+
+**Priority**: P1
+
+End-to-end integration test exercising the complete governance lifecycle across all three GovernedResource implementations (reputation, scoring-path, knowledge).
+
+**Acceptance Criteria**:
+- Single test file: `autopoietic-loop-v3.test.ts`
+- Exercises: create → transition → verify → audit for each resource type
+- GovernorRegistry.verifyAllResources() returns all 3 resource types
+- Cross-resource invariant: knowledge freshness decay rate influenced by reputation score
+- Minimum 10 tests
+
+> Source: loa-finn #66 §Gap Analysis (cross-system E2E smoke test),
+> Bridgebuilder Review PR #25 §Thread 4 (uniform health check surface)
+
+#### FR-13: Database Migration Framework
+
+**Priority**: P0
+
+Lightweight migration system for PostgreSQL schema management. Each migration is a numbered SQL file. Migrations run forward only (no rollback — use additive migrations).
+
+**Acceptance Criteria**:
+- `migrations/` directory with numbered SQL files
+- `migrate()` function runs pending migrations
+- Migration state tracked in `_migrations` table
+- At least 3 migrations: schema creation, reputation tables, mutation tables
+
+---
+
+## 5. Non-Functional Requirements
+
+| Requirement | Target | Rationale |
+|-------------|--------|-----------|
+| PostgreSQL compatibility | ≥15 | Current LTS |
+| Connection pool size | 5-20 (configurable) | Prevent connection exhaustion |
+| Transaction timeout | 5s default | Prevent long-held locks |
+| Migration idempotency | Re-running is safe | Operational simplicity |
+| Audit trail integrity verification | <100ms for 1000 entries | Practical health checks |
+| Zero breaking changes to existing API | 100% | Existing consumers unaffected |
+
+---
+
+## 6. Architecture Constraints
+
+| Constraint | Rationale |
+|-----------|-----------|
+| PostgreSQL store must implement existing `ReputationStore` interface exactly | All 1307 tests must pass without modification |
+| Knowledge GovernedResource must use Hounfour commons types | Protocol alignment (INV-008) |
+| DynamicContract must come from `@0xhoneyjar/loa-hounfour/commons` | Single source of truth |
+| Migrations must be forward-only (no rollback scripts) | Additive schema evolution matches DynamicContract monotonicity |
+| UCB1 must be optional, not default | Backward compatibility with existing ε-greedy behavior |
+
+---
+
+## 7. Scope
+
+### In Scope (Cycle-009)
+- PostgreSQL persistence layer (reputation, mutations, audit)
+- Knowledge as GovernedResource<T> (third witness)
+- DynamicContract adoption
+- Adaptive exploration (UCB1 option)
+- Dimension covariance tracking
+- GovernorRegistry unification
+- Database migration framework
+- Three-resource integration test
+
+### Out of Scope (Future Cycles)
+- Redis caching layer for hot-path reads
+- GovernedResource for billing (depends on loa-freeside x402 readiness)
+- GovernedResource for access (depends on DynamicContract maturity)
+- Meta-governance protocol (constitutional amendment process — BB-SPEC-001)
+- Cross-repo invariant composition (requires multi-repo GovernedResource adoption)
+- MCP interface surface (loa-dixie #18 — separate cycle)
+- Soul Memory full implementation (ADRs are Proposed, not yet Accepted)
+
+### Explicitly Deferred
+- **Meta-governance (BB-SPEC-001)**: Governance of governance itself. Requires at least 3 mature GovernedResource implementations before the meta-layer adds value. Cycle-009 provides the 3rd witness; cycle-010 can build the meta-layer.
+- **x402 integration**: loa-freeside #91/#98 are in progress. The conservation laws are ready. Integration depends on freeside's payment rail activation.
+- **Production deployment**: This cycle focuses on making governance *durable*. Production deployment (Dockerfile, fly.toml, monitoring) is a separate concern.
+
+---
+
+## 8. Risks & Mitigations
+
+| Risk | Impact | Likelihood | Mitigation |
+|------|--------|------------|------------|
+| PostgreSQL adapter introduces performance regression | Tests slow, CI friction | Medium | Run integration tests with PostgreSQL in Docker; keep in-memory for unit tests |
+| Knowledge GovernedResource doesn't fit the protocol cleanly | Forces protocol changes | Low | Protocol was designed for this; GovernedResourceBase exists for shared wiring |
+| DynamicContract from hounfour has breaking changes | Requires adaptation | Low | Pin to v8.2.0; hounfour is stable |
+| UCB1 exploration changes routing behavior | Unexpected model selection | Low | Default remains ε-greedy; UCB1 is opt-in |
+| Migration framework adds operational complexity | Deployment friction | Medium | Keep migrations simple (additive SQL); document runbook |
+
+---
+
+## 9. Dependencies
+
+| Dependency | Status | Risk |
+|-----------|--------|------|
+| `@0xhoneyjar/loa-hounfour@8.2.0` | Available (symlink) | None |
+| PostgreSQL 15+ | Requires Docker for CI | Low |
+| `pg` npm package | Standard, well-maintained | None |
+| DynamicContract from hounfour/commons | Available in v8.2.0 | None |
+| Existing 1307 tests | Pass on main | None |
+
+---
+
+## 10. Success Definition
+
+Cycle-009 succeeds when:
+
+1. A process restart no longer destroys governance state
+2. Every governance action has a durable, hash-chained audit entry
+3. Knowledge is the third GovernedResource, proving the isomorphism with 3 witnesses
+4. The GovernorRegistry can verify all 3 resource types in a single call
+5. DynamicContract enables capability evolution for agents
+6. The exploration mechanism can adapt to model catalog changes
+7. All existing tests pass without modification
+8. ≥10 invariants are declared in invariants.yaml
+
+Or, in the Bridgebuilder's language: **the court reporter takes their seat, and the courthouse can finally prove what happened last Tuesday.**
+
+---
+
+## 11. Estimated Sprints
+
+| Sprint | Focus | Key FRs |
+|--------|-------|---------|
+| **Sprint 1** | Database Foundation | FR-1 (PostgreSQL Store), FR-13 (Migrations) |
+| **Sprint 2** | Durable Governance | FR-2 (Mutation Log), FR-3 (Audit Trail) |
+| **Sprint 3** | Knowledge Governance | FR-4 (KnowledgeAggregate), FR-5 (GovernedResource), FR-6 (Invariants) |
+| **Sprint 4** | Capability Evolution | FR-7 (DynamicContract), FR-8 (Capability-Gated Access) |
+| **Sprint 5** | Self-Improvement | FR-9 (UCB1), FR-10 (Covariance) |
+| **Sprint 6** | Integration & Hardening | FR-11 (Registry), FR-12 (Three-Resource Test) |
+
+Estimated: 6 sprints, ~36 tasks, ~87-92 global sprint IDs
+
+---
+
+*"A court without records is not a court. The code knows this. It built the interfaces,
+designed the persistence, drafted the architecture. It just needs permission to remember."*
+
+*— Bridgebuilder Review, PR #25*

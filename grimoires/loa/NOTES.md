@@ -4,46 +4,53 @@
 
 | Field | Value |
 |-------|-------|
-| **Active Task** | Cycle-005: Hounfour v7.11.0 Full Adoption |
-| **Status** | PRD written, awaiting `/architect` → `/sprint-plan` |
+| **Active Task** | Cycle-009: Institutional Memory — Durable Governance, Knowledge Sovereignty & the Court of Record |
+| **Status** | PRD v9.0.0 written. Ready for `/architect` (SDD) |
 | **Blocked By** | None |
-| **Next Action** | `/architect` to create SDD, then `/sprint-plan` |
-| **Previous** | Cycle-004 archived (v2.0.0 release); PRD v4.0.0 archived to `archive/2026-02-24-v2-0-0-release/` |
+| **Next Action** | `/architect` to create SDD v9.0.0 |
+| **Previous** | Cycle-008 (Governance Isomorphism, GovernedResource<T>); Cycle-007 (Hounfour v8.2.0); Cycle-006 archived |
 
 ## Session Log
 
 | Timestamp | Event | Details |
 |-----------|-------|---------|
-| 2026-02-24T00:00:00Z | Session started | `/plan-and-analyze` for hounfour v7.11.0 adoption per loa-finn#66 |
-| 2026-02-24T00:05:00Z | Context ingested | loa-finn#66 (Launch Readiness RFC), hounfour CHANGELOG v7.10.0–v7.11.0 |
-| 2026-02-24T00:10:00Z | Migration analysis | 5 files, 3 critical type replacements, 1 new feature (hash chain) |
-| 2026-02-24T00:15:00Z | Scope confirmed | Narrow: hounfour v7.11.0 adoption only (not broader launch readiness) |
-| 2026-02-24T00:20:00Z | Strategic decisions | Full hash chain impl (not types-only), open enum adoption (not fixed set) |
-| 2026-02-24T00:25:00Z | PRD v5.0.0 written | 7 FRs, 2 estimated sprints, cycle-005 registered in ledger |
+| 2026-02-26T00:00:00Z | Session started | Cycle-009 PRD discovery via `/plan-and-analyze` |
+| 2026-02-26T00:01:00Z | Context gathered | PR #15 meditations, PR #25 review, 12+ ecosystem references |
+| 2026-02-26T00:05:00Z | PRD v9.0.0 written | 13 FRs across 5 tiers, 6 estimated sprints |
+| 2026-02-26T00:06:00Z | Ledger updated | cycle-009 registered, active_cycle set |
 
 ## Decisions
 
 | ID | Decision | Reasoning | Date |
 |----|----------|-----------|------|
-| D-012 | Narrow scope: v7.11.0 adoption only | Launch readiness items (E2E, deployment) are separate cycles per loa-finn#66 sprint sequence | 2026-02-24 |
-| D-013 | Full hash chain implementation | User chose runtime impl over types-only; completes economic boundary observability | 2026-02-24 |
-| D-014 | Open enum TaskType (ADR-003 compliant) | User chose community-extensible namespace:type pattern; future-proofs for community task types | 2026-02-24 |
+| D-019 | PostgreSQL persistence as P0 foundation | Every deferred item and BB finding points to ephemeral state as the blocker | 2026-02-26 |
+| D-020 | Knowledge as 3rd GovernedResource witness | GovernedResourceBase exists unused; 3 implementations prove isomorphism | 2026-02-26 |
+| D-021 | UCB1 as opt-in alternative to ε-greedy | Adaptive exploration addresses exploitation trap; backward compatible | 2026-02-26 |
+| D-022 | Forward-only migrations (no rollback) | Matches DynamicContract monotonic expansion philosophy | 2026-02-26 |
+| D-023 | Meta-governance deferred to cycle-010 | Needs 3 mature GovernedResource implementations first | 2026-02-26 |
 
-## Key Migration Surface
+## Cycle-008 Observations (Carried Forward)
 
-| Local Type | File | Lines | Hounfour Replacement | Status |
-|---|---|---|---|---|
-| `TaskType` | types/reputation-evolution.ts | 36-45 | `@0xhoneyjar/loa-hounfour/governance` | Pending |
-| `TaskTypeCohort` | types/reputation-evolution.ts | 62-65 | `@0xhoneyjar/loa-hounfour/governance` | Pending |
-| `ReputationEvent` | types/reputation-evolution.ts | 104-111 | `@0xhoneyjar/loa-hounfour/governance` | Pending |
-| `ScoringPathLog` | types/reputation-evolution.ts | 122-129 | `@0xhoneyjar/loa-hounfour/governance` | Pending |
+| Observation | Detail |
+|-------------|--------|
+| **Governance isomorphism** | GovernedResource<TState, TEvent, TInvariant> unifies reputation and scoring-path. 2 witnesses proven. |
+| **Welford's online algorithm** | CollectionScoreAggregator with numerically stable running mean/variance. |
+| **Cross-chain verification** | Two independent hash chains verified against each other. Divergence triggers quarantine. |
+| **Transaction boundaries** | InMemoryReputationStore.transact() provides snapshot/restore rollback. |
+| **ε-greedy exploration** | ExplorationConfig with Mulberry32 seeded PRNG prevents exploitation trap. |
+| **Multi-dimensional blending** | Per-dimension EMA dampening stored in DixieReputationAggregate.dimension_scores. |
 
-## Hounfour Delta Summary (v7.9.2 → v7.11.0)
+### Bridgebuilder Review Findings (PR #25)
 
-- **v7.10.0**: Task-dimensional reputation vocabulary (upstreamed from Dixie)
-- **v7.10.1**: Native enforcement metadata, shared COHORT_BASE_FIELDS, ADR-001/002
-- **v7.11.0**: Hash chain audit trail, @governance enum annotations, ADR-003/004/005
-- **Total**: 261 files changed, +4671/-685 lines, 5 ADRs, 22+ conformance vectors
+| ID | Severity | Finding | Status |
+|----|----------|---------|--------|
+| BB-MED-001 | MEDIUM | GovernedResourceBase unused | Addressed by FR-5 (knowledge extends it) |
+| BB-MED-002 | MEDIUM | auditTrail placeholder on ReputationService | Addressed by FR-3 |
+| BB-MED-003 | MEDIUM | GovernorRegistry.size double-counts | Addressed by FR-11 |
+| BB-LOW-001 | LOW | createPRNG() per-call in production | Deferred (minor) |
+| BB-LOW-002 | LOW | ExplorationConfig warmup is absolute count | Partially addressed by FR-9 (UCB1) |
+| BB-SPEC-001 | SPECULATION | Meta-governor (governance of governance) | Deferred to cycle-010 |
+| BB-SPEC-002 | SPECULATION | Streaming covariance for dimension correlations | Addressed by FR-10 |
 
 ## Blockers
 
@@ -57,21 +64,21 @@ _None identified yet_
 
 | ID | Learning | Source | Date |
 |----|----------|--------|------|
-| L-012 | Dixie's local reputation types were upstreamed to hounfour v7.10.0 — adopting canonical imports closes the loop | CHANGELOG analysis | 2026-02-24 |
-| L-013 | Hounfour ADR-001 uses `GovernanceTaskType` alias at root barrel to avoid core/governance collision | src/index.ts:71-78 | 2026-02-24 |
-| L-014 | Native enforcement sentinel `expression: "true"` signals constraints that require runtime validation beyond DSL v1.0 | ADR-002 | 2026-02-24 |
-| L-015 | Hash chain uses @noble/hashes (browser-compatible) + RFC 8785 canonical JSON, not node:crypto | scoring-path-hash.ts | 2026-02-24 |
+| L-021 | InMemoryReputationStore.transact() interface is exactly right for PostgreSQL — swap implementation, keep contract | cycle-008 implementation | 2026-02-26 |
+| L-022 | GovernedResourceBase exists for a reason — the 3rd witness was always planned | governed-resource.ts:88 | 2026-02-26 |
+| L-023 | Forward-only migrations align with DynamicContract's monotonic expansion principle | architectural alignment | 2026-02-26 |
 
 ## Session Continuity
 
-**Recovery Anchor**: PRD complete. Next step: `/architect` for SDD, then `/sprint-plan`.
+**Recovery Anchor**: PRD v9.0.0 written. Ready for `/architect` → SDD → `/sprint-plan`.
 
 **Key Context**:
-- Cycle: cycle-005 (Hounfour v7.11.0 Full Adoption)
-- PRD: `grimoires/loa/prd.md` v5.0.0
-- Ledger: active_cycle set to cycle-005
-- Hounfour: v7.11.0 at `../../loa-hounfour`
-- Scope: 7 FRs, 2 estimated sprints
-- Branch: `feature/v2.0.0-excellence` (will need new feature branch)
+- Cycle: cycle-009 (Institutional Memory — Durable Governance)
+- PRD: `grimoires/loa/prd.md` v9.0.0
+- SDD: Not yet created
+- Sprint Plan: Not yet created
+- Ledger: active_cycle=cycle-009, global_sprint_counter=72
+- Hounfour: v8.2.0 at `../../loa-hounfour`
+- Branch: main (will need new feature branch)
 
-**If resuming**: Run `/architect` to create SDD based on PRD v5.0.0.
+**If resuming**: Run `/architect` to create SDD v9.0.0
