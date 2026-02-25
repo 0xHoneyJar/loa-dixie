@@ -124,3 +124,48 @@ invariants:
         file: ".claude/adapters/tests/test_trust_scopes.py"
         symbol: "TestTrustScopesSchema"
         note: "Validates all models have complete trust_scopes declarations"
+
+  - id: INV-006
+    description: "Feedback dampening — model_performance feedback loop is bounded by EMA dampening. Score cannot jump more than alpha_max * delta per observation, preventing runaway convergence or death spirals in the autopoietic loop."
+    severity: important
+    category: bounded
+    properties:
+      - "For any observation: |dampened_score - old_score| <= ALPHA_MAX * |new_score - old_score|"
+      - "alpha = ALPHA_MIN + (ALPHA_MAX - ALPHA_MIN) * min(1, sample_count / RAMP)"
+      - "Cold start (null old_score) returns new_score directly (no dampening)"
+      - "Repeated identical observations converge to that value"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/reputation-service.ts"
+        symbol: "computeDampenedScore"
+        note: "Pure EMA function with alpha ramp from ALPHA_MIN to ALPHA_MAX"
+      - repo: loa-dixie
+        file: "app/src/services/reputation-service.ts"
+        symbol: "handleModelPerformance"
+        note: "Uses computeDampenedScore instead of raw score assignment"
+      - repo: loa-dixie
+        file: "app/src/services/reputation-service.ts"
+        symbol: "handleQualitySignal"
+        note: "Consistent dampening across both score-update paths"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/feedback-dampening.test.ts"
+        symbol: "computeDampenedScore"
+        note: "8 test cases verifying EMA properties, convergence, and outlier dampening"
+
+  - id: INV-007
+    description: "Session-scoped governance — MutationLog is explicitly session-scoped with unique sessionId. Governance mutations are traceable to their originating session."
+    severity: important
+    category: traceability
+    properties:
+      - "Each MutationLog instance has a unique sessionId (UUID)"
+      - "sessionId is immutable within a session (stable across appends)"
+      - "getGovernedState().session_id links governance metadata to the active session"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/governance-mutation.ts"
+        symbol: "MutationLog"
+        note: "Session-scoped with readonly sessionId, optional MutationLogPersistence"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/governance-mutation.test.ts"
+        symbol: "MutationLog session lifecycle"
+        note: "Verifies sessionId uniqueness, stability, and governed state integration"

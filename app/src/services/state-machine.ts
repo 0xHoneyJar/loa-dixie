@@ -38,6 +38,40 @@ export interface TransitionResult {
 }
 
 /**
+ * Error thrown when a state transition is invalid.
+ *
+ * Extends Error for proper stack traces and error monitoring integration
+ * (Sentry, Datadog). Carries HTTP metadata (status, body) for backward
+ * compatibility with Hono's error handling — callers that check `err.status`
+ * and `err.body` continue to work unchanged.
+ *
+ * @since cycle-007 — Sprint 80, Task S3-T2 (Bridgebuilder error taxonomy)
+ */
+export class TransitionError extends Error {
+  readonly status: number;
+  readonly body: {
+    error: string;
+    message: string;
+    from: string;
+    to: string;
+    machine: string;
+  };
+
+  constructor(result: TransitionResult) {
+    super(result.error ?? `Invalid transition ${result.from} → ${result.to} in ${result.machine}`);
+    this.name = 'TransitionError';
+    this.status = 409;
+    this.body = {
+      error: 'invalid_transition',
+      message: result.error ?? '',
+      from: result.from,
+      to: result.to,
+      machine: result.machine,
+    };
+  }
+}
+
+/**
  * Validate a state transition against a state machine definition.
  * Returns a TransitionResult — never throws.
  */
@@ -81,16 +115,7 @@ export function assertTransition<S extends string>(
 ): void {
   const result = validateTransition(machine, from, to);
   if (!result.valid) {
-    throw {
-      status: 409,
-      body: {
-        error: 'invalid_transition',
-        message: result.error,
-        from,
-        to,
-        machine: machine.name,
-      },
-    };
+    throw new TransitionError(result);
   }
 }
 

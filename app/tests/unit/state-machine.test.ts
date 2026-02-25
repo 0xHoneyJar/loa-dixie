@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   validateTransition,
   assertTransition,
+  TransitionError,
   CircuitStateMachine,
   MemoryEncryptionMachine,
   AutonomousModeMachine,
@@ -113,14 +114,32 @@ describe('state machine validation', () => {
       expect(() => assertTransition(CircuitStateMachine, 'closed', 'open')).not.toThrow();
     });
 
-    it('throws 409 for invalid transition', () => {
+    it('throws TransitionError for invalid transition', () => {
       try {
         assertTransition(CircuitStateMachine, 'closed', 'half_open');
         expect.unreachable('Should have thrown');
       } catch (err) {
-        const e = err as { status: number; body: { error: string } };
+        expect(err).toBeInstanceOf(TransitionError);
+        expect(err).toBeInstanceOf(Error);
+        const e = err as TransitionError;
         expect(e.status).toBe(409);
         expect(e.body.error).toBe('invalid_transition');
+        expect(e.name).toBe('TransitionError');
+        expect(e.message).toContain('Invalid transition');
+        // Stack trace available (Error subclass)
+        expect(e.stack).toBeDefined();
+      }
+    });
+
+    it('TransitionError carries from/to/machine in body (Hono backward compat)', () => {
+      try {
+        assertTransition(CircuitStateMachine, 'open', 'closed');
+        expect.unreachable('Should have thrown');
+      } catch (err) {
+        const e = err as TransitionError;
+        expect(e.body.from).toBe('open');
+        expect(e.body.to).toBe('closed');
+        expect(e.body.machine).toBe('CircuitState');
       }
     });
   });
