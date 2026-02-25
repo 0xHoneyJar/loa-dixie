@@ -4,11 +4,22 @@
  * Validates state transitions at runtime — invalid transitions rejected with 409.
  * Transition maps for: CircuitState, MemoryEncryptionState, AutonomousMode, ScheduleLifecycle.
  *
+ * v8.2.0 (cycle-007): Each state machine is now also expressed as a
+ * `StateMachineConfig` from commons, alongside the existing concise record
+ * format. The `toStateMachineConfig()` helper converts from the record format.
+ * Existing public API (validateTransition, assertTransition) unchanged.
+ *
  * See: SDD §13.2 (Hounfour state machines), PRD FR-9 (Level 2 targets)
+ * @since cycle-007 — Sprint 76, Tasks S4-T1, S4-T2, S4-T3
  */
 
 import type { CircuitState as HounfourCircuitState } from '@0xhoneyjar/loa-hounfour/core';
 import { isValidTransition } from '@0xhoneyjar/loa-hounfour/core';
+import type {
+  StateMachineConfig,
+  State,
+  Transition,
+} from '@0xhoneyjar/loa-hounfour/commons';
 
 /** Generic state machine definition */
 export interface StateMachine<S extends string> {
@@ -153,3 +164,83 @@ export const ScheduleLifecycleMachine: StateMachine<ScheduleState> = {
     failed: ['pending', 'cancelled'], // can retry
   },
 };
+
+// ---------------------------------------------------------------------------
+// StateMachineConfig Conversion (S4-T1) — commons format alongside records
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a concise record-format state machine to a commons StateMachineConfig.
+ * Executed once at module load — zero runtime overhead per transition.
+ *
+ * @since cycle-007 — Sprint 76, Task S4-T1
+ */
+export function toStateMachineConfig<S extends string>(
+  machine: StateMachine<S>,
+  terminalStates: S[],
+): StateMachineConfig {
+  return {
+    states: toStates(machine),
+    transitions: toTransitions(machine),
+    initial_state: machine.initial,
+    terminal_states: terminalStates,
+  };
+}
+
+/**
+ * Extract unique State[] from a StateMachine's transition record.
+ * @since cycle-007 — Sprint 76, Task S4-T1
+ */
+function toStates<S extends string>(machine: StateMachine<S>): State[] {
+  const stateNames = new Set<string>();
+  for (const from of Object.keys(machine.transitions)) {
+    stateNames.add(from);
+    for (const to of machine.transitions[from as S]) {
+      stateNames.add(to);
+    }
+  }
+  return Array.from(stateNames).map((name) => ({ name }));
+}
+
+/**
+ * Convert a transition record to commons Transition[].
+ * Handles self-loops and terminal states (empty target arrays).
+ * @since cycle-007 — Sprint 76, Task S4-T1
+ */
+function toTransitions<S extends string>(machine: StateMachine<S>): Transition[] {
+  const result: Transition[] = [];
+  for (const from of Object.keys(machine.transitions) as S[]) {
+    for (const to of machine.transitions[from]) {
+      result.push({ from, to });
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// StateMachineConfig Instances (S4-T2)
+// ---------------------------------------------------------------------------
+
+/** Commons StateMachineConfig for the circuit breaker. */
+export const CIRCUIT_STATE_CONFIG: StateMachineConfig = toStateMachineConfig(
+  CircuitStateMachine,
+  [], // no terminal states — circuit always recoverable
+);
+
+/** Commons StateMachineConfig for memory encryption. */
+export const MEMORY_ENCRYPTION_CONFIG: StateMachineConfig = toStateMachineConfig(
+  MemoryEncryptionMachine,
+  [], // no terminal states — always reversible
+);
+
+/** Commons StateMachineConfig for autonomous mode. */
+export const AUTONOMOUS_MODE_CONFIG: StateMachineConfig = toStateMachineConfig(
+  AutonomousModeMachine,
+  [], // no terminal states — can always re-enable
+);
+
+/** Commons StateMachineConfig for schedule lifecycle. */
+export const SCHEDULE_LIFECYCLE_CONFIG: StateMachineConfig = toStateMachineConfig(
+  ScheduleLifecycleMachine,
+  ['completed', 'cancelled'], // terminal states
+);

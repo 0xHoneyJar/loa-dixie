@@ -38,6 +38,7 @@ import { CompoundLearningEngine } from './services/compound-learning.js';
 import { createLearningRoutes } from './routes/learning.js';
 import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
+import { protocolVersionMiddleware } from './services/protocol-version.js';
 import { KnowledgePriorityStore } from './services/knowledge-priority-store.js';
 import { ReputationService, InMemoryReputationStore } from './services/reputation-service.js';
 import { EnrichmentService } from './services/enrichment-service.js';
@@ -255,6 +256,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     xFrameOptions: 'DENY',
     referrerPolicy: 'strict-origin-when-cross-origin',
   }));
+  // --- Protocol version header (v8.2.0, Sprint 76 S4-T5) ---
+  app.use('*', protocolVersionMiddleware());
+
   app.use('/api/*', createCors(config.corsOrigins));
   app.use('/api/*', createBodyLimit(102_400)); // 100KB body limit
 
