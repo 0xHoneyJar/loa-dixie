@@ -568,13 +568,14 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-## Sprint 8 (Global 72): Bridge Convergence — Data Integrity & Infrastructure Completeness
+## Sprint 8 (Global 72): Bridge Convergence — Data Integrity & Infrastructure Completeness -- COMPLETED
 
 **Theme**: Fix transactional gaps, type safety, infrastructure deployment gaps
 **Goal**: Address all 7 convergence findings from bridge iteration 1 (score 19) — 2 HIGH, 4 MEDIUM, 1 LOW.
 **Source**: Bridgebuilder review bridge-20260226-phase3-g69to71, iteration 1
+**Review**: APPROVED (1 cycle -- zero blocking findings, 1 minor observation)
 
-### Task 8.1: Wrap appendEvent in a transaction [HIGH-1]
+### Task 8.1: Wrap appendEvent in a transaction [HIGH-1] [DONE]
 
 **Finding**: appendEvent runs INSERT + UPDATE as independent statements; event_count can drift.
 **Files**:
@@ -595,7 +596,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 8.2: Fix unsafe type cast in reconstructAggregateFromEvents [HIGH-2]
+### Task 8.2: Fix unsafe type cast in reconstructAggregateFromEvents [HIGH-2] [DONE]
 
 **Finding**: `(event as Record<string, unknown>).score` bypasses discriminated union narrowing.
 **Files**:
@@ -616,7 +617,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 8.3: Add Terraform Secrets Manager references for ES256 migration [MEDIUM-1]
+### Task 8.3: Add Terraform Secrets Manager references for ES256 migration [MEDIUM-1] [DONE]
 
 **Finding**: DIXIE_HS256_FALLBACK_SECRET and DIXIE_JWT_PREVIOUS_KEY missing from task definition.
 **Files**:
@@ -635,7 +636,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 8.4: Add database migration to docker-compose.integration.yml [MEDIUM-2]
+### Task 8.4: Add database migration to docker-compose.integration.yml [MEDIUM-2] [DONE]
 
 **Finding**: PostgreSQL starts with empty database; reputation tables not created.
 **Files**:
@@ -652,7 +653,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 8.5: Make min_sample_count configurable in reconstructAggregateFromEvents [MEDIUM-3]
+### Task 8.5: Make min_sample_count configurable in reconstructAggregateFromEvents [MEDIUM-3] [DONE]
 
 **Finding**: Hardcoded `min_sample_count = 10` should be in options.
 **Files**:
@@ -673,7 +674,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 8.6: Consolidate NftOwnershipResolver duplicate methods [MEDIUM-4]
+### Task 8.6: Consolidate NftOwnershipResolver duplicate methods [MEDIUM-4] [DONE]
 
 **Finding**: resolveNftId and resolveOwnership call the same endpoint with different return types.
 **Files**:
@@ -690,7 +691,7 @@ These continuation sprints address all remaining findings — the unfixed LOW an
 
 ---
 
-### Task 8.7: Fix ROLLBACK error shadowing in compactSnapshot [LOW-1]
+### Task 8.7: Fix ROLLBACK error shadowing in compactSnapshot [LOW-1] [DONE]
 
 **Finding**: If ROLLBACK fails, it shadows the original error.
 **Files**:
