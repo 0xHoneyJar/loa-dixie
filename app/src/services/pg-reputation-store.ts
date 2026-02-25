@@ -47,20 +47,39 @@ export class PostgreSQLReputationStore implements ReputationStore {
     return result.rows[0]?.data;
   }
 
-  async put(nftId: string, aggregate: ReputationAggregate): Promise<void> {
+  async put(
+    nftId: string,
+    aggregate: ReputationAggregate,
+    expectedVersion?: number,
+  ): Promise<void> {
     // Extract indexed fields from the aggregate
     const state = aggregate.state ?? 'cold';
     const blendedScore = aggregate.blended_score ?? 0;
     const sampleCount = aggregate.sample_count ?? 0;
 
-    // Try UPDATE first (optimistic concurrency with version check)
+    if (expectedVersion !== undefined) {
+      // Optimistic concurrency: caller supplies expected version
+      const updateResult = await this.pool.query(
+        `UPDATE reputation_aggregates
+         SET data = $2, state = $3, blended_score = $4, sample_count = $5,
+             version = version + 1, updated_at = now()
+         WHERE nft_id = $1 AND version = $6
+         RETURNING version`,
+        [nftId, JSON.stringify(aggregate), state, blendedScore, sampleCount, expectedVersion],
+      );
+
+      if (updateResult.rowCount === 0) {
+        throw new ConflictError(nftId, expectedVersion);
+      }
+      return;
+    }
+
+    // No expected version: upsert without concurrency check (backward compatible)
     const updateResult = await this.pool.query(
       `UPDATE reputation_aggregates
        SET data = $2, state = $3, blended_score = $4, sample_count = $5,
            version = version + 1, updated_at = now()
-       WHERE nft_id = $1 AND version = (
-         SELECT version FROM reputation_aggregates WHERE nft_id = $1
-       )
+       WHERE nft_id = $1
        RETURNING version`,
       [nftId, JSON.stringify(aggregate), state, blendedScore, sampleCount],
     );
@@ -76,8 +95,7 @@ export class PostgreSQLReputationStore implements ReputationStore {
       );
 
       if (insertResult.rowCount === 0) {
-        // Conflict: another process inserted between our UPDATE and INSERT.
-        // Re-read the current version for the error message.
+        // Conflict: another process inserted between our UPDATE and INSERT
         const current = await this.pool.query<{ version: number }>(
           'SELECT version FROM reputation_aggregates WHERE nft_id = $1',
           [nftId],

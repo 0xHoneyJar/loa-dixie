@@ -222,7 +222,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // cycle-009: Knowledge governor — third ResourceGovernor witness
   const knowledgeGovernor = new KnowledgeGovernor();
 
-  // cycle-009: Async initialization — run migrations before stores are used
+  // cycle-009: Async initialization — run migrations before stores are used.
+  // Migration failure propagates (rejects the promise) so callers know the system
+  // is not fully initialized. Log the error for diagnostics, then re-throw.
   const ready = (async () => {
     if (dbPool) {
       try {
@@ -233,6 +235,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
           event: 'migration_error',
           message: err instanceof Error ? err.message : String(err),
         });
+        throw err;
       }
     }
     log('info', {

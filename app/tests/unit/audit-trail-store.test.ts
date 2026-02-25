@@ -2,32 +2,54 @@
  * AuditTrailStore Tests — cycle-009 Sprint 2, Tasks 2.4 + 2.5
  *
  * Validates:
- * - Hash chain append with Hounfour computeAuditEntryHash()
+ * - Chain-bound hash computation (content + previous_hash)
+ * - Serialized append via transaction (TOCTOU fix)
  * - Tip hash retrieval (empty chain + populated chain)
  * - Entry retrieval with ordering
  * - Chain integrity verification
  * - Tamper detection
  * - Cross-chain verification (scoring path vs audit trail)
+ *
+ * @since bridge-iter1: Updated for chain-bound hashing and transactional appends
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   AuditTrailStore,
   AUDIT_TRAIL_GENESIS_HASH,
 } from '../../src/services/audit-trail-store.js';
-import type { AuditEntry } from '../../src/services/audit-trail-store.js';
 import { createMockPool } from '../fixtures/pg-test.js';
 
-// We need to mock the Hounfour computeAuditEntryHash since it depends on
-// @noble/hashes which may not be available in the unit test environment.
-// In integration tests, we'd use the real implementation.
+// Mock Hounfour computeAuditEntryHash — deterministic based on entry_id + domain tag
+// The chain-bound hash calls this twice: once for content, once for chain binding.
+// Chain binding call uses contentHash as entry_id and previousHash as timestamp.
 vi.mock('@0xhoneyjar/loa-hounfour/commons', () => ({
-  computeAuditEntryHash: vi.fn((entry: { entry_id: string }, domainTag: string) => {
-    // Deterministic mock: hash based on entry_id + domain tag
-    return `sha256:mock_${entry.entry_id}_${domainTag.split(':')[2] ?? 'unknown'}`;
-  }),
+  computeAuditEntryHash: vi.fn(
+    (entry: { entry_id: string; timestamp: string; event_type: string }, domainTag: string) => {
+      const tag = domainTag.split(':')[2] ?? 'unknown';
+      if (entry.event_type === 'chain_binding') {
+        // Chain binding call: entry_id=contentHash, timestamp=previousHash
+        return `sha256:chain_${entry.entry_id}_${entry.timestamp.slice(0, 20)}`;
+      }
+      // Content hash call
+      return `sha256:content_${entry.entry_id}_${tag}`;
+    },
+  ),
   AUDIT_TRAIL_GENESIS_HASH:
     'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 }));
+
+/**
+ * Helper: compute expected chain-bound hash for a test entry.
+ * Mirrors the production computeChainBoundHash logic using our mock.
+ */
+function expectedChainHash(
+  entryId: string,
+  resourceType: string,
+  previousHash: string,
+): string {
+  const contentHash = `sha256:content_${entryId}_${resourceType}`;
+  return `sha256:chain_${contentHash}_${previousHash.slice(0, 20)}`;
+}
 
 describe('AuditTrailStore', () => {
   let pool: ReturnType<typeof createMockPool>;
@@ -59,9 +81,8 @@ describe('AuditTrailStore', () => {
   });
 
   describe('append()', () => {
-    it('appends an entry with computed hash and genesis as previous', async () => {
-      // getTipHash returns genesis (empty chain)
-      // Then INSERT succeeds
+    it('appends an entry with chain-bound hash and genesis as previous', async () => {
+      // The transactional client will issue: BEGIN, SELECT (tip), INSERT, COMMIT
       pool._setResponse('INSERT INTO audit_entries', {
         rows: [],
         rowCount: 1,
@@ -82,8 +103,44 @@ describe('AuditTrailStore', () => {
       expect(entry.hash_domain_tag).toBe('loa-dixie:audit:reputation:9.0.0');
     });
 
+    it('runs within a transaction (BEGIN/COMMIT)', async () => {
+      pool._setResponse('INSERT INTO audit_entries', {
+        rows: [],
+        rowCount: 1,
+      });
+
+      await store.append('reputation', {
+        entry_id: 'entry-tx',
+        timestamp: '2026-02-26T00:00:00Z',
+        event_type: 'governance.reputation.create',
+      });
+
+      // Verify transactional queries via the mock client
+      const queryTexts = pool._queries.map((q) => q.text);
+      expect(queryTexts).toContain('BEGIN');
+      expect(queryTexts).toContain('COMMIT');
+    });
+
+    it('uses FOR UPDATE lock for tip hash read', async () => {
+      pool._setResponse('INSERT INTO audit_entries', {
+        rows: [],
+        rowCount: 1,
+      });
+
+      await store.append('reputation', {
+        entry_id: 'entry-lock',
+        timestamp: '2026-02-26T00:00:00Z',
+        event_type: 'governance.reputation.create',
+      });
+
+      const tipQuery = pool._queries.find((q) =>
+        q.text.includes('FOR UPDATE'),
+      );
+      expect(tipQuery).toBeDefined();
+    });
+
     it('links to the previous entry hash in the chain', async () => {
-      // getTipHash returns a previous hash
+      // Mock tip hash read (via FOR UPDATE query in transaction)
       pool._setResponse('SELECT entry_hash', {
         rows: [{ entry_hash: 'sha256:previous_entry_hash' }],
         rowCount: 1,
@@ -183,7 +240,6 @@ describe('AuditTrailStore', () => {
       const entries = await store.getEntries('reputation', 1);
       expect(entries).toHaveLength(1);
 
-      // Verify LIMIT was in the query
       const selectQuery = pool._queries.find((q) =>
         q.text.includes('LIMIT'),
       );
@@ -199,9 +255,9 @@ describe('AuditTrailStore', () => {
     });
 
     it('returns valid for a properly linked chain', async () => {
-      // Build a valid 2-entry chain
-      const hash1 = 'sha256:mock_e1_reputation';
-      const hash2 = 'sha256:mock_e2_reputation';
+      // Build a valid 2-entry chain with chain-bound hashes
+      const hash1 = expectedChainHash('e1', 'reputation', AUDIT_TRAIL_GENESIS_HASH);
+      const hash2 = expectedChainHash('e2', 'reputation', hash1);
 
       pool._setResponse('SELECT * FROM audit_entries', {
         rows: [
@@ -236,7 +292,7 @@ describe('AuditTrailStore', () => {
       expect(result.entries_checked).toBe(2);
     });
 
-    it('detects tampered entry hash (content modification)', async () => {
+    it('detects tampered entry hash (content or chain modification)', async () => {
       pool._setResponse('SELECT * FROM audit_entries', {
         rows: [
           {
@@ -256,11 +312,16 @@ describe('AuditTrailStore', () => {
 
       const result = await store.verifyIntegrity('reputation');
       expect(result.valid).toBe(false);
-      expect(result.detail).toContain('Content hash mismatch');
+      expect(result.detail).toContain('Hash mismatch');
     });
 
-    it('detects broken chain linkage', async () => {
-      const hash1 = 'sha256:mock_e1_reputation';
+    it('detects broken chain linkage via tampered previous_hash', async () => {
+      const hash1 = expectedChainHash('e1', 'reputation', AUDIT_TRAIL_GENESIS_HASH);
+      // Entry 2's hash is computed with the CORRECT previous (hash1),
+      // but the stored previous_hash is wrong. The chain-bound hash
+      // verification will pass (hash matches) but the explicit linkage
+      // check will fail.
+      const hash2WithCorrectPrev = expectedChainHash('e2', 'reputation', hash1);
 
       pool._setResponse('SELECT * FROM audit_entries', {
         rows: [
@@ -282,7 +343,7 @@ describe('AuditTrailStore', () => {
             event_type: 'governance.reputation.update',
             actor_id: null,
             payload: null,
-            entry_hash: 'sha256:mock_e2_reputation',
+            entry_hash: hash2WithCorrectPrev,
             previous_hash: 'sha256:WRONG_PREVIOUS',
             hash_domain_tag: 'loa-dixie:audit:reputation:9.0.0',
           },
@@ -292,7 +353,8 @@ describe('AuditTrailStore', () => {
 
       const result = await store.verifyIntegrity('reputation');
       expect(result.valid).toBe(false);
-      expect(result.detail).toContain('Chain linkage broken');
+      // Should fail because stored previous_hash doesn't match expected
+      expect(result.detail).toContain('linkage broken');
     });
   });
 

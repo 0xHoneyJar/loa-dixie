@@ -16,7 +16,6 @@ import type {
   GovernanceEvent,
 } from './resource-governor.js';
 import type { StateMachine } from './state-machine.js';
-import { validateTransition } from './state-machine.js';
 import type {
   KnowledgeItem,
   KnowledgeFreshnessState,
