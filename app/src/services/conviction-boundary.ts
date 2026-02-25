@@ -19,6 +19,7 @@
  */
 import { evaluateEconomicBoundary } from '@0xhoneyjar/loa-hounfour';
 import { computeBlendedScore } from '@0xhoneyjar/loa-hounfour/governance';
+import { CONSERVATION_REGISTRY } from './conservation-laws.js';
 import type {
   TrustLayerSnapshot,
   CapitalLayerSnapshot,
@@ -154,25 +155,22 @@ export interface EconomicBoundaryOptions {
  * ## Social Contract: Enforcing the Conservation Invariants
  *
  * This function is the enforcement point for three conservation invariants
- * that constitute the economic social contract of the Dixie commons:
+ * that constitute the economic social contract of the Dixie commons.
+ * Each invariant is backed by a protocol ConservationLaw from CONSERVATION_REGISTRY.
  *
- * **I-1: committed + reserved + available = limit**
- * "Community resources are finite and accounted for." The `budgetRemainingMicroUsd`
- * parameter represents the `available` portion of the wallet's budget. The
- * economic boundary decision engine verifies that this value is sufficient
- * before granting access. No wallet can consume more than the community has
- * allocated — this is the scarcity constraint that makes the commons viable.
+ * **I-1: BUDGET_CONSERVATION** (committed + reserved + available = limit)
+ * "Community resources are finite and accounted for." Protocol: `CONSERVATION_REGISTRY.get('I-1')`.
+ * The `budgetRemainingMicroUsd` parameter represents the `available` portion.
+ * The economic boundary engine verifies sufficiency before granting access.
  *
- * **I-2: SUM(lot_entries) per lot = original_micro**
- * "Every credit lot is fully consumed." When access is granted and a response
- * incurs cost, that cost flows through the billing pipeline where conservation
- * is verified by `verifyPricingConservation()`. No value is created or destroyed.
+ * **I-2: PRICING_CONSERVATION** (SUM(lot_entries) per lot = original_micro)
+ * "Every credit lot is fully consumed." Protocol: `CONSERVATION_REGISTRY.get('I-2')`.
+ * Enforcement downstream in the billing pipeline via `verifyPricingConservation()`.
  *
- * **I-3: Redis.committed ~ Postgres.usage_events**
- * "Fast storage matches durable storage." The budget_remaining value fed to
- * this function may come from Redis (fast path) or Postgres (durable path).
- * The invariant that these eventually converge ensures that access decisions
- * made on the fast path are consistent with the durable record of truth.
+ * **I-3: CACHE_COHERENCE** (Redis.committed ~ Postgres.usage_events, bounded drift)
+ * "Fast storage matches durable storage." Protocol: `CONSERVATION_REGISTRY.get('I-3')`.
+ * Budget values from Redis (fast path) or Postgres (durable path) converge within
+ * the drift bound defined by the conservation law.
  *
  * In Web4 terms: this function is the gatekeeper that translates conviction
  * (demonstrated commitment to the commons) into economic access (the right
