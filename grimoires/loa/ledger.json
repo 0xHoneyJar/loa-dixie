@@ -480,6 +480,7 @@
       "completed": "2026-02-25",
       "status": "archived",
       "archived": "2026-02-25T02:00:05Z",
+      "archive_path": "grimoires/loa/archive/2026-02-25-phase3-production-wiring",
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
