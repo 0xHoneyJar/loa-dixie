@@ -550,10 +550,16 @@
       "id": "cycle-007",
       "label": "Hounfour v8.2.0 Full Adoption — Commons Governance Substrate",
       "started": "2026-02-25",
-      "status": "active",
+      "completed": "2026-02-25",
+      "status": "archived",
+      "archived": "2026-02-25T20:35:00Z",
+      "archive_path": "grimoires/loa/archive/2026-02-25-hounfour-v8-2-0-adoption",
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
+      "bridge_reviews": 2,
+      "bridge_flatline": true,
+      "source_pr": "#15",
       "sprints": [
         {
           "id": "sprint-1",
@@ -595,28 +601,81 @@
           "global_id": 78,
           "label": "Feedback Dampening & Governance Persistence",
           "tasks": 6,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-7",
           "global_id": 79,
           "label": "Decision Trails & Surface Enforcement",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-8",
           "global_id": 80,
           "label": "Observability & Error Taxonomy",
           "tasks": 4,
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "cycle-008",
+      "label": "Governance Isomorphism — Unified GovernedResource<T> Platform",
+      "started": "2026-02-25",
+      "status": "active",
+      "prd": "grimoires/loa/prd.md",
+      "sdd": "grimoires/loa/sdd.md",
+      "sprint_plan": "grimoires/loa/sprint.md",
+      "sprints": [
+        {
+          "id": "sprint-1",
+          "global_id": 81,
+          "label": "Consistency Foundations",
+          "tasks": 7,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-2",
+          "global_id": 82,
+          "label": "Integrity Infrastructure",
+          "tasks": 6,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-3",
+          "global_id": 83,
+          "label": "Self-Calibration Core",
+          "tasks": 6,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-4",
+          "global_id": 84,
+          "label": "Adaptive Routing",
+          "tasks": 6,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-5",
+          "global_id": 85,
+          "label": "GovernedResource<T> Platform",
+          "tasks": 6,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-6",
+          "global_id": 86,
+          "label": "Integration & Hardening",
+          "tasks": 4,
           "status": "pending"
         }
       ]
     }
   ],
-  "active_cycle": "cycle-007",
+  "active_cycle": "cycle-008",
   "active_bugfix": null,
-  "global_sprint_counter": 80,
+  "global_sprint_counter": 86,
   "bugfix_cycles": [],
   "release_cycles": [
     {

@@ -1,505 +1,702 @@
-# PRD: Hounfour v8.2.0 Full Adoption — Commons Governance Substrate
+# PRD: Governance Isomorphism — Unified GovernedResource<T> Platform
 
-**Version**: 7.0.0
+**Version**: 8.0.0
 **Date**: 2026-02-25
-**Author**: Merlin (Product), Claude (Synthesis)
-**Cycle**: cycle-007
+**Author**: Merlin (Product), Claude (Synthesis, Bridgebuilder Meditation)
+**Cycle**: cycle-008
 **Status**: Draft
-**Predecessor**: cycle-006 PRD (Phase 3 — Production Wiring & Live Integration)
+**Predecessor**: cycle-007 PRD v7.0.0 (Hounfour v8.2.0 Full Adoption)
 
-> Sources: loa-hounfour CHANGELOG v8.0.0–v8.2.0, MIGRATION.md (Dixie consumer path),
-> cycle-005 (Hounfour v7.11.0 Full Adoption, 5 sprints — Level 6+ foundation),
-> cycle-006 (Phase 3 — Production Wiring, 8 sprints — event sourcing + crypto hardening),
-> codebase analysis (42 files import hounfour, 8 service files need refactoring)
+> Sources: Bridgebuilder Meditation Parts I–III (PR #15 comments),
+> codebase analysis (66 .ts source files, 1291 tests, 7 invariants),
+> cross-ecosystem context (loa-finn #24/#31/#80, loa-hounfour #22/#29,
+> loa #247/#401, loa-freeside #62/#90, loa-dixie #5/#15, web4.html)
 
 ---
 
 ## 1. Problem Statement
 
-Dixie achieved Hounfour Level 6+ protocol compliance in cycle-005 against v7.11.0 and wired production infrastructure in cycle-006. Since then, Hounfour has advanced through three releases (v8.0.0, v8.1.0, v8.2.0) introducing a **governance substrate** — the `commons` module with 21 schemas, an enforcement SDK, and the 4th ReputationEvent variant.
-
-**The gap**: The local `loa-hounfour` package is already at v8.2.0 (symlinked at `file:../../loa-hounfour`), but **Dixie has not adopted any v8.x functionality**. The existing code works (backward compatible) but leaves significant protocol surface unused, and Dixie still maintains local patterns for things that now have canonical protocol implementations:
-
-| Local Pattern | File | Hounfour v8.2.0 Canonical | Gap |
-|---|---|---|---|
-| Hardcoded conservation checks | `conviction-boundary.ts:327-339` | `ConservationLaw<T>` factories + `buildSumInvariant()` | Local checks bypass protocol verification |
-| Scattered error types | `errors.ts`, `access-policy-validator.ts`, `conformance-signal.ts` | `GovernanceError` discriminated union (6 variants) | No structured governance error taxonomy |
-| Plain state machine objects | `state-machine.ts:95-155` | `StateMachineConfig` with invariants + audit hooks | Missing cross-state constraints and audit |
-| Custom hash chain tracker | `scoring-path-tracker.ts` | `AuditTrail<T>` with `verifyAuditTrailIntegrity()` | Missing checkpoint/verification infrastructure |
-| Generic resource governor | `resource-governor.ts` | `GovernedResource<T>` with mutation tracking | Missing governed mutations + versioning |
-| `QualityEvent` (3 fields) | `quality-feedback.ts:40-51` | `ModelPerformanceEvent` + `QualityObservation` | No model-level performance tracking |
-| No `'unspecified'` TaskType handling | `conviction-boundary.ts:261-286` | `'unspecified'` literal with aggregate-only routing | Silent fallthrough on missing task metadata |
-| No governance mutations | — | `GovernanceMutation` with required `actor_id` | No auditable policy change trail |
-| No protocol versioning | — | `DynamicContract` + `ContractNegotiation` | No capability negotiation with clients |
-| No quarantine mechanism | — | `QuarantineStatus` + `QuarantineRecord` | No unsafe state isolation |
-| `invariants.yaml` pinned to 7.0.0 | `grimoires/loa/invariants.yaml:9` | Protocol version 8.2.0 | Stale protocol declaration |
-
-**Why this matters**: Hounfour v8.0.0 introduced the commons module specifically to **canonicalize governance patterns that every consumer was implementing independently**. Dixie has conservation invariants, state machines, audit trails, resource governance, and error handling — all implemented locally. Each local implementation diverges from the protocol's verified, tested, and cross-consumer-compatible patterns. The v8.2.0 release adds `ModelPerformanceEvent` which closes the autopoietic feedback loop (Dixie evaluation → scoring → routing → Finn) — without it, Dixie's quality signals don't feed back into model selection.
-
-> Sources: loa-hounfour CHANGELOG v8.0.0 ("commons module introduces governance substrate"),
-> v8.1.0 ("GovernanceMutation.actor_id required"), v8.2.0 ("ModelPerformanceEvent closes autopoietic loop"),
-> MIGRATION.md (Dixie consumer path), codebase analysis
-
-## 2. Product Vision
-
-**Replace Dixie's local governance patterns with canonical Hounfour v8.2.0 commons implementations, close the autopoietic feedback loop with ModelPerformanceEvent, and enable runtime protocol negotiation via DynamicContract.**
-
-This is a **deep protocol adoption cycle** — not just type imports (cycle-005) but behavioral alignment. Dixie already implements the right patterns; the work is replacing local implementations with protocol-canonical equivalents that gain:
-- Verified conservation law enforcement (property-tested in hounfour)
-- Structured governance error taxonomy (6-variant discriminated union)
-- Audit trail checkpointing and integrity verification
-- Mutation-tracked resource governance
-- Protocol capability negotiation for client compatibility
-- Quarantine mechanism for unsafe state isolation
-
-The autopoietic loop closure is the highest-value functional change: model performance observations from Finn inference flow back through reputation scoring, influencing future model routing decisions. This makes the Oracle self-improving — the defining characteristic of the system's architecture.
-
-## 3. Success Metrics
-
-| ID | Metric | Target |
-|----|--------|--------|
-| C-1 | Local governance pattern elimination | 0 local implementations where hounfour commons equivalent exists |
-| C-2 | Commons module imports | All 6 commons subsystems integrated (conservation, error, state, audit, resource, contract) |
-| C-3 | ModelPerformanceEvent operational | Finn inference quality → ReputationEvent → scoring → routing (functional loop) |
-| C-4 | QualityObservation emission | Every quality assessment produces structured observation with score [0,1] |
-| C-5 | GovernanceMutation trail | All policy changes produce auditable mutation with `actor_id` attribution |
-| C-6 | `'unspecified'` TaskType handled | Explicit aggregate-only routing when task metadata unavailable |
-| C-7 | Protocol versioning active | `X-Protocol-Version` header on all responses, capability negotiation functional |
-| C-8 | Conformance vectors | v8.2.0 vectors pass (217+ total) |
-| C-9 | Zero regressions | All existing tests pass (baseline from cycle-006) |
-| C-10 | `invariants.yaml` updated | Protocol pin at `loa-hounfour@8.2.0` |
-| C-11 | Quarantine operational | Unsafe state isolation with automatic recovery |
-| C-12 | Audit trail checkpoints | Checkpoint creation, continuity verification, and pruning functional |
-
-## 4. Functional Requirements
-
-### Tier 1: Required Protocol Compliance
-
-#### FR-1: Handle ModelPerformanceEvent (4th ReputationEvent Variant)
-
-**Current**: `ReputationEvent` is a 3-variant discriminated union (`quality_signal`, `task_completion`, `credential_update`). Dixie's `reputation-service.ts` and `quality-feedback.ts` handle these three variants but have no handling for `model_performance`.
-
-**Target**: Full integration of the 4th variant:
-
-1. `quality-feedback.ts` emits `ModelPerformanceEvent` after Finn inference completes, capturing:
-   - `model_id`: which model was used
-   - `provider`: model provider (e.g., `'anthropic'`, `'openai'`)
-   - `pool_id`: routing pool identifier
-   - `quality`: `QualityObservation` (score [0,1], optional dimensions, latency, evaluator)
-2. `reputation-service.ts` processes `model_performance` events in the discriminated union handler
-3. Model performance feeds into blended score computation, influencing future routing
-4. Exhaustive switch coverage ensures type safety (no `default` fallthrough)
-
-**Acceptance Criteria**:
-- [ ] `ModelPerformanceEvent` type imported from `@0xhoneyjar/loa-hounfour/governance`
-- [ ] `quality-feedback.ts` emits model performance events after Finn inference
-- [ ] `reputation-service.ts` handles `model_performance` variant in event processing
-- [ ] Model performance scores influence blended reputation computation
-- [ ] Exhaustive switch on `ReputationEvent.type` (4 cases, no default)
-- [ ] Tests verify end-to-end: inference → event emission → reputation update
-
-> Sources: loa-hounfour CHANGELOG v8.2.0 ("ModelPerformanceEvent closes autopoietic loop"),
-> quality-feedback.ts:40-51, reputation-service.ts event handling
-
-#### FR-2: Emit QualityObservation for Structured Evaluation Output
-
-**Current**: `quality-feedback.ts` computes a quality score via severity-weighted sum (`1 / (1 + weighted_count)`) but stores it as a bare number within `QualityEvent`. No structured observation schema.
-
-**Target**: Replace `QualityEvent` with `QualityObservation` from hounfour governance:
-- `score`: [0,1] float — computed from severity distribution (existing algorithm preserved)
-- `dimensions`: optional record of named dimension scores (max 20)
-- `latency_ms`: optional inference latency
-- `evaluated_by`: evaluator identifier (e.g., `'dixie-quality-feedback'`)
-
-**Acceptance Criteria**:
-- [ ] `QualityObservation` and `QualityObservationSchema` imported from hounfour governance
-- [ ] `QualityEvent` interface replaced with `QualityObservation` usage
-- [ ] Severity-weighted score computation preserved (backward compatible output)
-- [ ] `dimensions` populated with per-severity breakdown
-- [ ] `evaluated_by` field identifies the evaluation source
-- [ ] Conformance suite validates `QualityObservation` payloads
-
-> Sources: loa-hounfour CHANGELOG v8.2.0 ("QualityObservation schema"),
-> quality-feedback.ts:84-94 (severity weights)
-
-#### FR-3: Handle `'unspecified'` TaskType
-
-**Current**: When `taskType` is undefined or doesn't match any cohort, `conviction-boundary.ts` falls through to aggregate scoring silently. No explicit handling of the `'unspecified'` literal.
-
-**Target**: Explicit routing:
-1. When `taskType === 'unspecified'` or `taskType === undefined`: route to aggregate-only scoring (skip cohort lookup entirely)
-2. Record scoring path as `{ path: 'aggregate', reason: 'unspecified task type' }`
-3. No cohort entry created for `'unspecified'` (aggregate-only)
-
-**Acceptance Criteria**:
-- [ ] Explicit `'unspecified'` check before cohort lookup in `conviction-boundary.ts`
-- [ ] Scoring path records `'unspecified'` handling with clear reason
-- [ ] No `TaskTypeCohort` entries created for `'unspecified'` task type
-- [ ] Tests verify `'unspecified'` routes to aggregate-only scoring
-- [ ] Backward compatible: `undefined` taskType still works identically
-
-> Sources: loa-hounfour CHANGELOG v8.2.0 ("'unspecified' TaskType literal"),
-> MIGRATION.md ("route to aggregate-only scoring"), conviction-boundary.ts:261-286
-
-#### FR-4: Update Conformance Suite for v8.2.0
-
-**Current**: Conformance suite validates against governance schemas from v7.11.0 (6 schema types: AccessPolicy, ConversationSealingPolicy, TaskType, TaskTypeCohort, ReputationEvent, ScoringPathLog).
-
-**Target**: Extend coverage to include all v8.2.0 additions:
-- `QualityObservation` validation
-- `ModelPerformanceEvent` as 4th ReputationEvent variant
-- `GovernanceMutation` validation (with required `actor_id`)
-- `ConservationLaw` validation
-- `AuditTrail` validation (including integrity verification)
-- `DynamicContract` validation
-- `GovernanceError` validation (all 6 variants)
-
-**Acceptance Criteria**:
-- [ ] Conformance suite schema enum extended with v8.2.0 types
-- [ ] Sample payloads for each new schema type
-- [ ] v8.0.0–v8.2.0 conformance vectors referenced (217+ total)
-- [ ] `runFullSuite()` includes commons schema validation
-- [ ] Integration test verifies full suite passes
-
-> Sources: conformance-suite.ts:24-204, loa-hounfour RELEASE-INTEGRITY.json (219 vectors)
-
-### Tier 2: Commons Governance Substrate
-
-#### FR-5: Adopt ConservationLaw Factories for Existing Invariants
-
-**Current**: `conviction-boundary.ts` documents 3 conservation invariants as comments (I-1 through I-3) and checks them inline. `invariants.yaml` declares 5 cross-repo invariants (INV-001 through INV-005). These are verified by tests but not expressed as protocol objects.
-
-**Target**: Replace inline checks with `ConservationLaw<T>` factories from commons:
-
-| Invariant | Factory | Predicate |
-|-----------|---------|-----------|
-| I-1: Budget conservation | `buildSumInvariant()` | `committed + reserved + available === limit` |
-| I-2: Pricing conservation | `buildSumInvariant()` | `SUM(recipients) === total_cost` |
-| I-3: Cache coherence | `buildBoundedInvariant()` | `abs(redis_value - postgres_value) <= threshold` |
-| INV-001: Cost conservation | `buildSumInvariant()` | `cost_micro * 1_000_000 + remainder == tokens * price_per_million` |
-| INV-002: Non-negative spend | `buildNonNegativeInvariant()` | `daily_spend >= 0` |
-| INV-004: Budget monotonicity | `createMonotonicConservation()` | `daily_spend(t+1) >= daily_spend(t)` |
-
-**Acceptance Criteria**:
-- [ ] `ConservationLaw`, `buildSumInvariant`, `buildNonNegativeInvariant`, `buildBoundedInvariant`, `createMonotonicConservation` imported from `@0xhoneyjar/loa-hounfour/commons`
-- [ ] Budget conservation (I-1) expressed as protocol `ConservationLaw<BudgetState>`
-- [ ] Pricing conservation (I-2) expressed as protocol `ConservationLaw<BillingEntry>`
-- [ ] Cache coherence (I-3) expressed as protocol `ConservationLaw<CacheState>`
-- [ ] Inline conservation checks in `conviction-boundary.ts` replaced with factory-produced law evaluation
-- [ ] `invariants.yaml` updated to `loa-hounfour@8.2.0` and invariants reference commons types
-- [ ] Tests verify conservation law evaluation produces same results as inline checks
-
-> Sources: loa-hounfour CHANGELOG v8.1.0 ("conservation law factories"),
-> conviction-boundary.ts:20-30 (invariant comments), invariants.yaml
-
-#### FR-6: Adopt GovernanceError Discriminated Union
-
-**Current**: Error handling is scattered across files:
-- `errors.ts`: `BffError` class with `status` + `body`
-- `access-policy-validator.ts`: policy validation errors with `violations[]`
-- `conformance-signal.ts`: `ConformanceViolationSignal` interface
-- `conviction-boundary.ts`: `buildConvictionDenialResponse()` with `denial_codes[]`
-
-**Target**: Introduce `GovernanceError` from commons as canonical governance error type:
-- Map existing error patterns to 6-variant discriminated union
-- Add `severity`, `remediation`, and `provenance` fields
-- Preserve HTTP status mapping (400, 403, 409, 429)
-
-| Current Pattern | GovernanceError Variant | HTTP Status |
-|----------------|------------------------|-------------|
-| Policy validation failure | `PolicyValidationError` | 400 |
-| Access/conviction denied | `AccessBoundaryError` | 403 |
-| Conformance violation | `ConformanceViolationError` | 400 |
-| Budget exhausted | `ResourceExhaustedError` | 429 |
-| State transition invalid | `StateConflictError` | 409 |
-| Protocol version mismatch | `ProtocolVersionError` | 422 |
-
-**Acceptance Criteria**:
-- [ ] `GovernanceError` and all 6 variants imported from `@0xhoneyjar/loa-hounfour/commons`
-- [ ] `errors.ts` extended with `GovernanceError` → `BffError` mapping utility
-- [ ] `access-policy-validator.ts` produces `PolicyValidationError` instances
-- [ ] `conviction-boundary.ts` denial responses use `AccessBoundaryError`
-- [ ] `conformance-signal.ts` violations use `ConformanceViolationError`
-- [ ] All governance errors include `severity` and optional `remediation`
-- [ ] Tests verify error mapping preserves HTTP status codes
-
-> Sources: loa-hounfour CHANGELOG v8.0.0 ("GovernanceError 6-variant union"),
-> errors.ts, access-policy-validator.ts:36-69, conviction-boundary.ts:362-401
-
-#### FR-7: Wire GovernanceMutation with Required `actor_id`
-
-**Current**: No governance mutation tracking exists. Policy changes (e.g., conviction tier thresholds, access matrix updates) happen without audit trail.
-
-**Target**: Implement `GovernanceMutation` from commons for all policy changes:
-1. Every governance policy change produces a mutation record with required `actor_id`
-2. `evaluateGovernanceMutation()` validates mutation before application
-3. Mutation history provides auditable trail of governance evolution
-
-**Acceptance Criteria**:
-- [ ] `GovernanceMutation`, `GovernanceMutationSchema`, `evaluateGovernanceMutation` imported from `@0xhoneyjar/loa-hounfour/commons`
-- [ ] Mutation envelope includes `mutation_id` (UUID), `expected_version`, `mutated_at`, `actor_id`
-- [ ] `evaluateGovernanceMutation()` called before any policy modification
-- [ ] Mutation history stored and queryable
-- [ ] `actor_id` required on all mutations (v8.1.0 breaking change compliance)
-- [ ] Tests verify mutation validation rejects missing `actor_id`
-
-> Sources: loa-hounfour CHANGELOG v8.1.0 ("GovernanceMutation.actor_id required"),
-> MIGRATION.md (actor_id migration pattern)
-
-#### FR-8: Adopt AuditTrail from Commons
-
-**Current**: `scoring-path-tracker.ts` implements a custom hash chain with `computeScoringPathHash()` and `SCORING_PATH_GENESIS_HASH`. It works but lacks checkpoint support, integrity verification, and pruning capabilities.
-
-**Target**: Refactor `ScoringPathTracker` to compose with `AuditTrail<ScoringPathLog>` from commons:
-1. Core hash chain computation preserved (same hash algorithm)
-2. Add `createCheckpoint()` for periodic chain snapshots
-3. Add `verifyCheckpointContinuity()` for integrity verification between checkpoints
-4. Add `pruneBeforeCheckpoint()` for managed log rotation
-5. Add `verifyAuditTrailIntegrity()` for full chain verification
-
-**Acceptance Criteria**:
-- [ ] `AuditTrail`, `createCheckpoint`, `verifyCheckpointContinuity`, `pruneBeforeCheckpoint`, `verifyAuditTrailIntegrity`, `AUDIT_TRAIL_GENESIS_HASH` imported from commons
-- [ ] `ScoringPathTracker` refactored to compose with `AuditTrail<ScoringPathLog>`
-- [ ] Existing hash chain behavior preserved (genesis linking, chain integrity)
-- [ ] Checkpoint creation functional after N entries (configurable)
-- [ ] Continuity verification detects tampered entries
-- [ ] Pruning removes entries before checkpoint without breaking chain
-- [ ] Metadata (`reputation_freshness`, `routed_model_id`) preserved through refactoring
-- [ ] All existing `scoring-path-tracker.test.ts` tests pass unchanged
-
-> Sources: loa-hounfour CHANGELOG v8.1.0 ("checkpoint utilities"),
-> scoring-path-tracker.ts, scoring-path-tracker.test.ts
-
-#### FR-9: Adopt GovernedResource Patterns
-
-**Current**: `resource-governor.ts` defines a generic `ResourceGovernor<T>` interface. `governor-registry.ts` provides a registry. `reputation-service.ts` manages reputation but doesn't implement `ResourceGovernor<T>`. Credits and freshness are managed ad-hoc.
-
-**Target**: Replace local `ResourceGovernor<T>` with hounfour's `GovernedResource<T>` pattern:
-
-| Resource | Current | GovernedResource<T> Pattern |
-|----------|---------|----------------------------|
-| Reputation | `ReputationService` + `InMemoryReputationStore` | `GovernedReputation` with event log + mutation tracking |
-| Credits | Ad-hoc budget checks in conviction-boundary | `GovernedCredits` with conservation law enforcement |
-| Freshness | `freshness-disclaimer.ts` confidence mapping | `GovernedFreshness` with TTL validation |
-
-**Acceptance Criteria**:
-- [ ] `GovernedResource`, `GovernedCredits`, `GovernedReputation`, `GovernedFreshness`, `GOVERNED_RESOURCE_FIELDS` imported from commons
-- [ ] `ReputationService` extended to track mutations via `GovernanceMutation`
-- [ ] Credit balance managed through `GovernedCredits` with conservation enforcement
-- [ ] Freshness metadata uses `GovernedFreshness` with protocol-standard TTL
-- [ ] `GovernorRegistry` updated to work with commons `GovernedResource<T>`
-- [ ] `resource-governor.ts` local interface deprecated in favor of commons pattern
-- [ ] Tests verify governed resource mutation tracking
-
-> Sources: loa-hounfour CHANGELOG v8.0.0 ("GovernedResource<T>"),
-> resource-governor.ts, governor-registry.ts, reputation-service.ts
-
-#### FR-10: Adopt StateMachineConfig for State Machines
-
-**Current**: `state-machine.ts` defines 4 state machines as plain objects with a generic `StateMachine<S>` interface. Transitions are validated manually. No cross-state invariants or audit hooks.
-
-**Target**: Replace local `StateMachine<S>` with `StateMachineConfig` from commons:
-
-| Machine | Current States | Enhancement |
-|---------|---------------|-------------|
-| CircuitStateMachine | closed → open → half_open → {closed, open} | Add max_open_duration invariant |
-| MemoryEncryptionMachine | unsealed → sealing → sealed ↔ unsealing | Add sealing timeout invariant |
-| AutonomousModeMachine | disabled → enabled → {suspended, confirming} | Add auto-suspend on error threshold |
-| ScheduleLifecycleMachine | pending → {active, cancelled} with retry | Add retry budget invariant |
-
-**Acceptance Criteria**:
-- [ ] `StateMachineConfig`, `State`, `Transition` imported from `@0xhoneyjar/loa-hounfour/commons`
-- [ ] All 4 state machines expressed as `StateMachineConfig` instances
-- [ ] `validateTransition()` and `assertTransition()` refactored to use commons validation
-- [ ] Cross-state invariants declared (at minimum: circuit max_open_duration)
-- [ ] Transition audit hooks wired to emit governance events
-- [ ] All existing `state-machine.test.ts` tests pass unchanged
-- [ ] New tests for cross-state invariant enforcement
-
-> Sources: loa-hounfour CHANGELOG v8.0.0 ("StateMachineConfig"),
-> state-machine.ts:95-155, state-machine.test.ts
-
-### Tier 3: Future-Ready Infrastructure
-
-#### FR-11: Implement DynamicContract + Protocol Versioning
-
-**Current**: No protocol versioning or capability negotiation exists. All clients receive the same response format regardless of their protocol awareness.
-
-**Target**: Implement runtime protocol capability negotiation:
-
-1. **Protocol version header**: `X-Protocol-Version` on all API responses
-2. **Capability matrix**: Declare what each protocol version supports
-3. **DynamicContract**: Define Dixie's protocol surface as a negotiable contract
-4. **ContractNegotiation**: Enable clients to assert required capabilities
-5. **Backward compatibility**: Support current version + 2 prior versions
-6. **Monotonic expansion verification**: New versions only add capabilities, never remove
-
-**Acceptance Criteria**:
-- [ ] `DynamicContract`, `DynamicContractSchema`, `ContractNegotiation`, `ContractNegotiationSchema` imported from commons
-- [ ] `isNegotiationValid()`, `computeNegotiationExpiry()`, `verifyMonotonicExpansion()` imported from commons
-- [ ] Protocol version constant defined (e.g., `DIXIE_PROTOCOL_VERSION = '8.2.0'`)
-- [ ] `X-Protocol-Version` header emitted on all API responses
-- [ ] Capability negotiation middleware validates client capability requirements
-- [ ] Backward compatibility for 2 prior protocol versions
-- [ ] Contract monotonic expansion verified on version bump
-- [ ] Tests verify negotiation, capability resolution, and version headers
-
-> Sources: loa-hounfour CHANGELOG v8.0.0 ("DynamicContract"), v8.1.0 ("isNegotiationValid, verifyMonotonicExpansion"),
-> MIGRATION.md ("wire DynamicContract at gateway")
-
-#### FR-12: Implement Audit Trail Checkpoints
-
-**Current**: `ScoringPathTracker` maintains an unbounded in-memory chain. No checkpoint or pruning mechanism exists.
-
-**Target**: Production-ready audit trail management:
-
-1. **Automatic checkpointing**: Create checkpoint after every N entries (configurable, default 100)
-2. **Continuity verification**: Verify chain integrity between checkpoints on startup
-3. **Managed pruning**: Prune entries before oldest active checkpoint
-4. **Discontinuity detection**: `HashChainDiscontinuity` schema for detecting and recording chain breaks
-
-**Acceptance Criteria**:
-- [ ] `HashChainDiscontinuity`, `HashChainDiscontinuitySchema` imported from commons
-- [ ] Checkpoint creation configurable via service options
-- [ ] Continuity verification runs on service initialization
-- [ ] Pruning preserves checkpoint entries and all entries after latest checkpoint
-- [ ] Discontinuity events detected and recorded (not silently ignored)
-- [ ] Tests verify checkpoint lifecycle: create → verify → prune → verify
-
-> Sources: loa-hounfour CHANGELOG v8.0.0 ("HashChainDiscontinuity"), v8.1.0 ("checkpoint utilities")
-
-#### FR-13: Implement Quarantine for Unsafe States
-
-**Current**: No quarantine mechanism exists. Unsafe states (corrupted aggregates, broken hash chains, invalid policy states) are either silently tolerated or cause hard failures.
-
-**Target**: Introduce quarantine mechanism using hounfour commons:
-
-1. **QuarantineStatus**: Track which resources are quarantined and why
-2. **QuarantineRecord**: Full quarantine event with trigger, timestamp, severity
-3. **Automatic quarantine triggers**:
-   - Hash chain integrity failure → quarantine scoring path
-   - Conservation law violation → quarantine affected resource
-   - State machine invariant violation → quarantine machine
-4. **Recovery path**: Manual or automatic release from quarantine with re-verification
-
-**Acceptance Criteria**:
-- [ ] `QuarantineStatus`, `QuarantineStatusSchema`, `QuarantineRecord` imported from commons
-- [ ] Quarantine triggered automatically on integrity failures
-- [ ] Quarantined resources excluded from scoring/routing decisions (safe fallback)
-- [ ] Quarantine events surfaced in governance error responses
-- [ ] Recovery requires passing integrity verification
-- [ ] Tests verify quarantine triggers, isolation, and recovery
-
-> Sources: loa-hounfour CHANGELOG v8.0.0 ("QuarantineStatus, QuarantineRecord")
-
-## 5. Non-Functional Requirements
-
-### NFR-1: Zero Breaking External Changes
-
-All changes are internal governance refactoring. No public API surface changes. No new routes, no changed response shapes (except added `X-Protocol-Version` header). External consumers see identical behavior.
-
-### NFR-2: Backward Compatibility
-
-- All existing response formats preserved
-- `X-Protocol-Version` header is additive (clients that don't send it get default behavior)
-- Quarantine falls back to safe defaults (no hard failures)
-- Conservation law factories produce identical results to inline checks
-
-### NFR-3: Test Coverage
-
-- All existing tests must pass unchanged
-- New tests for every FR (minimum 3 scenarios per feature)
-- Integration tests for: autopoietic loop (FR-1), conservation laws (FR-5), audit trail lifecycle (FR-12)
-- Property-based tests for conservation law enforcement where applicable
-
-### NFR-4: Performance
-
-- Conservation law evaluation: <1ms per check (same as inline)
-- GovernanceError construction: <0.1ms (object creation)
-- AuditTrail checkpoint: <5ms (hash computation + write)
-- Protocol negotiation: <0.5ms per request (header parsing + lookup)
-- ModelPerformanceEvent emission: fire-and-forget (no latency impact on response)
-
-## 6. Technical Constraints
-
-| Constraint | Detail |
-|---|---|
-| Hounfour version | v8.2.0 (local: `file:../../loa-hounfour`) |
-| Import barrels | `@0xhoneyjar/loa-hounfour/commons` (primary new), `/governance`, `/core`, `/economy` (existing) |
-| Breaking: `actor_id` | `GovernanceMutation.actor_id` required (v8.1.0) — all mutations must identify actor |
-| Hash algorithm | SHA-256 via `@noble/hashes` (unchanged from cycle-005) |
-| Canonicalization | RFC 8785 (unchanged from cycle-005) |
-| ADR-006 | Hash chain discontinuity detection (commons pattern) |
-| ADR-007 | Commons module organization (barrel structure) |
-| ADR-008 | Enforcement SDK design (Path B — factories + utilities) |
-| ADR-009 | Dynamic contract integration pattern |
-
-## 7. Scope
-
-### In Scope
-
-- **Tier 1**: ModelPerformanceEvent, QualityObservation, unspecified TaskType, conformance v8.2.0
-- **Tier 2**: ConservationLaw factories, GovernanceError union, GovernanceMutation, AuditTrail, GovernedResource, StateMachineConfig
-- **Tier 3**: DynamicContract, protocol versioning, audit checkpoints, quarantine mechanism
-- **Cross-cutting**: invariants.yaml update, type audit update, conformance suite extension
-- **Functional**: Autopoietic feedback loop operational end-to-end
-
-### Out of Scope
-
-- Database schema changes for audit trail persistence (current in-memory sufficient for this cycle)
-- Cross-repo E2E integration testing with live Finn instance
-- Production deployment changes
-- Community TaskType registry infrastructure (ADR-003 Tier 2)
-- Multi-agent governance orchestration (Agent Teams feature)
-
-## 8. Risks & Mitigations
-
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| Commons module API instability | Low | Medium | v8.2.0 is published with 6,393 passing tests; API surface verified |
-| GovernanceError refactoring breaks error handling | Medium | Medium | Map existing HTTP status codes first; add new variants incrementally |
-| Audit trail checkpoint performance | Low | Low | Checkpointing is configurable; default 100-entry interval is conservative |
-| Protocol versioning complexity | Medium | Low | Start with single version; add backward compat incrementally |
-| Quarantine false positives | Low | Medium | Conservative triggers only (integrity failures, not transient errors) |
-| `actor_id` requirement on GovernanceMutation | Low | Low | Dixie always knows the actor (wallet address or system agent ID) |
-| Large refactoring surface (8 service files) | Medium | Medium | Incremental by tier; each tier independently testable and deployable |
-
-## 9. Dependencies
-
-| Dependency | Type | Status |
-|---|---|---|
-| `@0xhoneyjar/loa-hounfour` v8.2.0 | Local package | Available at `../../loa-hounfour` (already v8.2.0) |
-| `@noble/hashes` | Transitive (via hounfour) | Already installed |
-| Hounfour ADR-006 (hash chain discontinuity) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-007 (commons barrel structure) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-008 (enforcement SDK) | Convention | Published in hounfour docs/adr/ |
-| Hounfour ADR-009 (dynamic contract) | Convention | Published in hounfour docs/adr/ |
-| All prior ADRs (001-005) | Convention | Already compliant from cycle-005 |
-
-## 10. Estimated Effort
-
-| Sprint | Focus | FRs | Tasks (est.) |
-|---|---|---|---|
-| Sprint 1 | **Protocol Compliance**: ModelPerformanceEvent + QualityObservation + unspecified TaskType + conformance | FR-1, FR-2, FR-3, FR-4 | 6-8 |
-| Sprint 2 | **Conservation & Errors**: ConservationLaw factories + GovernanceError discriminated union | FR-5, FR-6 | 6-8 |
-| Sprint 3 | **Governance Infrastructure**: GovernanceMutation + AuditTrail refactoring + GovernedResource | FR-7, FR-8, FR-9 | 7-9 |
-| Sprint 4 | **State & Contracts**: StateMachineConfig + DynamicContract + protocol versioning | FR-10, FR-11 | 6-8 |
-| Sprint 5 | **Safety & Hardening**: Audit checkpoints + quarantine + integration testing + type audit | FR-12, FR-13, cross-cutting | 5-7 |
-
-**Estimated: 5 sprints.** This is a deep adoption cycle — refactoring established patterns to use canonical protocol implementations, closing the autopoietic feedback loop, and adding production safety infrastructure (quarantine, checkpoints, protocol negotiation).
-
-## 11. Architecture Decision Context
-
-This cycle builds on 6 previous cycles of protocol adoption. Key architectural decisions that inform this work:
-
-| ADR | Decision | Relevance |
-|-----|----------|-----------|
-| adr-hounfour-alignment | Hounfour is source of truth for all protocol types | Extends to commons governance patterns |
-| adr-separation-of-powers | Access control boundaries between layers | GovernanceError respects layer boundaries |
-| adr-autopoietic-property | Self-improving system via feedback loops | ModelPerformanceEvent closes the loop |
-| adr-conviction-currency-path | Reputation as economic signal | GovernedReputation formalizes this |
-| adr-constitutional-amendment | Protocol evolution via governed mutation | GovernanceMutation provides the mechanism |
+Cycle-007 achieved full Hounfour v8.2.0 adoption — conservation laws, governance errors, audit trails, state machines, dynamic contracts, and the autopoietic feedback loop. 1291 tests pass. 7 invariants are declared. The constitutional infrastructure exists.
+
+The Bridgebuilder Meditation (posted as three PR #15 comments) discovered something the code already knew: **billing, reputation, knowledge, and access are all instances of the same governance primitive** — bounded, event-sourced state transitions with self-knowledge. This is the **governance isomorphism**.
+
+The meditation also identified **6 gaps** where the code's aspiration exceeds its implementation — places where the architecture knows what it wants to be but hasn't fully committed:
+
+| # | Gap | Location | Impact |
+|---|-----|----------|--------|
+| 1 | **Blended score staleness** | `reputation-service.ts:550-569` | `handleQualitySignal()` updates personal_score but NOT blended_score. Economic boundary evaluations use stale data after quality signals. |
+| 2 | **Transaction boundary absence** | `reputation-service.ts:631-681` | Multiple independent `store.put()` calls in `handleModelPerformance()`. Crash between calls creates durable inconsistency. |
+| 3 | **Collection score as empirical ignorance** | `reputation-service.ts:131-139` | `DEFAULT_COLLECTION_SCORE = 0` is "we assume every new agent is worthless." Punitive cold-start violates Ostrom's graduated inclusion. |
+| 4 | **Checkpoint interval never fires** | `scoring-path-tracker.ts:173-194` | `checkpointInterval` accepted as config but never checked in `record()`. Audit trail grows unbounded. |
+| 5 | **Dual-chain divergence risk** | `scoring-path-tracker.ts` | Two independent hash chains (original + commons AuditTrail) are never cross-verified. Second chain provides no tamper detection without cross-verification. |
+| 6 | **Overloaded economic boundary** | `conviction-boundary.ts:192-220` | `evaluateEconomicBoundaryForWallet()` uses `criteriaOrOpts?: QualificationCriteria | EconomicBoundaryOptions` with runtime type discrimination via negative check. |
+
+And **6 path-forward recommendations** that would transform the system from self-observing to genuinely self-calibrating:
+
+| # | Recommendation | Architectural Impact |
+|---|---------------|---------------------|
+| 1 | **Name the isomorphism explicitly** — create `GovernedResource<T>` as protocol-level abstraction | The Kubernetes CRD moment: governance SDK that each domain instantiates |
+| 2 | **Routing attribution** — record which model pool/model was used with quality observations | Enables optimization of routing quality, not just model quality |
+| 3 | **Quality decomposition** — use multi-dimensional signal (satisfaction, coherence, safety) | "Good at review" ≠ "good at reasoning" becomes expressible |
+| 4 | **Exploration budget** — ε-greedy reserve for non-optimal model selection | Prevents exploitation trap; discovers when previously-poor models improve |
+| 5 | **Empirical collection score** — replace constant 0 with running population mean | New agents start at "average" not "terrible"; Bayesian prior reflects reality |
+| 6 | **Cross-verify dual chains** — `crossVerify()` turns redundant storage into tamper detection | Google Certificate Transparency pattern: independent logs that testify against each other |
+
+**Why this matters beyond Dixie**: When loa-freeside #62 describes billing infrastructure and loa-freeside #90 implements the conservation guard, they are building the same primitive. If both converge on `GovernedResource<T>`, the cross-repo governance isomorphism becomes explicit — Hounfour defines schemas, each repo implements `GovernedResource<T>` for its domain, and cross-repo invariants ("reputation transitions must be funded by billing conservation") become compositions of domain-specific invariants. This is the Cambrian body plan — the fundamental architectural pattern that new organisms adopt and specialize.
+
+> Sources: Bridgebuilder Meditation Part I (governance isomorphism), Part II (6 gaps),
+> Part III (path forward), codebase analysis verified all gaps at exact line numbers
 
 ---
 
-*This PRD scopes the full adoption of loa-hounfour v8.2.0 commons governance substrate into loa-dixie, replacing local governance patterns with canonical protocol implementations, closing the autopoietic feedback loop, and enabling runtime protocol negotiation. All three tiers (required, recommended, future-ready) are included per stakeholder direction to use hounfour as the single source of truth.*
+## 2. Product Vision
+
+**Fully embrace the governance isomorphism: make Dixie's code match its architecture's ambition.**
+
+Every gap identified in the Bridgebuilder Meditation shares a common structure: *the code knows what it wants to be but hasn't fully committed to being it.* This cycle commits. The blended score recomputation becomes consistent. The transaction boundaries become explicit. The collection score becomes empirical. The checkpoint fires. The chains cross-verify. The API becomes legible.
+
+Beyond fixing gaps, this cycle establishes the **GovernedResource<T> platform** — the unified governance abstraction that makes reputation, knowledge, scoring paths, and future domains all instances of the same protocol. And it extends the autopoietic loop from self-observing (cycle-007: model performance → reputation → routing) to genuinely self-calibrating (cycle-008: + routing attribution, quality decomposition, exploration budget).
+
+**The constitutional metaphor becomes literal**: `invariants.yaml` is legislation. Conservation laws are economic constitutional provisions. The `DynamicContract` is a bill of rights. The `MutationLog` is a legal record. The `ScoringPathTracker` is institutional memory. This cycle ensures each of these metaphors is honored in the implementation.
+
+---
+
+## 3. Success Metrics
+
+| ID | Metric | Target | Measurement |
+|----|--------|--------|-------------|
+| M-1 | Gap closure | All 6 Bridgebuilder gaps resolved | Code review + tests for each |
+| M-2 | Blended score consistency | Every event type produces consistent aggregate state | Test: quality_signal followed by boundary evaluation uses fresh blended_score |
+| M-3 | Transaction safety | Aggregate + cohort updates are atomic | Test: simulated failure between puts doesn't corrupt state |
+| M-4 | Cold-start equity | New agents start at empirical population mean | Test: collection_score reflects running average, not constant 0 |
+| M-5 | Audit trail bounded | Auto-checkpoint triggers after configurable N entries | Test: record() triggers checkpoint at interval boundary |
+| M-6 | Tamper detection | Cross-chain verification detects divergence | Test: modify one chain entry, cross-verify catches it |
+| M-7 | API legibility | Economic boundary has clear, non-overloaded signatures | Code review: no union type discrimination in boundary evaluation |
+| M-8 | GovernedResource coverage | ≥3 resource types implement unified protocol | reputation, scoring-path, knowledge all implement GovernedResource<T> |
+| M-9 | Quality dimensionality | ModelPerformanceEvent carries multi-dimensional scores | Test: dimensions propagate through blending pipeline |
+| M-10 | Routing feedback | Scoring path records routing decisions with attribution | Test: routing decision appears in audit trail |
+| M-11 | Exploration mechanism | ε-greedy exploration functional with configurable budget | Test: with ε=1.0, non-optimal model selected; with ε=0, optimal selected |
+| M-12 | Zero regressions | All 1291 existing tests pass | CI green |
+| M-13 | New test coverage | ≥50 new tests for new functionality | Test count ≥ 1341 |
+
+---
+
+## 4. Functional Requirements
+
+### Tier 1: Consistency Foundations
+
+*Fix the gaps where the code already knows what it wants to be.*
+
+#### FR-1: Consistent Blended Score Recomputation
+
+**Gap**: Bridgebuilder Gap 1 — `handleQualitySignal()` updates `personal_score` but does NOT recompute `blended_score`.
+
+**Current**: `reputation-service.ts:550-569` — `handleQualitySignal()` updates `personal_score` via `computeDampenedScore()` and increments `sample_count`, but leaves `blended_score` stale. Meanwhile, `handleModelPerformance()` (lines 631-681) updates both.
+
+**Target**: Both `handleQualitySignal()` and `handleModelPerformance()` produce fully consistent aggregate state after every event. The pattern:
+
+```
+event → computeDampenedScore() → computeBlendedScore() → store.put()
+```
+
+is applied uniformly to ALL event paths.
+
+**Acceptance Criteria**:
+- [ ] `handleQualitySignal()` recomputes `blended_score` after updating `personal_score`
+- [ ] Same `computeBlended()` call used in both quality signal and model performance paths
+- [ ] Test: 10 quality signals in sequence → blended_score reflects ALL 10 observations
+- [ ] Test: interleave quality signals and model performance events → blended_score always consistent
+- [ ] No behavioral change to `handleModelPerformance()` (already correct)
+
+**FAANG Parallel**: Netflix 2014 — online updates touched score but not blend, while batch updates touched both. Recommendations drifted between batch runs. Fix: every update path produces fully consistent output.
+
+> Sources: Bridgebuilder Meditation Part II §Gap 1, reputation-service.ts:550-569 vs 631-681
+
+---
+
+#### FR-2: Auto-Checkpoint on Record
+
+**Gap**: Bridgebuilder Gap 4 — `checkpointInterval` accepted as config but never checked in `record()`.
+
+**Current**: `scoring-path-tracker.ts:173-194` — `record()` increments `entryCount` but never checks `entryCount % checkpointInterval === 0`. The `checkpoint()` method exists (line 265) but auto-triggering never happens.
+
+**Target**: Three lines in `record()`:
+
+```typescript
+if (this._options.checkpointInterval > 0 &&
+    this.length % this._options.checkpointInterval === 0) {
+  this.checkpoint();
+}
+```
+
+**Acceptance Criteria**:
+- [ ] `record()` auto-triggers `checkpoint()` at configured interval
+- [ ] Default interval of 100 entries preserved
+- [ ] Test: record 100 entries → checkpoint exists after entry 100
+- [ ] Test: record 250 entries → 2 checkpoints exist (at 100 and 200)
+- [ ] `checkpointInterval: 0` disables auto-checkpointing
+- [ ] Existing tests pass unchanged
+
+> Sources: Bridgebuilder Meditation Part II §Gap 4, scoring-path-tracker.ts:173-194
+
+---
+
+#### FR-3: Clear Economic Boundary API
+
+**Gap**: Bridgebuilder Gap 6 — `evaluateEconomicBoundaryForWallet()` uses runtime type discrimination on a union parameter.
+
+**Current**: `conviction-boundary.ts:192-220` — 4th parameter is `criteriaOrOpts?: QualificationCriteria | EconomicBoundaryOptions` with `!('min_trust_score' in criteriaOrOpts)` as the discriminator.
+
+**Target**: Split into two clearly named functions:
+
+```typescript
+// New canonical API — clear parameter types, no discrimination
+evaluateEconomicBoundary(
+  wallet: string,
+  tier: ConvictionTier,
+  budgetRemainingMicroUsd: number | string,
+  options: EconomicBoundaryOptions
+): EconomicBoundaryEvaluationResult
+
+// Legacy adapter — delegates to canonical with parameter mapping
+evaluateEconomicBoundaryLegacy(
+  wallet: string,
+  tier: ConvictionTier,
+  budgetRemainingMicroUsd: number | string,
+  criteria?: QualificationCriteria,
+  budgetPeriodDays?: number
+): EconomicBoundaryEvaluationResult
+```
+
+The existing `evaluateEconomicBoundaryForWallet()` becomes a thin wrapper that calls `evaluateEconomicBoundary()` internally, preserving backward compatibility.
+
+**Acceptance Criteria**:
+- [ ] New `evaluateEconomicBoundary()` with clear, non-overloaded signature
+- [ ] Legacy `evaluateEconomicBoundaryLegacy()` adapter function
+- [ ] `evaluateEconomicBoundaryForWallet()` preserved as deprecated wrapper
+- [ ] All existing callers work unchanged (backward compatible)
+- [ ] No runtime type discrimination in the new canonical path
+- [ ] Tests verify both new and legacy APIs produce identical results
+
+**Institutional Metaphor**: A court needs a legible API. The overloaded signature is a ruling written in two legal traditions.
+
+> Sources: Bridgebuilder Meditation Part II §Gap 6, conviction-boundary.ts:192-220
+
+---
+
+### Tier 2: Integrity Infrastructure
+
+*Make the institutional guarantees real.*
+
+#### FR-4: Transaction-Aware ReputationStore
+
+**Gap**: Bridgebuilder Gap 2 — Multiple independent `store.put()` calls without transaction wrapping.
+
+**Current**: `reputation-service.ts:631-681` — `handleModelPerformance()` calls `store.put(nftId, updated)` then `store.putTaskCohort(nftId, ...)` independently. Crash between the two creates durable inconsistency.
+
+**Target**: Add optional transaction support to `ReputationStore` interface:
+
+```typescript
+interface ReputationStore {
+  // ... existing methods ...
+
+  /**
+   * Execute operations atomically.
+   * In-memory: just calls fn directly.
+   * PostgreSQL: wraps in BEGIN/COMMIT.
+   */
+  transact<T>(fn: (store: ReputationStore) => Promise<T>): Promise<T>;
+}
+```
+
+Update `handleModelPerformance()` to wrap aggregate + cohort updates:
+
+```typescript
+await this.store.transact(async (tx) => {
+  await tx.put(nftId, updated);
+  await tx.putTaskCohort(nftId, taskCohortEntry);
+});
+```
+
+**Acceptance Criteria**:
+- [ ] `ReputationStore` interface has `transact<T>()` method
+- [ ] `InMemoryReputationStore` implements `transact()` by calling fn directly
+- [ ] `handleModelPerformance()` wraps aggregate + cohort updates in `transact()`
+- [ ] `handleQualitySignal()` wraps aggregate update in `transact()` (for consistency)
+- [ ] Test: simulated failure in transact callback doesn't corrupt state
+- [ ] Test: successful transact produces consistent aggregate + cohort
+- [ ] PostgreSQL adapter can wrap in BEGIN/COMMIT when implemented
+
+**FAANG Parallel**: Stripe — separate subscription state and payment state, crash between left customers charged but not subscribed. Fix: same idempotent operation keyed by idempotency key.
+
+> Sources: Bridgebuilder Meditation Part II §Gap 2, reputation-service.ts:631-681
+
+---
+
+#### FR-5: Cross-Chain Verification
+
+**Gap**: Bridgebuilder Gap 5 — Two independent hash chains never cross-verified.
+
+**Current**: `scoring-path-tracker.ts` maintains `lastHash` (original chain) and `_auditTrail` (commons chain). `verifyIntegrity()` only checks the commons chain. Neither checks the other.
+
+**Target**: Add `verifyCrossChainConsistency()` that confirms:
+1. `lastHash` matches the most recent audit trail entry hash
+2. Entry count matches between chains
+3. Hash sequences agree at sample points
+
+Plus periodic auto-verification in `record()` (every N entries, configurable).
+
+**Acceptance Criteria**:
+- [ ] `verifyCrossChainConsistency(): CrossChainVerificationResult` method added
+- [ ] Result includes `consistent: boolean`, `divergence_point?: number`, `detail: string`
+- [ ] Periodic cross-verification in `record()` (default: every 10 entries)
+- [ ] Cross-verification interval configurable via `ScoringPathTrackerOptions`
+- [ ] Divergence triggers quarantine via existing quarantine mechanism
+- [ ] Test: tamper with one chain entry → cross-verify detects divergence
+- [ ] Test: normal operation → cross-verify always passes
+- [ ] Test: divergence triggers quarantine with correct discontinuity info
+
+**FAANG Parallel**: Google Certificate Transparency — multiple independent logs maintain hash trees over same certificates. Security comes from cross-log verification, not from having multiple logs.
+
+> Sources: Bridgebuilder Meditation Part II §Gap 5, scoring-path-tracker.ts
+
+---
+
+### Tier 3: Self-Calibration Foundation
+
+*Transform from self-observing to genuinely self-calibrating.*
+
+#### FR-6: Empirical Collection Score
+
+**Gap**: Bridgebuilder Gap 3 — `DEFAULT_COLLECTION_SCORE = 0` is empirical ignorance.
+
+**Current**: `reputation-service.ts:131-139` — `DEFAULT_COLLECTION_SCORE = 0` and `DEFAULT_PSEUDO_COUNT = 10`. New agents start with an effective score pulled toward 0 by the Bayesian prior. This is the cold-start penalty.
+
+**Target**: Replace constant with running population mean:
+
+```typescript
+class CollectionScoreAggregator {
+  private runningSum = 0;
+  private count = 0;
+
+  update(personalScore: number): void {
+    this.count++;
+    this.runningSum += personalScore;
+  }
+
+  get mean(): number {
+    return this.count > 0 ? this.runningSum / this.count : 0;
+  }
+
+  get populationSize(): number {
+    return this.count;
+  }
+}
+```
+
+The collection score becomes `aggregator.mean` — the empirically observed average quality across all agents. New agents start at "average" rather than "terrible."
+
+**Acceptance Criteria**:
+- [ ] `CollectionScoreAggregator` tracks running mean of all personal scores
+- [ ] `computeBlended()` uses empirical collection mean when `count > 0`, falls back to 0 when no data
+- [ ] Both `handleQualitySignal()` and `handleModelPerformance()` update the aggregator
+- [ ] Aggregator exposes `mean`, `populationSize`, `variance` (for future adaptive pseudo_count)
+- [ ] Test: after 100 observations with mean 0.7, new agent blended_score starts near 0.7
+- [ ] Test: empty aggregator (count=0) falls back to DEFAULT_COLLECTION_SCORE = 0
+- [ ] Test: extreme observation with high population count barely moves the mean
+- [ ] `ReputationStore` extended with `getCollectionMetrics()` for persistence
+
+**FAANG Parallel**: Amazon product ranking — new products with zero reviews ranked behind established products, creating cold-start death spiral. Fix: Bayesian rating with empirical global average as prior.
+
+**Ostrom Alignment**: Principle 5 (graduated sanctions) — new agents enter the commons at a welcoming baseline, not punished with zero until proven worthy.
+
+> Sources: Bridgebuilder Meditation Part II §Gap 3, Part III §closing item 3, reputation-service.ts:131-139
+
+---
+
+#### FR-7: Multi-Dimensional Quality Decomposition
+
+**Recommendation**: Bridgebuilder Path Forward §2 — use multi-dimensional quality signal instead of collapsing to single score.
+
+**Current**: `ModelPerformanceEvent` carries `quality_observation.score` (single number). `quality_observation.dimensions` exists as `Record<string, number>` but is optional and never consumed by the blending pipeline.
+
+**Target**: Thread dimensions through the entire pipeline:
+
+```typescript
+interface DimensionalBlendInput {
+  overall: BlendedScoreInput;
+  dimensions: Record<string, BlendedScoreInput>;  // e.g., accuracy, coherence, safety
+}
+
+interface DimensionalBlendOutput {
+  overall: number;
+  dimensions: Record<string, number>;
+}
+```
+
+Each dimension is independently blended with its own EMA dampening. The `overall` score becomes a configurable weighted aggregate of dimensions (default: equal weights).
+
+**Acceptance Criteria**:
+- [ ] `computeMultiDimensionalBlended()` function that blends each dimension independently
+- [ ] Dimension weights configurable (default: equal weights across provided dimensions)
+- [ ] `handleModelPerformance()` extracts dimensions from `quality_observation.dimensions`
+- [ ] Dimensions stored in `ReputationAggregate` (new `dimension_scores?: Record<string, number>` field)
+- [ ] `evaluateEconomicBoundary()` can use dimension-specific scores for task-cohort selection
+- [ ] Test: model with high accuracy but low coherence scores differently per dimension
+- [ ] Test: missing dimensions fall back to overall score
+- [ ] Backward compatible: events without dimensions work exactly as before
+
+**FAANG Parallel**: Netflix multi-dimensional recommendation — quality is not one number. "Engaging" ≠ "well-produced" ≠ "satisfying." Different quality dimensions influence different recommendation decisions.
+
+> Sources: Bridgebuilder Meditation Part III §autopoietic loop analysis, quality_observation schema
+
+---
+
+#### FR-8: Routing Attribution in Scoring Path
+
+**Recommendation**: Bridgebuilder Path Forward §1 — record routing decisions for feedback.
+
+**Current**: `ScoringPathLogEntry` has `routed_model_id` as optional metadata but doesn't record:
+- Why the router chose that model over alternatives
+- Whether the routing diverged from the reputation system's recommendation
+- The pool from which the model was selected
+
+**Target**: Extend `RecordOptions` with routing context:
+
+```typescript
+interface RoutingAttribution {
+  recommended_model?: string;   // What reputation recommended
+  routed_model: string;          // What was actually routed
+  pool_id?: string;              // Which model pool
+  routing_reason?: string;       // Why this model was chosen
+  exploration?: boolean;         // Was this an exploration decision?
+}
+```
+
+Record in scoring path as first-class audit data.
+
+**Acceptance Criteria**:
+- [ ] `RoutingAttribution` type defined
+- [ ] `RecordOptions` extended with `routing?: RoutingAttribution`
+- [ ] Routing attribution included in scoring path entries and audit trail
+- [ ] `logScoringPath()` formats routing attribution in structured output
+- [ ] Test: routing attribution appears in scoring path log
+- [ ] Test: routing divergence (recommended ≠ routed) recorded with reason
+- [ ] Hash chain includes routing data (tamper-evident routing decisions)
+
+> Sources: Bridgebuilder Meditation Part III §autopoietic loop step 3
+
+---
+
+#### FR-9: Exploration Budget (ε-Greedy)
+
+**Recommendation**: Bridgebuilder Path Forward §3 — prevent exploitation trap.
+
+**Current**: The autopoietic loop optimizes for known-best model. EMA dampening prevents death spirals but also prevents recovery — once a model's reputation drops, the dampened score pulls new observations toward the low prior. This is the exploitation trap.
+
+**Target**: Reserve a configurable fraction of evaluations for non-optimal selection:
+
+```typescript
+interface ExplorationConfig {
+  /** Probability of selecting non-optimal model. Default: 0.05 (5%). */
+  epsilon: number;
+  /** Minimum observations before exploration begins. Default: 50. */
+  warmup: number;
+  /** Seed for reproducible exploration in tests. */
+  seed?: string;
+}
+```
+
+With probability ε, `evaluateEconomicBoundary()` selects a non-optimal model from the cohort and records `exploration: true` in the scoring path. With probability 1-ε, it selects the optimal model as before.
+
+**Acceptance Criteria**:
+- [ ] `ExplorationConfig` type with `epsilon`, `warmup`, `seed`
+- [ ] `EconomicBoundaryOptions` extended with `exploration?: ExplorationConfig`
+- [ ] When exploration triggers, non-optimal model selected from cohort
+- [ ] Scoring path records `exploration: true` with routing attribution
+- [ ] Warmup period: no exploration until minimum observations met
+- [ ] Deterministic with seed (for testing)
+- [ ] Test: `epsilon: 1.0` → always explores
+- [ ] Test: `epsilon: 0.0` → never explores (existing behavior)
+- [ ] Test: `epsilon: 0.1` over 1000 evaluations → ~10% exploration (statistical)
+- [ ] Test: warmup period respected
+
+**FAANG Parallel**: Netflix Thompson Sampling — balance exploitation (content user probably likes) with exploration (content that might reveal new preferences). Without exploration, the system converges to a local optimum.
+
+**Multi-Armed Bandit Theory**: This is the ε-greedy strategy. Future enhancement: Upper Confidence Bound (UCB) or Thompson Sampling for more efficient exploration.
+
+> Sources: Bridgebuilder Meditation Part III §autopoietic loop analysis item 3
+
+---
+
+### Tier 4: GovernedResource<T> Platform
+
+*Name the isomorphism. Make it the architecture.*
+
+#### FR-10: GovernedResource<T> Protocol Abstraction
+
+**Recommendation**: Bridgebuilder Path Forward §1 — the CRD moment.
+
+**Current**: `resource-governor.ts` defines a generic `ResourceGovernor<T>` interface, but it's implemented only by `CorpusMeta`. `ReputationService` has `getGovernedState()` but doesn't implement the full `GovernedResource<T>` lifecycle.
+
+**Target**: Define a unified `GovernedResource<T>` protocol that all governed resources implement:
+
+```typescript
+interface GovernedResource<TState, TEvent, TInvariant> {
+  // Identity
+  readonly resourceId: string;
+  readonly resourceType: string;
+
+  // State
+  readonly current: TState;
+  readonly version: number;
+
+  // Transitions
+  transition(event: TEvent, actor: ActorId): TransitionResult<TState>;
+
+  // Invariants
+  verify(invariant: TInvariant): InvariantResult;
+  verifyAll(): InvariantResult[];
+
+  // Audit
+  readonly auditTrail: AuditTrail;
+  readonly mutationLog: ReadonlyArray<GovernanceMutation>;
+}
+```
+
+This becomes the canonical governance abstraction — the body plan of the Cambrian explosion.
+
+**Acceptance Criteria**:
+- [ ] `GovernedResource<TState, TEvent, TInvariant>` interface defined
+- [ ] `TransitionResult<T>` type with success/failure discriminated union
+- [ ] `InvariantResult` type compatible with existing `ConservationLaw<T>` results
+- [ ] `GovernedResourceBase<T>` abstract class with shared audit trail and mutation log wiring
+- [ ] Interface aligns with existing commons patterns (AuditTrail, GovernanceMutation, ConservationLaw)
+- [ ] Protocol documented in `invariants.yaml` as INV-008
+
+---
+
+#### FR-11: GovernedReputation Implementation
+
+**Target**: Refactor `ReputationService` to implement `GovernedResource<ReputationAggregate, ReputationEvent, ReputationInvariant>`.
+
+```
+TState = ReputationAggregate
+TEvent = ReputationEvent (4 variants: quality_signal, task_completion, credential_update, model_performance)
+TInvariant = INV-006 (dampening bounded), INV-007 (session scoped)
+```
+
+**Acceptance Criteria**:
+- [ ] `ReputationService` implements `GovernedResource<ReputationAggregate, ReputationEvent, ReputationInvariant>`
+- [ ] `transition()` dispatches to existing handlers (handleQualitySignal, handleModelPerformance, etc.)
+- [ ] `verify()` checks dampening bounds (INV-006) and session scope (INV-007)
+- [ ] `verifyAll()` returns results for all reputation invariants
+- [ ] Existing `getGovernedState()` delegates to the GovernedResource interface
+- [ ] All 1291 existing tests pass unchanged
+
+---
+
+#### FR-12: GovernedScoringPath Implementation
+
+**Target**: Refactor `ScoringPathTracker` to implement `GovernedResource<ScoringPathState, ScoringPathEvent, ScoringPathInvariant>`.
+
+```
+TState = { entryCount, lastHash, checkpoints, quarantineStatus }
+TEvent = RecordEvent | CheckpointEvent | QuarantineEvent
+TInvariant = chain integrity, cross-chain consistency, checkpoint coverage
+```
+
+**Acceptance Criteria**:
+- [ ] `ScoringPathTracker` implements the GovernedResource interface
+- [ ] `transition()` maps to record(), checkpoint(), quarantine operations
+- [ ] `verify()` includes cross-chain verification (FR-5)
+- [ ] `verifyAll()` runs integrity + continuity + cross-chain checks
+- [ ] Existing scoring-path-tracker tests pass unchanged
+
+---
+
+#### FR-13: GovernorRegistry Unification
+
+**Target**: Update `GovernorRegistry` to manage `GovernedResource<T>` instances uniformly.
+
+**Current**: `governor-registry.ts` registers `ResourceGovernor<T>` instances. Only `CorpusMeta` is registered.
+
+**Target**: Registry accepts any `GovernedResource<T>` and provides:
+- `verifyAll()` across all registered resources (cross-resource invariant checking)
+- `getAuditSummary()` aggregating audit trail metrics across all resources
+- `getMutationHistory()` unified governance mutation timeline
+
+**Acceptance Criteria**:
+- [ ] `GovernorRegistry` accepts `GovernedResource<any, any, any>` instances
+- [ ] `registerResource()` replaces `registerGovernor()` (backward-compatible alias maintained)
+- [ ] `verifyAll()` returns `Map<string, InvariantResult[]>` across all resources
+- [ ] `getAuditSummary()` aggregates entry counts, checkpoint coverage, quarantine status
+- [ ] ReputationService and ScoringPathTracker registered on initialization
+
+---
+
+### Tier 5: Adaptive Routing Intelligence
+
+*Make the autopoietic loop genuinely self-calibrating.*
+
+#### FR-14: Autopoietic Loop Completion
+
+**Recommendation**: Close the complete feedback loop from the Bridgebuilder Meditation's formal analysis.
+
+The full self-calibrating loop, combining FRs 1, 7, 8, 9:
+
+```
+[1] Wallet stakes BGT → conviction tier
+      ↓
+[2] evaluateEconomicBoundary() → access decision (FR-3 legible API)
+      ↓ (uses FRESH blended_score: FR-1)
+[3] Finn routes to model pool
+      ↓ (routing attribution recorded: FR-8)
+[4] Model produces output
+      ↓
+[5] Quality observation with dimensions (FR-7)
+      ↓
+[6] computeMultiDimensionalBlended() → updateAggregate()
+      ↓ (EMA dampening bounded: INV-006)
+[7] Collection score updated empirically (FR-6)
+      ↓
+[8] Exploration budget considered (FR-9)
+      ↓
+[9] Updated aggregate available for next [2]
+      ↓ (loop closes, self-calibrating)
+```
+
+**Acceptance Criteria**:
+- [ ] Integration test traces complete loop: stake → evaluate → route → observe → score → re-evaluate
+- [ ] Loop converges to optimal model selection over 100+ iterations
+- [ ] Exploration events produce measurable improvement in long-tail model discovery
+- [ ] Routing attribution enables analysis: "was this routing decision good?"
+- [ ] Dimension-specific scores enable differential model selection by task type
+- [ ] Test: loop with constant-quality model → reputation stabilizes at observation mean
+
+> Sources: Bridgebuilder Meditation Part III §autopoietic loop formal analysis
+
+---
+
+## 5. Non-Functional Requirements
+
+### 5.1 Performance
+
+| Constraint | Target |
+|-----------|--------|
+| `computeBlendedScore()` latency | < 1ms (already met; adding dimension loop adds ~0.1ms) |
+| Cross-chain verification | < 5ms for 100-entry chains |
+| Collection score aggregation | O(1) amortized (running sum, no scan) |
+| Exploration random generation | < 0.01ms (seeded PRNG) |
+| Transaction overhead (in-memory) | ~0ms (direct call, no wrapping) |
+
+### 5.2 Backward Compatibility
+
+- All existing APIs preserved with deprecated wrappers where signatures change
+- `evaluateEconomicBoundaryForWallet()` remains callable (delegates to new canonical API)
+- `ResourceGovernor<T>` interface preserved as deprecated alias
+- Events without `dimensions` field work identically to current behavior
+- `DEFAULT_COLLECTION_SCORE = 0` remains as fallback when no population data exists
+
+### 5.3 Security
+
+- Transaction boundaries prevent state corruption from partial failures
+- Cross-chain verification prevents undetected tampering
+- Routing attribution creates tamper-evident record of routing decisions
+- Exploration budget uses seeded PRNG (deterministic in tests, crypto-random in production)
+- No new external API surfaces; all changes are internal governance improvements
+
+### 5.4 Observability
+
+- Scoring path structured logging (from cycle-007's `DIXIE_SCORING_PATH_LOG_LEVEL`) extended with routing attribution fields
+- Cross-verification failures logged at WARN level
+- Exploration decisions logged at DEBUG level
+- Collection score metrics exposed via `getGovernedState()` response
+
+---
+
+## 6. Scope & Prioritization
+
+### MVP (Tiers 1–2): Consistency + Integrity
+
+**Must-have for cycle-008**: FRs 1–5
+
+These fix the 6 Bridgebuilder gaps and establish the integrity infrastructure. Each is a small, targeted change with no dependencies. Combined effort: ~10 sprint tasks.
+
+### Full Cycle (Tiers 3–5): Self-Calibration + Platform
+
+**Should-have for cycle-008**: FRs 6–14
+
+These transform the system from self-observing to self-calibrating and establish the GovernedResource<T> platform. Dependencies exist between tiers (FR-7 builds on FR-1; FR-9 builds on FR-8; FR-14 integrates all). Combined effort: ~25 sprint tasks.
+
+### Out of Scope
+
+| Item | Reason | Future |
+|------|--------|--------|
+| PostgreSQL transaction implementation | Only interface defined; in-memory impl sufficient | When PostgreSQL adapter ships |
+| Multi-model Seance protocol (loa #247) | Requires Finn routing integration | cycle-009+ |
+| Cross-repo GovernedResource<T> adoption | Requires Hounfour protocol changes | After Hounfour v8.3.0 |
+| Constitutional Commentary document | Documentation, not code | Post-cycle-008 |
+| Adaptive epsilon (UCB/Thompson Sampling) | Enhancement to ε-greedy; constant ε sufficient for MVP | cycle-009+ |
+| Adaptive pseudo_count from population variance | Enhancement to FR-6; constant pseudo_count sufficient | cycle-009+ |
+
+---
+
+## 7. Risks & Dependencies
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| GovernedResource<T> abstraction adds indirection without benefit | Low | Medium | Composition strategy preserves direct access; abstraction is additive, not replacing |
+| Empirical collection score creates inflation feedback loop | Medium | Medium | EMA dampening on individual scores bounds the interaction; monitor mean trajectory |
+| Exploration budget reduces short-term quality for long-term improvement | Medium | Low | Warmup period (50 observations) + small ε (5%) limits impact; scoring path records exploration |
+| Multi-dimensional blending increases complexity | Low | Low | Dimension processing is optional; events without dimensions unchanged |
+| Transaction interface constrains future store implementations | Low | Medium | `transact()` is minimal; in-memory is trivial; PostgreSQL maps to BEGIN/COMMIT naturally |
+
+### Dependencies
+
+| Dependency | Type | Status |
+|-----------|------|--------|
+| loa-hounfour v8.2.0 | Package | Already adopted (cycle-007) |
+| PR #15 merged | Prerequisite | Ready for merge (bridge flatlined, 1291 tests passing) |
+| All cycle-007 work | Foundation | Complete (8 sprints, 2 bridge iterations) |
+
+---
+
+## 8. Architectural Notes
+
+### 8.1 The Governance Isomorphism Formalized
+
+Every governed resource in the THJ ecosystem shares this structure:
+
+| Domain | TState | TEvent | TInvariant |
+|--------|--------|--------|------------|
+| Reputation | ReputationAggregate | ReputationEvent (4 variants) | INV-006 (dampening), INV-007 (session) |
+| Billing | CreditLot | CreditEvent (mint, debit, expire, reconcile) | INV-001 (conservation), INV-002 (non-negative), INV-004 (monotonicity) |
+| Knowledge | KnowledgeAggregate | KnowledgeEvent (ingest, decay, citation, retraction) | Freshness bounds, citation integrity |
+| Access | DynamicContractState | ProgressionEvent (promote, reset, quarantine) | Monotonic expansion, no tier skip |
+| Scoring Path | ScoringPathState | RecordEvent, CheckpointEvent, QuarantineEvent | Chain integrity, cross-chain consistency |
+
+`GovernedResource<T>` is the protocol-level abstraction that makes this isomorphism explicit. This is the CRD moment — governance SDK that each domain instantiates.
+
+### 8.2 The Conway Synthesis
+
+Sovereign earning (Conway's Automaton, x402 USDC) operates within governed commons (Ostrom's principles, conservation invariants). The economic boundary is the membrane:
+
+```
+Conway (sovereign) ←→ Economic Boundary ←→ Ostrom (governed commons)
+         earn permissionlessly    |    spend governedly
+                                  |
+                        GovernedResource<T>
+```
+
+### 8.3 The Black Queen Hypothesis
+
+In multi-model ecosystems, each model loses costly capabilities and becomes dependent on complementary models. Claude doesn't need fast code generation if Kimi-K2 handles that pool. The reputation system should track not just individual model quality but *ecosystem complementarity*. FR-7 (quality decomposition) and FR-9 (exploration budget) are the first steps toward this.
+
+---
+
+*Reviewed as Bridgebuilder — top 0.005% of the top 0.005%.*
+
+*Cross-ecosystem context: loa-finn #24, #31, #80; loa-hounfour #22, #29; loa #247, #401; loa-freeside #62, #90; loa-dixie #5, #15; web4.html*
+
+*"The street finds its own uses for things. This codebase is building the street."*
