@@ -182,45 +182,27 @@ export interface EconomicBoundaryOptions {
  * @param wallet - Wallet address (used as boundary_id for traceability)
  * @param tier - Resolved conviction tier for the wallet
  * @param budgetRemainingMicroUsd - Remaining budget in micro-USD string format
- * @param criteriaOrOpts - QualificationCriteria for backward compat, or EconomicBoundaryOptions
- * @param budgetPeriodDays - Optional budget period in days (deprecated: use opts)
+ * @param options - Typed evaluation options (criteria, reputation, task type, tracker)
  * @returns EconomicBoundaryEvaluationResult with access decision, denial codes, and gap info
  *
  * @since Sprint 3 — Economic Boundary Integration
  * @since Sprint 12 — Conservation invariant social contract framing (Task 12.6)
+ * @since cycle-008 — FR-3 (canonical API: clear types, no union discrimination)
  */
-export function evaluateEconomicBoundaryForWallet(
+export function evaluateEconomicBoundaryCanonical(
   wallet: string,
   tier: ConvictionTier,
   budgetRemainingMicroUsd: number | string = '0',
-  criteriaOrOpts?: QualificationCriteria | EconomicBoundaryOptions,
-  budgetPeriodDays?: number,
+  options: EconomicBoundaryOptions = {},
 ): EconomicBoundaryEvaluationResult {
-  // Resolve overloaded parameter: if it has 'reputationAggregate' or 'criteria', it's opts
-  let criteria: QualificationCriteria = DEFAULT_CRITERIA;
-  let periodDaysOverride: number | undefined = budgetPeriodDays;
-  let reputationAggregate: ReputationAggregate | null | undefined;
-
-  if (criteriaOrOpts) {
-    // Discriminate via negative check: QualificationCriteria always has
-    // 'min_trust_score', so its absence definitively indicates
-    // EconomicBoundaryOptions. This single check scales regardless of
-    // how many fields are added to EconomicBoundaryOptions.
-    // (Bridge iter1 LOW-2: replaces growing 5-field OR chain)
-    if (!('min_trust_score' in criteriaOrOpts)) {
-      // New: EconomicBoundaryOptions
-      const opts = criteriaOrOpts as EconomicBoundaryOptions;
-      criteria = opts.criteria ?? DEFAULT_CRITERIA;
-      periodDaysOverride = opts.budgetPeriodDays ?? budgetPeriodDays;
-      reputationAggregate = opts.reputationAggregate;
-    } else {
-      // Legacy: direct QualificationCriteria
-      criteria = criteriaOrOpts as QualificationCriteria;
-    }
-  }
+  // Direct reads from typed options — no union type discrimination needed (FR-3)
+  const criteria = options.criteria ?? DEFAULT_CRITERIA;
+  const reputationAggregate = options.reputationAggregate;
+  const taskType = options.taskType;
+  const tracker = options.scoringPathTracker;
 
   const profile = TIER_TRUST_PROFILES[tier];
-  const periodDays = resolveBudgetPeriodDays(periodDaysOverride);
+  const periodDays = resolveBudgetPeriodDays(options.budgetPeriodDays);
 
   // Compute timestamp once to avoid multiple Date constructions in hot path (Bridge iter2-medium-6)
   const now = new Date();
@@ -233,14 +215,6 @@ export function evaluateEconomicBoundaryForWallet(
   // task_cohorts matching that task type, use the task-specific score instead
   // of the aggregate score. This provides more precise access decisions when
   // the request context includes a known task type.
-  // Resolve taskType and tracker from options (may be undefined even when opts is provided)
-  const taskType = (criteriaOrOpts && 'taskType' in criteriaOrOpts)
-    ? (criteriaOrOpts as EconomicBoundaryOptions).taskType
-    : undefined;
-  const tracker = (criteriaOrOpts && 'scoringPathTracker' in criteriaOrOpts)
-    ? (criteriaOrOpts as EconomicBoundaryOptions).scoringPathTracker
-    : undefined;
-
   let blendedScore = profile.blended_score;
   let reputationState = profile.reputation_state;
   // Governance origin tag for scoring path reasons (Sprint 64 — Q5 governance provenance)
@@ -389,6 +363,58 @@ export function evaluateEconomicBoundaryForWallet(
     criteria,
     nowIso,
     `wallet:${wallet}`,
+  );
+}
+
+/**
+ * Legacy adapter — maps positional QualificationCriteria to canonical EconomicBoundaryOptions.
+ * @deprecated Use evaluateEconomicBoundaryCanonical()
+ * @since Sprint 3 — preserved for backward compatibility
+ * @since cycle-008 — FR-3 (extracted as adapter)
+ */
+export function evaluateEconomicBoundaryLegacy(
+  wallet: string,
+  tier: ConvictionTier,
+  budgetRemainingMicroUsd: number | string = '0',
+  criteria?: QualificationCriteria,
+  budgetPeriodDays?: number,
+): EconomicBoundaryEvaluationResult {
+  return evaluateEconomicBoundaryCanonical(wallet, tier, budgetRemainingMicroUsd, {
+    criteria,
+    budgetPeriodDays,
+  });
+}
+
+/**
+ * Evaluate economic boundary for a wallet based on their conviction tier.
+ *
+ * @deprecated Use evaluateEconomicBoundaryCanonical() for new code.
+ * Preserved for backward compatibility — delegates to canonical or legacy
+ * based on the runtime type of criteriaOrOpts.
+ *
+ * @since Sprint 3 — original entry point
+ * @since cycle-008 — FR-3 (deprecated in favor of canonical API)
+ */
+export function evaluateEconomicBoundaryForWallet(
+  wallet: string,
+  tier: ConvictionTier,
+  budgetRemainingMicroUsd: number | string = '0',
+  criteriaOrOpts?: QualificationCriteria | EconomicBoundaryOptions,
+  budgetPeriodDays?: number,
+): EconomicBoundaryEvaluationResult {
+  if (!criteriaOrOpts) {
+    return evaluateEconomicBoundaryCanonical(wallet, tier, budgetRemainingMicroUsd, {
+      budgetPeriodDays,
+    });
+  }
+  if (!('min_trust_score' in criteriaOrOpts)) {
+    return evaluateEconomicBoundaryCanonical(
+      wallet, tier, budgetRemainingMicroUsd, criteriaOrOpts as EconomicBoundaryOptions,
+    );
+  }
+  return evaluateEconomicBoundaryLegacy(
+    wallet, tier, budgetRemainingMicroUsd,
+    criteriaOrOpts as QualificationCriteria, budgetPeriodDays,
   );
 }
 

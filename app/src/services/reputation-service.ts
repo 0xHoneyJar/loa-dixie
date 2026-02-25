@@ -544,8 +544,45 @@ export class ReputationService {
   }
 
   /**
+   * Build a fully consistent updated aggregate from a new personal score.
+   *
+   * Shared helper that ensures every event path (quality_signal, model_performance)
+   * produces an aggregate with fresh blended_score. Extracted as part of
+   * Bridgebuilder Gap 1 fix (FR-1): handleQualitySignal previously updated
+   * personal_score but NOT blended_score.
+   *
+   * @param existing - Current aggregate state
+   * @param newPersonalScore - New dampened personal score
+   * @param timestamp - Event timestamp for last_updated
+   * @returns Fully consistent aggregate with fresh blended_score
+   * @since cycle-008 — Sprint 81, Task 1.1 (FR-1: consistent blended score)
+   */
+  private buildUpdatedAggregate(
+    existing: ReputationAggregate,
+    newPersonalScore: number,
+    timestamp: string,
+  ): ReputationAggregate {
+    const newSampleCount = existing.sample_count + 1;
+    const blended = this.computeBlended({
+      personalScore: newPersonalScore,
+      collectionScore: existing.collection_score,
+      sampleCount: newSampleCount,
+      pseudoCount: existing.pseudo_count,
+    });
+
+    return {
+      ...existing,
+      personal_score: newPersonalScore,
+      blended_score: blended,
+      sample_count: newSampleCount,
+      last_updated: timestamp,
+    };
+  }
+
+  /**
    * Handle quality_signal event — update blended score.
    * @since cycle-007 — Sprint 73, Task S1-T4
+   * @since cycle-008 — Sprint 81, Task 1.2 (FR-1: consistent blended score recomputation)
    */
   private async handleQualitySignal(
     nftId: string,
@@ -559,12 +596,7 @@ export class ReputationService {
       event.score,
       aggregate.sample_count,
     );
-    const updated: ReputationAggregate = {
-      ...aggregate,
-      personal_score: dampenedScore,
-      sample_count: aggregate.sample_count + 1,
-      last_updated: event.timestamp,
-    };
+    const updated = this.buildUpdatedAggregate(aggregate, dampenedScore, event.timestamp);
     await this.store.put(nftId, updated);
   }
 
@@ -642,21 +674,8 @@ export class ReputationService {
       aggregate.sample_count,
     );
 
-    // Update aggregate with the dampened observation score
-    const blended = this.computeBlended({
-      personalScore: dampenedScore,
-      collectionScore: aggregate.collection_score,
-      sampleCount: aggregate.sample_count + 1,
-      pseudoCount: aggregate.pseudo_count,
-    });
-
-    const updated: ReputationAggregate = {
-      ...aggregate,
-      personal_score: dampenedScore,
-      blended_score: blended,
-      sample_count: aggregate.sample_count + 1,
-      last_updated: event.timestamp,
-    };
+    // Update aggregate via shared helper (FR-1: consistent blended score)
+    const updated = this.buildUpdatedAggregate(aggregate, dampenedScore, event.timestamp);
     await this.store.put(nftId, updated);
 
     // Update task-specific cohort if available

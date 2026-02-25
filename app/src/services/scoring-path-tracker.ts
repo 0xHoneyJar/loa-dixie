@@ -186,6 +186,13 @@ export class ScoringPathTracker {
     // Mirror to AuditTrail (S3-T3)
     this.appendToAuditTrail(contentFields, scored_at, entry_hash, previous_hash);
 
+    // Auto-checkpoint at configured interval (FR-2: Bridgebuilder Gap 4)
+    // Checkpoint AFTER audit trail append so the checkpoint covers the current entry.
+    if (this._options.checkpointInterval > 0 &&
+        this.entryCount % this._options.checkpointInterval === 0) {
+      this.checkpoint();
+    }
+
     return {
       ...contentFields,
       entry_hash,
