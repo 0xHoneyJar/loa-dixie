@@ -222,6 +222,15 @@ export interface ReputationStore {
    * @since Sprint 10 — Task 10.5
    */
   getEventHistory(nftId: string): Promise<ReputationEvent[]>;
+
+  /**
+   * Execute operations atomically. The callback receives the store itself.
+   * In-memory: snapshot/restore semantics (rollback on error).
+   * PostgreSQL: wraps in BEGIN/COMMIT with rollback on error.
+   *
+   * @since cycle-008 — FR-4 (transaction boundaries)
+   */
+  transact<T>(fn: (store: ReputationStore) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -314,6 +323,27 @@ export class InMemoryReputationStore implements ReputationStore {
    */
   async getEventHistory(nftId: string): Promise<ReputationEvent[]> {
     return this.eventLog.get(nftId) ?? [];
+  }
+
+  /**
+   * Execute operations atomically with snapshot/restore semantics.
+   * Before calling fn, snapshots aggregates and task cohorts.
+   * On error: restores pre-transaction state. On success: keeps mutations.
+   * @since cycle-008 — FR-4
+   */
+  async transact<T>(fn: (store: ReputationStore) => Promise<T>): Promise<T> {
+    const snapshot = new Map(this.store);
+    const cohortSnapshot = new Map(this.taskCohorts);
+    try {
+      return await fn(this);
+    } catch (err) {
+      // Restore state on failure — the "rollback"
+      this.store.clear();
+      for (const [k, v] of snapshot) this.store.set(k, v);
+      this.taskCohorts.clear();
+      for (const [k, v] of cohortSnapshot) this.taskCohorts.set(k, v);
+      throw err;
+    }
   }
 
   /** Clear all stored data (aggregates, task cohorts, events) for testing. */
@@ -583,6 +613,7 @@ export class ReputationService {
    * Handle quality_signal event — update blended score.
    * @since cycle-007 — Sprint 73, Task S1-T4
    * @since cycle-008 — Sprint 81, Task 1.2 (FR-1: consistent blended score recomputation)
+   * @since cycle-008 — Sprint 82, Task 2.3 (FR-4: transactional wrapper)
    */
   private async handleQualitySignal(
     nftId: string,
@@ -597,7 +628,9 @@ export class ReputationService {
       aggregate.sample_count,
     );
     const updated = this.buildUpdatedAggregate(aggregate, dampenedScore, event.timestamp);
-    await this.store.put(nftId, updated);
+    await this.store.transact(async (tx) => {
+      await tx.put(nftId, updated);
+    });
   }
 
   /**
@@ -660,6 +693,11 @@ export class ReputationService {
    *
    * @since cycle-007 — Sprint 73, Task S1-T4
    */
+  /**
+   * Handle model_performance event — decompose into quality signal pipeline.
+   * Wrapped in transact() so aggregate + cohort updates are atomic.
+   * @since cycle-008 — Sprint 82, Task 2.3 (FR-4: transactional wrapper)
+   */
   private async handleModelPerformance(
     nftId: string,
     event: Extract<ReputationEvent, { type: 'model_performance' }>,
@@ -676,27 +714,30 @@ export class ReputationService {
 
     // Update aggregate via shared helper (FR-1: consistent blended score)
     const updated = this.buildUpdatedAggregate(aggregate, dampenedScore, event.timestamp);
-    await this.store.put(nftId, updated);
 
-    // Update task-specific cohort if available
-    const existingCohort = await this.store.getTaskCohort(nftId, event.model_id, event.task_type);
-    if (existingCohort) {
-      await this.store.putTaskCohort(nftId, {
-        ...existingCohort,
-        personal_score: rawScore,
-        sample_count: existingCohort.sample_count + 1,
-        last_updated: event.timestamp,
-      });
-    } else {
-      // Create new task cohort for this model + task type combination
-      await this.store.putTaskCohort(nftId, {
-        model_id: event.model_id,
-        task_type: event.task_type,
-        personal_score: rawScore,
-        sample_count: 1,
-        last_updated: event.timestamp,
-      });
-    }
+    // Atomic: aggregate + cohort update (FR-4: transaction boundary)
+    await this.store.transact(async (tx) => {
+      await tx.put(nftId, updated);
+
+      // Update task-specific cohort
+      const existingCohort = await tx.getTaskCohort(nftId, event.model_id, event.task_type);
+      if (existingCohort) {
+        await tx.putTaskCohort(nftId, {
+          ...existingCohort,
+          personal_score: rawScore,
+          sample_count: existingCohort.sample_count + 1,
+          last_updated: event.timestamp,
+        });
+      } else {
+        await tx.putTaskCohort(nftId, {
+          model_id: event.model_id,
+          task_type: event.task_type,
+          personal_score: rawScore,
+          sample_count: 1,
+          last_updated: event.timestamp,
+        });
+      }
+    });
   }
 }
 

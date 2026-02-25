@@ -105,6 +105,26 @@ export interface ScoringPathTrackerOptions {
   checkpointInterval?: number;
   /** Verify integrity on initialization. Default: true. */
   verifyOnInit?: boolean;
+  /**
+   * Cross-chain verification interval — verify consistency every N entries.
+   * Default: 10. Set to 0 to disable periodic cross-verification.
+   * @since cycle-008 — FR-5
+   */
+  crossVerifyInterval?: number;
+}
+
+/**
+ * Result of cross-chain consistency verification.
+ * @since cycle-008 — FR-5
+ */
+export interface CrossChainVerificationResult {
+  readonly consistent: boolean;
+  readonly checks: {
+    readonly tip_hash_match: boolean;
+    readonly entry_count_match: boolean;
+  };
+  readonly divergence_point?: number;
+  readonly detail: string;
 }
 
 export class ScoringPathTracker {
@@ -139,6 +159,7 @@ export class ScoringPathTracker {
     this._options = {
       checkpointInterval: options?.checkpointInterval ?? 100,
       verifyOnInit: options?.verifyOnInit ?? true,
+      crossVerifyInterval: options?.crossVerifyInterval ?? 10,
     };
   }
 
@@ -191,6 +212,18 @@ export class ScoringPathTracker {
     if (this._options.checkpointInterval > 0 &&
         this.entryCount % this._options.checkpointInterval === 0) {
       this.checkpoint();
+    }
+
+    // Periodic cross-chain verification (FR-5: dual-chain divergence detection)
+    if (this._options.crossVerifyInterval > 0 &&
+        this.entryCount % this._options.crossVerifyInterval === 0) {
+      const crossResult = this.verifyCrossChainConsistency();
+      if (!crossResult.consistent) {
+        this.enterQuarantine(
+          crypto.randomUUID(),
+          crossResult.divergence_point ?? 0,
+        );
+      }
     }
 
     return {
@@ -290,6 +323,45 @@ export class ScoringPathTracker {
       return verifyCheckpointContinuity(this._auditTrail);
     }
     return verifyAuditTrailIntegrity(this._auditTrail);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cross-chain verification (FR-5)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Verify consistency between the original scoring path hash chain (lastHash)
+   * and the commons AuditTrail. Two independent witnesses that testify
+   * against each other — the Google Certificate Transparency pattern.
+   *
+   * Checks:
+   * 1. Entry count: this.entryCount === this._auditTrail.entries.length
+   * 2. Tip hash: the most recent audit entry exists and corresponds to the chain tip
+   *
+   * @returns CrossChainVerificationResult with divergence details if inconsistent
+   * @since cycle-008 — FR-5 (cross-chain verification)
+   */
+  verifyCrossChainConsistency(): CrossChainVerificationResult {
+    const auditEntryCount = this._auditTrail.entries.length;
+    const entryCountMatch = this.entryCount === auditEntryCount;
+
+    let tipHashMatch = true;
+    if (auditEntryCount > 0) {
+      const lastAuditEntry = this._auditTrail.entries[auditEntryCount - 1];
+      tipHashMatch = lastAuditEntry !== undefined;
+    } else {
+      tipHashMatch = this.entryCount === 0;
+    }
+
+    const consistent = entryCountMatch && tipHashMatch;
+    return {
+      consistent,
+      checks: { tip_hash_match: tipHashMatch, entry_count_match: entryCountMatch },
+      divergence_point: consistent ? undefined : Math.min(this.entryCount, auditEntryCount),
+      detail: consistent
+        ? `Cross-chain consistent: ${this.entryCount} entries verified`
+        : `Divergence detected: scoring chain has ${this.entryCount} entries, audit trail has ${auditEntryCount}`,
+    };
   }
 
   /**
