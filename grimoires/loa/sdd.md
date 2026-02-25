@@ -1,939 +1,513 @@
-# SDD: Institutional Memory — Durable Governance, Knowledge Sovereignty & the Court of Record
+# SDD: Autopoietic Loop Closure — Reputation Query Surface & Governance Hardening
 
-**Version**: 9.0.0
+**Version**: 11.0.0
 **Date**: 2026-02-26
 **Author**: Claude (Architecture), Merlin (Direction)
-**Cycle**: cycle-009
+**Cycle**: cycle-011
 **Status**: Draft
-**PRD Reference**: PRD v9.0.0 — Institutional Memory
-**Predecessor**: cycle-006 SDD (Phase 3 Production Wiring)
+**PRD Reference**: PRD v11.0.0 — Autopoietic Loop Closure
 
 ---
 
 ## 1. Executive Summary
 
-Cycle-009 transforms Dixie from a governance protocol with ephemeral state into an institutional memory — a durable court of record. The architecture leverages two complementary layers:
-
-1. **Schema layer** (Hounfour commons v8.x): `GovernedReputation`, `GovernedFreshness`, `GovernanceMutation`, `AuditTrail` — formal type-safe schemas with conservation laws, audit trails, and state machines.
-2. **Service layer** (Dixie): `ResourceGovernor<T>`, `GovernorRegistry`, `ReputationStore` — runtime governance with pluggable persistence, health monitoring, and self-knowledge.
-
-The key insight: Hounfour defines WHAT governance looks like (data shape). Dixie defines HOW governance runs (runtime behavior). Cycle-009 bridges these layers with PostgreSQL persistence, making governance durable.
+Cycle-011 closes the autopoietic feedback loop by exposing dixie's reputation
+data as an HTTP API that finn can query at routing time. The architecture adds
+a thin reputation route layer over existing services, fixes the collection score
+startup seeding gap, and optionally completes the three-witness PG durability
+story and cross-governor event coordination.
 
 ### Architecture at a Glance
 
 ```
+                         loa-finn (consumer)
+                              │
+                    GET /api/reputation/query
+                    ?poolId=X&routingKey=Y
+                              │
+                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         Dixie Service Layer                         │
+│                         Dixie BFF Layer                             │
 │                                                                     │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
-│  │ ReputationService │  │ ScoringPath      │  │ Knowledge        │  │
-│  │ (ResourceGovernor)│  │ Tracker          │  │ Governor         │  │
-│  └────────┬─────────┘  └──────────────────┘  └────────┬─────────┘  │
-│           │                                            │            │
-│  ┌────────┴────────────────────────────────────────────┴─────────┐  │
-│  │                     GovernorRegistry                          │  │
-│  └───────────────────────────┬───────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │              NEW: Reputation Routes (FR-4..FR-8)              │   │
+│  │                                                               │   │
+│  │  GET /reputation/:nftId         → agent reputation summary    │   │
+│  │  GET /reputation/:nftId/cohorts → per-model breakdown         │   │
+│  │  GET /reputation/query          → ReputationQueryFn bridge    │   │
+│  │  GET /reputation/population     → collection stats (admin)    │   │
+│  └──────────────────────┬───────────────────────────────────────┘   │
+│                          │                                          │
+│  ┌──────────────────┐   │   ┌──────────────────┐  ┌────────────┐  │
+│  │ ReputationService │◄──┘   │ ScoringPath      │  │ Knowledge  │  │
+│  │ + CollectionScore │       │ Tracker          │  │ Governor   │  │
+│  │   Aggregator      │       │ (GovernedRes)    │  │ (+PG: FR-9)│  │
+│  └────────┬──────────┘       └──────────────────┘  └──────┬─────┘  │
+│           │                                               │        │
+│  ┌────────┴───────────────────────────────────────────────┴─────┐  │
+│  │                   GovernorRegistry                            │  │
+│  │                   + Event Bus (FR-10)                         │  │
+│  └──────────────────────────┬───────────────────────────────────┘  │
 │                              │                                      │
-│  ┌───────────────────────────┴───────────────────────────────────┐  │
-│  │                    Persistence Layer                           │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐  │  │
-│  │  │ PostgreSQL   │  │ Mutation    │  │ Audit Trail          │  │  │
-│  │  │ Reputation   │  │ Log        │  │ Store                │  │  │
-│  │  │ Store        │  │ Store      │  │                      │  │  │
-│  │  └──────┬───────┘  └─────┬──────┘  └──────────┬───────────┘  │  │
-│  │         └────────────────┼────────────────────┘               │  │
-│  │                    ┌─────┴──────┐                              │  │
-│  │                    │ Migration  │                              │  │
-│  │                    │ Runner     │                              │  │
-│  │                    └─────┬──────┘                              │  │
-│  │                          │                                     │  │
-│  └──────────────────────────┼────────────────────────────────────┘  │
-│                              │                                      │
-└──────────────────────────────┼──────────────────────────────────────┘
-                               │
-                        ┌──────┴──────┐
-                        │ PostgreSQL  │
-                        │ (pg pool)   │
-                        └─────────────┘
+│  ┌──────────────────────────┴──────────────────────────────────┐   │
+│  │                    Persistence Layer                          │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐   │   │
+│  │  │ PG Reputation │  │ PG Knowledge │  │ Mutation/Audit  │   │   │
+│  │  │ Store         │  │ Store (FR-9) │  │ Stores          │   │   │
+│  │  └──────────────┘  └──────────────┘  └─────────────────┘   │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
----
+### Key Design Decisions
 
-## 2. Technology Stack
-
-| Layer | Technology | Version | Justification |
-|-------|-----------|---------|---------------|
-| Runtime | Bun / Node.js | >=18 | Existing runtime |
-| Framework | Hono | ^4.7.0 | Existing HTTP framework |
-| Database | PostgreSQL | >=15 | Already configured in `db/client.ts`, pool ready |
-| DB Driver | pg | ^8.18.0 | Already in dependencies |
-| Schema Validation | TypeBox (via Hounfour) | — | Hounfour commons schemas |
-| Hashing | SHA-256 (RFC 8785 canonical JSON) | — | Existing pattern from `ScoringPathTracker` |
-| Protocol Types | `@0xhoneyjar/loa-hounfour` | v8.2.0 | Symlinked at `../../loa-hounfour` |
-| Testing | Vitest | ^3.0.0 | Existing test framework |
-
-### New Dependencies
-
-None. All required packages (`pg`, `@types/pg`, `@0xhoneyjar/loa-hounfour`) are already in `package.json`.
+| Decision | Rationale |
+|----------|-----------|
+| Route module per `learning.ts` pattern | Proven dependency injection, testable |
+| `/reputation/query` returns `{ score }` only | Minimal response = minimal latency for finn |
+| Collection aggregator seeded from PG on boot | Population mean available immediately, no cold-start penalty |
+| Event bus is advisory, not command | Decoupled governors; failure isolation |
+| KnowledgeGovernorStore mirrors ReputationStore | Consistent persistence interface; proven mock pool test pattern |
 
 ---
 
-## 3. Component Design
+## 2. Component Design
 
-### 3.1 PostgreSQL ReputationStore (FR-1)
+### 2.1 Reputation Routes (`routes/reputation.ts`) — NEW
 
-**File**: `app/src/services/pg-reputation-store.ts`
-
-Implements the existing `ReputationStore` interface with PostgreSQL backing. Drop-in replacement for `InMemoryReputationStore`.
+**Pattern**: Follows `learning.ts` route factory.
 
 ```typescript
-import type { DbPool } from '../db/client.js';
-import type { ReputationStore } from './reputation-service.js';
-import type { ReputationAggregate } from '@0xhoneyjar/loa-hounfour/governance';
-import type { TaskTypeCohort, ReputationEvent } from '../types/reputation-evolution.js';
+interface ReputationRouteDeps {
+  readonly reputationService: ReputationService;
+  readonly adminKey?: string;
+  readonly reputationCache?: LRUCache<string, number | null>; // [Flatline IMP-003]
+  readonly serviceJWTVerifier?: ServiceJWTVerifier;            // [Flatline SKP-001]
+}
 
-export class PostgreSQLReputationStore implements ReputationStore {
-  constructor(private readonly pool: DbPool) {}
+function createReputationRoutes(deps: ReputationRouteDeps): Hono
+```
 
-  async get(nftId: string): Promise<ReputationAggregate | undefined>;
-  async put(nftId: string, aggregate: ReputationAggregate): Promise<void>;
-  async listCold(): Promise<Array<{ nftId: string; aggregate: ReputationAggregate }>>;
-  async count(): Promise<number>;
-  async listAll(): Promise<Array<{ nftId: string; aggregate: ReputationAggregate }>>;
-  async getTaskCohort(nftId: string, model: string, taskType: string): Promise<TaskTypeCohort | undefined>;
-  async putTaskCohort(nftId: string, cohort: TaskTypeCohort): Promise<void>;
-  async appendEvent(nftId: string, event: ReputationEvent): Promise<void>;
-  async getEventHistory(nftId: string): Promise<ReputationEvent[]>;
+#### Endpoints
+
+**GET `/api/reputation/:nftId`** (FR-4)
+
+Auth: conviction tier `builder+` via `x-conviction-tier` header, backed by
+JWT-verified claims from the gateway. Defense-in-depth: verify JWT signature
+even when behind proxy (prevents header forgery via SSRF). [Flatline SKP-006]
+
+```typescript
+// Handler pseudocode
+const aggregate = await deps.reputationService.store.get(nftId);
+if (!aggregate) return c.json({ error: 'not_found' }, 404);
+const reliability = deps.reputationService.checkReliability(aggregate.blended_score);
+return c.json({
+  blended_score: aggregate.blended_score,
+  personal_score: aggregate.personal_score,
+  sample_count: aggregate.sample_count,
+  state: aggregate.state,
+  reliability: reliability.reliable,
+  dimensions: aggregate.dimension_scores ?? {},
+  snapshot_at: new Date().toISOString(),
+});
+```
+
+Response schema:
+```typescript
+{
+  blended_score: number | null;
+  personal_score: number | null;
+  sample_count: number;
+  state: 'cold' | 'warming' | 'established' | 'authoritative';
+  reliability: boolean;
+  dimensions: Record<string, number>;
+  snapshot_at: string; // ISO 8601
 }
 ```
 
-#### Storage Strategy
+**GET `/api/reputation/query`** (FR-6) — The Finn Bridge
 
-The `ReputationAggregate` is a complex nested object. Rather than normalizing every field into columns, we use a hybrid approach:
-
-| Table | Strategy | Rationale |
-|-------|----------|-----------|
-| `reputation_aggregates` | JSONB column + indexed fields | Aggregate shape varies by Hounfour version; JSONB absorbs schema evolution. Key fields (`nft_id`, `state`, `version`) are lifted to columns for queries. |
-| `reputation_task_cohorts` | Relational columns | Fixed schema, queried by composite key (`nft_id`, `model_id`, `task_type`). |
-| `reputation_events` | Append-only with JSONB payload | Event sourcing pattern. Never updated or deleted. `seq` column for ordering. |
-
-#### Optimistic Concurrency
-
-```sql
--- put() with version check
-UPDATE reputation_aggregates
-SET data = $2, version = version + 1, updated_at = now()
-WHERE nft_id = $1 AND version = $3
-RETURNING version;
--- If 0 rows affected: version conflict -> throw ConflictError
-```
-
-#### Transaction Support
-
-For batch operations that need atomicity:
+Auth: service-to-service signed JWT (ES256). Caller must present token with
+`iss: loa-finn`, `aud: loa-dixie`. Verified via existing `jose` stack. [Flatline SKP-001]
 
 ```typescript
-// app/src/db/transaction.ts
-export async function withTransaction<T>(
-  pool: DbPool,
-  fn: (client: pg.PoolClient) => Promise<T>,
-): Promise<T> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await fn(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
+// Handler pseudocode — optimized for latency
+const jwt = c.req.header('authorization')?.replace('Bearer ', '');
+if (!jwt || !await verifyServiceJWT(jwt, { iss: 'loa-finn', aud: 'loa-dixie' })) {
+  return c.json({ error: 'unauthorized' }, 401);
+}
+const { poolId, routingKey } = c.req.query();
+if (!routingKey?.startsWith('nft:')) return c.json({ score: null });
+const nftId = routingKey.slice(4);
+// Write-through LRU cache (5s TTL, 10K entries) [Flatline IMP-003]
+const cached = deps.reputationCache?.get(nftId);
+if (cached !== undefined) return c.json({ score: cached });
+const aggregate = await deps.reputationService.store.get(nftId);
+if (!aggregate || aggregate.blended_score === null) {
+  return c.json({ score: null });
+}
+deps.reputationCache?.set(nftId, aggregate.blended_score);
+return c.json({ score: aggregate.blended_score });
+```
+
+Response: `{ score: number | null }` — matches `ReputationQueryFn` return type.
+
+Design notes:
+- `routingKey` uses `nft:<id>` prefix encoding, validated on receipt [Flatline PRD SKP-002]
+- `poolId` is passed for future per-pool reputation but not used in v1
+- Service-to-service JWT prevents exposure via SSRF/misconfigured ingress [Flatline IMP-001]
+- Write-through LRU cache invalidated on `processEvent()` [Flatline IMP-003]
+- Rate limited: 1000 req/s per caller, circuit breaker at 5000 [Flatline IMP-002]
+- Returns `null` (not error) for unknown agents — finn treats null as "use collection prior"
+- Returns `null` during warmup (readiness gating) — not 503 [Flatline IMP-004]
+- API version: `Accept: application/vnd.dixie.reputation.v1+json` [Flatline IMP-005]
+
+**GET `/api/reputation/:nftId/cohorts`** (FR-5)
+
+Auth: conviction tier `builder+`.
+
+```typescript
+const aggregate = await deps.reputationService.store.get(nftId);
+if (!aggregate) return c.json({ error: 'not_found' }, 404);
+const cohorts = (aggregate as DixieReputationAggregate).task_cohorts ?? [];
+const crossModel = deps.reputationService.computeCrossModel(cohorts);
+return c.json({
+  cohorts,
+  cross_model_score: crossModel,
+});
+```
+
+**GET `/api/reputation/population`** (FR-7)
+
+Auth: admin-gated via Bearer token (same pattern as `/health/governance`).
+
+```typescript
+const agg = deps.reputationService.collectionAggregator;
+const count = await deps.reputationService.store.count();
+return c.json({
+  mean: agg.mean,
+  variance: agg.variance,
+  population_size: agg.populationSize,
+  store_count: count,
+});
+```
+
+### 2.2 Collection Score Startup Seeding (FR-2)
+
+**Problem**: On fresh boot, `CollectionScoreAggregator` is empty. The `mean`
+property falls back to `DEFAULT_COLLECTION_SCORE = 0`, penalizing new agents.
+
+**Solution**: Two-phase seeding with PG snapshot + incremental catchup. [Flatline IMP-004, SKP-002]
+
+```typescript
+// Phase 1: Load persisted snapshot (< 1ms)
+async function loadAggregatorSnapshot(pool: DbPool): Promise<AggregatorSnapshot | null> {
+  const row = await pool.query('SELECT mean, variance, count FROM reputation_metadata LIMIT 1');
+  return row.rows[0] ?? null;
+}
+
+// Phase 2: Incremental catchup (paginated, bounded)
+async function seedCollectionAggregator(
+  store: ReputationStore,
+  aggregator: CollectionScoreAggregator,
+  options: { batchSize: number; maxDuration: number } = { batchSize: 1000, maxDuration: 5000 },
+): Promise<{ seeded: number; complete: boolean }> {
+  const start = Date.now();
+  let offset = 0;
+  let seeded = 0;
+  // Paginated seeding — never loads full table [Flatline SKP-002]
+  while (Date.now() - start < options.maxDuration) {
+    const batch = await store.listPage(offset, options.batchSize);
+    if (batch.length === 0) return { seeded, complete: true };
+    for (const { aggregate } of batch) {
+      if (aggregate.personal_score !== null) {
+        aggregator.update(aggregate.personal_score);
+        seeded++;
+      }
+    }
+    offset += options.batchSize;
   }
+  return { seeded, complete: false }; // Timed out — serve with partial data
 }
+
+// Server startup
+const snapshot = dbPool ? await loadAggregatorSnapshot(dbPool) : null;
+if (snapshot) {
+  reputationService.collectionAggregator = CollectionScoreAggregator.fromJSON(snapshot);
+}
+// Async catchup — does not block readiness
+seedCollectionAggregator(reputationStore, reputationService.collectionAggregator)
+  .then(({ seeded, complete }) => log.info({ seeded, complete }, 'collection aggregator seeded'));
 ```
 
-### 3.2 Migration Framework (FR-13)
+**Single-instance scoping** [Flatline SKP-003]: The `CollectionScoreAggregator`
+is scoped to a single process. INV-013 (convergence) applies per-process only.
+For multi-replica deployments, compute population stats via PG aggregate query
+(`SELECT AVG(personal_score), VAR_POP(personal_score), COUNT(*) FROM reputation_aggregates`)
+rather than in-memory aggregator. This is a future optimization — dixie is single-instance for now.
+```
 
-**File**: `app/src/db/migrate.ts`
+**Fallback change**: Update `DEFAULT_COLLECTION_SCORE` from `0` to `0.5`
+as a neutral Bayesian prior when no population data exists.
 
-Lightweight, forward-only migration runner. Continues the existing pattern from `migrations/003_schedules.sql` and `migrations/004_autonomous_permissions.sql`.
+**`reconstructAggregateFromEvents` fix**: Accept optional `collectionScore`
+parameter instead of hardcoding `DEFAULT_COLLECTION_SCORE` at line 1116.
+
+### 2.3 Server Wiring
+
+New wiring in `server.ts`:
 
 ```typescript
-export interface MigrationResult {
-  applied: string[];
-  skipped: string[];
-  total: number;
+// After existing route registrations
+app.route('/api/reputation', createReputationRoutes({
+  reputationService,
+  adminKey: config.adminKey,
+}));
+```
+
+The `DixieApp` interface gains:
+```typescript
+interface DixieApp {
+  // ... existing fields ...
+  reputationRoutes: Hono; // NEW
 }
-
-export async function migrate(pool: DbPool): Promise<MigrationResult>;
 ```
 
-#### Migration Table
+### 2.4 PG-Backed KnowledgeGovernor (FR-9) — Stretch
 
-```sql
-CREATE TABLE IF NOT EXISTS _migrations (
-  id SERIAL PRIMARY KEY,
-  filename TEXT NOT NULL UNIQUE,
-  checksum TEXT NOT NULL,
-  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-```
-
-#### Migration Numbering
-
-| Migration | Purpose | FR |
-|-----------|---------|-----|
-| `005_reputation_aggregates.sql` | Reputation aggregate storage | FR-1 |
-| `006_reputation_task_cohorts.sql` | Per-model per-task cohort storage | FR-1 |
-| `007_reputation_events.sql` | Append-only event log | FR-1 |
-| `008_mutation_log.sql` | Governance mutation log | FR-2 |
-| `009_audit_trail.sql` | Hash-chained audit entries | FR-3 |
-| `010_knowledge_freshness.sql` | Knowledge governance state | FR-4, FR-5 |
-| `011_dynamic_contracts.sql` | DynamicContract storage | FR-7 |
-
-#### Idempotency
-
-Migrations use `IF NOT EXISTS` for table/index creation. The `_migrations` table tracks which files have been applied. Re-running `migrate()` is always safe.
-
-### 3.3 Mutation Log Store (FR-2)
-
-**File**: `app/src/services/mutation-log-store.ts`
-
-Durable recording of every governance mutation. Uses Hounfour's `GovernanceMutation` envelope as the schema foundation.
+**Pattern**: Mirrors `pg-reputation-store.ts`.
 
 ```typescript
-import type { GovernanceMutation } from '@0xhoneyjar/loa-hounfour/commons';
-import type { DbPool } from '../db/client.js';
-
-export interface MutationLogEntry {
-  readonly mutation_id: string;
-  readonly session_id: string;
-  readonly actor_id: string;
-  readonly resource_type: string;
-  readonly mutation_type: string;
-  readonly payload: Record<string, unknown>;
-  readonly created_at: string;
-}
-
-export interface MutationLogQuery {
-  session_id?: string;
-  actor_id?: string;
-  resource_type?: string;
-  since?: string;
-  limit?: number;
-}
-
-export class MutationLogStore {
-  constructor(private readonly pool: DbPool) {}
-
-  async append(entry: MutationLogEntry): Promise<void>;
-  async query(filter: MutationLogQuery): Promise<MutationLogEntry[]>;
-  async countBySession(sessionId: string): Promise<number>;
+interface KnowledgeStore {
+  get(corpusId: string): Promise<KnowledgeItem | undefined>;
+  put(corpusId: string, item: KnowledgeItem): Promise<void>;
+  list(): Promise<KnowledgeItem[]>;
+  appendEvent(event: GovernanceEvent): Promise<void>;
+  getEventHistory(): Promise<GovernanceEvent[]>;
+  getVersion(): Promise<number>;
+  incrementVersion(): Promise<number>;
 }
 ```
 
-#### Schema
+**Implementation classes**:
+- `InMemoryKnowledgeStore` — extracted from current `KnowledgeGovernor` Map-based state
+- `PostgresKnowledgeStore` — uses existing `knowledge_freshness` table (migration 010)
 
-```sql
-CREATE TABLE IF NOT EXISTS governance_mutations (
-  mutation_id UUID PRIMARY KEY,
-  session_id UUID NOT NULL,
-  actor_id TEXT NOT NULL,
-  resource_type TEXT NOT NULL,
-  mutation_type TEXT NOT NULL,
-  payload JSONB NOT NULL DEFAULT '{}',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+**Migration alignment**: Migration 010 created `knowledge_freshness` with columns
+matching `KnowledgeItem` fields. No new migration needed for the corpus table.
+A new migration (012) adds `knowledge_events` for the event log.
 
-CREATE INDEX idx_mutations_session ON governance_mutations(session_id);
-CREATE INDEX idx_mutations_resource ON governance_mutations(resource_type, created_at);
-CREATE INDEX idx_mutations_actor ON governance_mutations(actor_id, created_at);
+**Transactional semantics** [Flatline SKP-009]: All state mutations
+(appendEvent + incrementVersion) run inside a single transaction with
+`SELECT ... FOR UPDATE` on the version row. Single-writer assumption
+(same as ReputationStore pattern). Event append is idempotent via
+`event_id` unique constraint. Rollback: forward-only migrations
+(same as cycle-009 decision D-022).
+
+**KnowledgeGovernor refactor**:
+```typescript
+class KnowledgeGovernor implements ResourceGovernor<KnowledgeItem> {
+  constructor(private store: KnowledgeStore) { ... }
+  // All methods delegate to store instead of internal Map
+}
 ```
 
-### 3.4 Audit Trail Store (FR-3)
+### 2.5 Cross-Governor Event Bus (FR-10) — Stretch
 
-**File**: `app/src/services/audit-trail-store.ts`
-
-Durable, hash-chained audit entries using Hounfour's `AuditEntry` and `AuditTrail` schemas. Each governance action produces an audit entry with SHA-256 hash linking.
+**Design**: Lightweight pub/sub on `GovernorRegistry`.
 
 ```typescript
-import type { AuditEntry } from '@0xhoneyjar/loa-hounfour/commons';
-import { computeAuditEntryHash, AUDIT_TRAIL_GENESIS_HASH } from '@0xhoneyjar/loa-hounfour/commons';
-import type { DbPool } from '../db/client.js';
+type GovernanceEventType = 'KNOWLEDGE_DRIFT' | 'REPUTATION_SHIFT' | 'INVARIANT_VIOLATION';
 
-export class AuditTrailStore {
-  constructor(private readonly pool: DbPool) {}
+interface GovernanceBusEvent {
+  type: GovernanceEventType;
+  source: string;      // resourceType of emitting governor
+  detail: unknown;
+  timestamp: string;
+}
 
-  /** Append a new audit entry, computing its hash and linking to the chain. */
-  async append(
-    resourceType: string,
-    entry: Omit<AuditEntry, 'entry_hash' | 'previous_hash'>,
-  ): Promise<AuditEntry>;
+// Added to GovernorRegistry
+class GovernorRegistry {
+  private listeners = new Map<GovernanceEventType, Set<GovernanceEventHandler>>();
 
-  /** Get the latest hash for a resource type's audit chain. */
-  async getTipHash(resourceType: string): Promise<string>;
-
-  /** Retrieve audit entries for a resource type. */
-  async getEntries(resourceType: string, limit?: number): Promise<AuditEntry[]>;
-
-  /** Verify integrity of the audit chain for a resource type. */
-  async verifyIntegrity(
-    resourceType: string,
-  ): Promise<{ valid: boolean; entries_checked: number }>;
+  on(type: GovernanceEventType, handler: GovernanceEventHandler): void;
+  off(type: GovernanceEventType, handler: GovernanceEventHandler): void;
+  emit(event: GovernanceBusEvent): void;
 }
 ```
 
-#### Schema
+**Cycle detection**: Track `emitting` flag per event type. If handler triggers
+re-emission of the same event type, log warning and drop.
 
-```sql
-CREATE TABLE IF NOT EXISTS audit_entries (
-  entry_id UUID PRIMARY KEY,
-  resource_type TEXT NOT NULL,
-  timestamp TIMESTAMPTZ NOT NULL,
-  event_type TEXT NOT NULL,
-  actor_id TEXT,
-  payload JSONB,
-  entry_hash TEXT NOT NULL,
-  previous_hash TEXT NOT NULL,
-  hash_domain_tag TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+**Async delivery**: Handlers are called via `queueMicrotask()` — non-blocking,
+same tick. Errors are caught and logged, never propagated.
 
-CREATE INDEX idx_audit_resource ON audit_entries(resource_type, created_at);
-CREATE INDEX idx_audit_hash ON audit_entries(entry_hash);
-```
+### 2.6 Adaptive Retrieval from Self-Knowledge (FR-11) — Stretch
 
-#### Cross-Chain Verification
-
-The existing `ScoringPathTracker` maintains an in-memory hash chain for scoring decisions. The `AuditTrailStore` maintains a durable hash chain for governance actions. Cross-chain verification compares the scoring path's tip hash against the audit trail's latest scoring-related entry to detect divergence.
-
-### 3.5 Knowledge Governor (FR-4, FR-5, FR-6)
-
-**File**: `app/src/services/knowledge-governor.ts`
-
-The third `ResourceGovernor<T>` implementation, governing knowledge freshness. Uses Hounfour's `GovernedFreshness` schema as the type foundation.
+**Design**: Freshness-weighted confidence in the enrichment pipeline.
 
 ```typescript
-import type {
-  ResourceGovernor, ResourceHealth, ResourceSelfKnowledge, GovernanceEvent,
-} from './resource-governor.js';
-import type { GovernedFreshness } from '@0xhoneyjar/loa-hounfour/commons';
-
-export interface KnowledgeItem {
-  readonly corpus_id: string;
-  readonly source_count: number;
-  readonly citation_count: number;
-  readonly freshness_score: number;
-  readonly freshness_state: 'fresh' | 'decaying' | 'stale' | 'expired';
-  readonly last_ingested: string;
-  readonly dimension_scores: {
-    accuracy: number;
-    coverage: number;
-    recency: number;
+// In enrichment-service.ts
+async assembleKnowledgeContext(nftId: string): Promise<KnowledgeContext> {
+  const health = knowledgeGovernor.getHealth();
+  const freshnessWeight = this.computeFreshnessWeight(health);
+  return {
+    ...existingContext,
+    freshness_weight: freshnessWeight,    // [0, 1]
+    freshness_disclaimer: freshnessWeight < 0.5
+      ? 'Knowledge sources may be outdated'
+      : undefined,
   };
 }
 
-export class KnowledgeGovernor implements ResourceGovernor<KnowledgeItem> {
-  readonly resourceType = 'knowledge';
-
-  getHealth(nowOverride?: Date): ResourceHealth | null;
-  getGovernorSelfKnowledge(nowOverride?: Date): ResourceSelfKnowledge | null;
-  getEventLog(): ReadonlyArray<GovernanceEvent>;
-  getLatestEvent(): GovernanceEvent | null;
-  invalidateCache(): void;
-  warmCache(): void;
-
-  /** Knowledge-specific: compute freshness decay for a corpus. */
-  computeFreshnessDecay(item: KnowledgeItem, now?: Date): number;
-
-  /** Verify freshness bound invariant (INV-009). */
-  verifyFreshnessBound(
-    item: KnowledgeItem,
-  ): { satisfied: boolean; detail: string };
-
-  /** Verify citation integrity invariant (INV-010). */
-  verifyCitationIntegrity(
-    item: KnowledgeItem,
-    knownSources: Set<string>,
-  ): { satisfied: boolean; detail: string };
+private computeFreshnessWeight(health: ResourceHealth): number {
+  if (health.status === 'healthy') return 1.0;
+  if (health.status === 'degraded') return 0.7;
+  return 0.3; // unhealthy
 }
-```
-
-#### Freshness State Machine
-
-Aligned with Hounfour's `GovernedFreshness` decay model:
-
-```
-fresh --(decay)--> decaying --(decay)--> stale --(decay)--> expired
-  ^                                                            |
-  +--------------------(re-ingestion)---------------------------+
-```
-
-**Transitions:**
-- `fresh -> decaying`: `freshness_score` drops below 0.7
-- `decaying -> stale`: `freshness_score` drops below 0.3
-- `stale -> expired`: `freshness_score` drops below `minimum_freshness` (0.1)
-- `expired -> fresh`: re-ingestion event (score reset to 1.0)
-
-**Decay formula**: `score(t) = exp(-lambda * (t - last_refresh))` where `lambda` is the decay rate per day. Default `lambda = 0.023` gives a half-life of ~30 days (matching reputation decay).
-
-#### Knowledge Invariants
-
-| ID | Name | Expression | Severity |
-|----|------|-----------|----------|
-| INV-009 | Freshness Bound | `freshness_score` decreases monotonically between ingestion events | error |
-| INV-010 | Citation Integrity | Every citation references an existing source | error |
-
-#### Schema
-
-```sql
-CREATE TABLE IF NOT EXISTS knowledge_freshness (
-  corpus_id TEXT PRIMARY KEY,
-  source_count INTEGER NOT NULL DEFAULT 0,
-  citation_count INTEGER NOT NULL DEFAULT 0,
-  freshness_score NUMERIC(5,4) NOT NULL DEFAULT 1.0,
-  freshness_state TEXT NOT NULL DEFAULT 'fresh',
-  decay_rate NUMERIC(8,6) NOT NULL DEFAULT 0.023,
-  minimum_freshness NUMERIC(5,4) NOT NULL DEFAULT 0.1,
-  last_ingested TIMESTAMPTZ NOT NULL DEFAULT now(),
-  dimension_scores JSONB NOT NULL DEFAULT '{"accuracy":0,"coverage":0,"recency":0}',
-  version INTEGER NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-```
-
-### 3.6 DynamicContract Adoption (FR-7, FR-8)
-
-**File**: `app/src/services/dynamic-contract-store.ts`
-
-Adopts Hounfour's `DynamicContract` type for capability-gated access. Stores contract state in PostgreSQL and integrates with the conviction boundary.
-
-```typescript
-import type { DynamicContract, ProtocolSurface } from '@0xhoneyjar/loa-hounfour/commons';
-import { verifyMonotonicExpansion } from '@0xhoneyjar/loa-hounfour/commons';
-import type { DbPool } from '../db/client.js';
-
-export class DynamicContractStore {
-  constructor(private readonly pool: DbPool) {}
-
-  /** Get the active contract for an NFT. */
-  async getContract(nftId: string): Promise<DynamicContract | undefined>;
-
-  /** Create or update a contract. Verifies monotonic expansion before saving. */
-  async putContract(nftId: string, contract: DynamicContract): Promise<void>;
-
-  /** Get the protocol surface for an NFT at a given reputation state. */
-  async getSurface(
-    nftId: string,
-    reputationState: string,
-  ): Promise<ProtocolSurface | undefined>;
-}
-```
-
-#### Integration with ConvictionBoundary
-
-Extend `EconomicBoundaryOptions` to include contract checking:
-
-```typescript
-// In conviction-boundary.ts
-export interface EconomicBoundaryOptions {
-  criteria?: QualificationCriteria;
-  budgetPeriodDays?: number;
-  reputationAggregate?: ReputationAggregate | DixieReputationAggregate | null;
-  taskType?: TaskType;
-  scoringPathTracker?: ScoringPathTracker;
-  dynamicContract?: DynamicContract;  // NEW: capability check
-}
-```
-
-When `dynamicContract` is present:
-1. Look up the agent's reputation state
-2. Get the `ProtocolSurface` for that state from the contract's `surfaces` map
-3. Verify the required capability is in `surface.capabilities`
-4. If capability missing: access denied with clear reason
-
-**Backward compatibility**: When `dynamicContract` is `undefined`, the existing behavior is unchanged. Contracts are opt-in.
-
-#### Schema
-
-```sql
-CREATE TABLE IF NOT EXISTS dynamic_contracts (
-  nft_id TEXT PRIMARY KEY,
-  contract_id UUID NOT NULL UNIQUE,
-  contract_data JSONB NOT NULL,
-  contract_version TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-```
-
-### 3.7 Adaptive Exploration — UCB1 (FR-9)
-
-**File**: `app/src/services/exploration.ts`
-
-UCB1 (Upper Confidence Bound) as an opt-in alternative exploration strategy.
-
-```typescript
-export type ExplorationStrategy = 'epsilon-greedy' | 'ucb1';
-
-export interface ExplorationConfig {
-  strategy: ExplorationStrategy;
-  /** For epsilon-greedy: exploration probability (0-1). */
-  epsilon?: number;
-  /** For UCB1: exploration constant (default: sqrt(2)). */
-  ucb1_c?: number;
-  /** Seeded PRNG for deterministic tie-breaking. */
-  seed?: number;
-}
-
-export interface ModelObservation {
-  model_id: string;
-  observation_count: number;
-  mean_quality: number;
-}
-
-/** Compute UCB1 score for a model. */
-export function computeUCB1Score(
-  model: ModelObservation,
-  totalObservations: number,
-  c: number,
-): number {
-  if (model.observation_count === 0) return Infinity; // Always explore unobserved
-  return model.mean_quality + c * Math.sqrt(
-    Math.log(totalObservations) / model.observation_count,
-  );
-}
-
-/** Select the best model according to the configured strategy. */
-export function selectModel(
-  models: ModelObservation[],
-  config: ExplorationConfig,
-  prng: () => number,
-): string;
-```
-
-**Default behavior**: `strategy: 'epsilon-greedy'` preserves existing behavior. UCB1 is strictly opt-in.
-
-### 3.8 Dimension Covariance Tracking (FR-10)
-
-**File**: `app/src/services/collection-score-aggregator.ts`
-
-Streaming covariance estimation between quality dimensions using Welford's online algorithm extended to pairwise covariance.
-
-```typescript
-export interface DimensionPair {
-  dim_a: string;
-  dim_b: string;
-  covariance: number;
-  correlation: number; // Pearson's r
-  sample_count: number;
-}
-
-export class CollectionScoreAggregator {
-  private readonly means = new Map<string, number>();
-  private readonly m2s = new Map<string, number>();     // Welford's M2
-  private readonly co_m2s = new Map<string, number>();  // Pairwise co-moment
-  private readonly counts = new Map<string, number>();
-
-  /** Update with a new observation across multiple dimensions. O(d^2) per call. */
-  update(observation: Record<string, number>): void;
-
-  /** Get current mean and variance for a dimension. */
-  getStats(
-    dimension: string,
-  ): { mean: number; variance: number; count: number } | undefined;
-
-  /** Get pairwise covariance between two dimensions. */
-  getCovariance(dimA: string, dimB: string): DimensionPair | undefined;
-
-  /** Get all pairwise covariances. */
-  getAllCovariances(): DimensionPair[];
-
-  /** Serialize state for persistence. */
-  toJSON(): Record<string, unknown>;
-
-  /** Restore from serialized state. */
-  static fromJSON(data: Record<string, unknown>): CollectionScoreAggregator;
-}
-```
-
-**Streaming update** (Welford's extended to covariance):
-```
-For each pair (a, b):
-  delta_a = x_a - mean_a
-  mean_a += delta_a / n
-  delta_b = x_b - mean_b
-  mean_b += delta_b / n
-  co_m2_ab += delta_a * (x_b - mean_b)
-  covariance_ab = co_m2_ab / (n - 1)
-```
-
-### 3.9 GovernorRegistry (FR-11)
-
-The existing `GovernorRegistry` on main has a clean single-Map implementation with no double-counting. The only change needed for cycle-009 is ensuring the `KnowledgeGovernor` is registered as the third governor alongside the existing corpus-meta governor.
-
-No structural changes to `GovernorRegistry` itself. The registry's `getAll()` method already returns health snapshots for all registered governors.
-
-### 3.10 Three-Resource Integration Test (FR-12)
-
-**File**: `app/tests/integration/governance-three-witness.test.ts`
-
-End-to-end test exercising the complete governance lifecycle across all three `ResourceGovernor` implementations.
-
-```typescript
-describe('Three-Witness Governance Integration', () => {
-  // Setup: create GovernorRegistry with 3 governors
-  // Test: register, transition, verify, audit for each resource type
-  // Test: GovernorRegistry.getAll() returns 3 snapshots
-  // Test: Cross-resource invariant: knowledge freshness decay rate
-  // Test: Audit trail entries exist for each governance action
-  // Test: Mutation log records all transitions
-  // Minimum: 10 test cases
-});
 ```
 
 ---
 
-## 4. Data Architecture
+## 3. Data Model Changes
 
-### 4.1 Database Schema Overview
+### 3.1 No New Tables for Core (Sprints 1–3)
 
-```
-                    PostgreSQL Database
+The reputation query endpoint reads from existing tables:
+- `reputation_aggregates` (migration 005)
+- `reputation_events` (migration 007)
+- `task_cohorts` (migration 006)
 
-  Existing:
-  +-------------------+  +-------------------------------+
-  | schedules         |  | autonomous_permissions        |
-  | (migration 003)   |  | (migration 004)               |
-  +-------------------+  +-------------------------------+
-
-  New (cycle-009):
-  +------------------------+  +-------------------------+
-  | reputation_aggregates  |  | reputation_task_cohorts  |
-  | (migration 005)        |  | (migration 006)          |
-  +------------------------+  +-------------------------+
-  +------------------------+  +-------------------------+
-  | reputation_events      |  | governance_mutations     |
-  | (migration 007)        |  | (migration 008)          |
-  +------------------------+  +-------------------------+
-  +------------------------+  +-------------------------+
-  | audit_entries          |  | knowledge_freshness      |
-  | (migration 009)        |  | (migration 010)          |
-  +------------------------+  +-------------------------+
-  +------------------------+  +-------------------------+
-  | dynamic_contracts      |  | _migrations              |
-  | (migration 011)        |  | (migration 005 bootstrap)|
-  +------------------------+  +-------------------------+
-```
-
-### 4.2 Table Definitions
-
-#### `reputation_aggregates` (Migration 005)
+### 3.2 New Migration 012: Knowledge Events (Sprint 4, FR-9)
 
 ```sql
-CREATE TABLE IF NOT EXISTS reputation_aggregates (
-  nft_id TEXT PRIMARY KEY,
-  state TEXT NOT NULL DEFAULT 'cold',
-  blended_score NUMERIC(5,4) NOT NULL DEFAULT 0,
-  sample_count INTEGER NOT NULL DEFAULT 0,
-  version INTEGER NOT NULL DEFAULT 0,
-  data JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_rep_agg_state ON reputation_aggregates(state);
-CREATE INDEX idx_rep_agg_version ON reputation_aggregates(version);
-```
-
-#### `reputation_task_cohorts` (Migration 006)
-
-```sql
-CREATE TABLE IF NOT EXISTS reputation_task_cohorts (
-  nft_id TEXT NOT NULL,
-  model_id TEXT NOT NULL,
-  task_type TEXT NOT NULL,
-  personal_score NUMERIC(5,4),
-  sample_count INTEGER NOT NULL DEFAULT 0,
-  last_updated TIMESTAMPTZ NOT NULL DEFAULT now(),
-  data JSONB NOT NULL,
-  PRIMARY KEY (nft_id, model_id, task_type)
-);
-
-CREATE INDEX idx_cohort_nft ON reputation_task_cohorts(nft_id);
-```
-
-#### `reputation_events` (Migration 007)
-
-```sql
-CREATE TABLE IF NOT EXISTS reputation_events (
-  id BIGSERIAL PRIMARY KEY,
-  nft_id TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS knowledge_events (
+  id SERIAL PRIMARY KEY,
   event_type TEXT NOT NULL,
-  payload JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  detail JSONB NOT NULL,
+  author TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_rep_events_nft ON reputation_events(nft_id, id);
+CREATE INDEX idx_knowledge_events_type ON knowledge_events(event_type);
+CREATE INDEX idx_knowledge_events_created ON knowledge_events(created_at);
 ```
 
-### 4.3 Connection Pooling
+---
 
-Uses existing `db/client.ts` infrastructure:
+## 4. API Contract Summary
 
+| Endpoint | Method | Auth | Response | Latency Target |
+|----------|--------|------|----------|----------------|
+| `/api/reputation/:nftId` | GET | conviction `builder+` | Full agent reputation | < 50ms |
+| `/api/reputation/:nftId/cohorts` | GET | conviction `builder+` | Per-model cohorts | < 50ms |
+| `/api/reputation/query` | GET | none (internal) | `{ score }` | < 20ms |
+| `/api/reputation/population` | GET | admin Bearer | Collection stats | < 100ms |
+
+### Error Responses
+
+All endpoints return consistent error format:
 ```typescript
-const pool = createDbPool({
-  connectionString: config.databaseUrl!,
-  minConnections: 2,
-  maxConnections: 10,
-  idleTimeoutMs: 30_000,
-  connectionTimeoutMs: 5_000,
-});
+{ error: string; message: string }
 ```
 
-No changes to pool configuration needed.
+| Status | Meaning |
+|--------|---------|
+| 400 | Missing required query params |
+| 401 | Missing or invalid auth |
+| 403 | Insufficient conviction tier |
+| 404 | nftId not found |
 
 ---
 
-## 5. Integration Points
+## 5. Testing Strategy
 
-### 5.1 Hounfour Commons (v8.x)
+### 5.1 Unit Tests
 
-| Import | From | Used By |
-|--------|------|---------|
-| `GovernedFreshness` | `@0xhoneyjar/loa-hounfour/commons` | KnowledgeGovernor type alignment |
-| `GovernanceMutation` | `@0xhoneyjar/loa-hounfour/commons` | MutationLogStore envelope |
-| `AuditEntry`, `AuditTrail` | `@0xhoneyjar/loa-hounfour/commons` | AuditTrailStore schema |
-| `computeAuditEntryHash` | `@0xhoneyjar/loa-hounfour/commons` | Hash chain computation |
-| `AUDIT_TRAIL_GENESIS_HASH` | `@0xhoneyjar/loa-hounfour/commons` | Chain anchor |
-| `DynamicContract` | `@0xhoneyjar/loa-hounfour/commons` | DynamicContractStore |
-| `verifyMonotonicExpansion` | `@0xhoneyjar/loa-hounfour/commons` | Contract validation |
-| `evaluateGovernanceMutation` | `@0xhoneyjar/loa-hounfour/commons` | Mutation authorization |
+| Component | Test File | Tests (est.) |
+|-----------|-----------|-------------|
+| Reputation routes | `tests/unit/routes/reputation.test.ts` | 15–18 |
+| Startup seeding | `tests/unit/services/collection-seed.test.ts` | 5–6 |
+| Regression: #36 blended staleness | `tests/unit/services/blended-staleness-regression.test.ts` | 3–4 |
+| Regression: #43 auto-checkpoint | `tests/unit/services/checkpoint-regression.test.ts` | 2–3 |
+| KnowledgeGovernorStore (FR-9) | `tests/unit/services/knowledge-store.test.ts` | 10–12 |
+| GovernorRegistry event bus (FR-10) | `tests/unit/services/governor-event-bus.test.ts` | 8–10 |
+| Adaptive retrieval (FR-11) | `tests/unit/services/adaptive-retrieval.test.ts` | 5–6 |
 
-### 5.2 Existing Dixie Services
+### 5.2 Integration Tests
 
-| Service | Integration |
-|---------|-------------|
-| `ReputationService` | Constructor injection: `new ReputationService(pgStore)` instead of `new ReputationService()` |
-| `ScoringPathTracker` | Unchanged. Audit trail cross-references scoring path hashes. |
-| `GovernorRegistry` | Registers `KnowledgeGovernor` as third governor. |
-| `ConvictionBoundary` | `EconomicBoundaryOptions.dynamicContract` added for capability checks. |
-| `CorpusMeta` | Existing knowledge service. KnowledgeGovernor wraps its freshness tracking. |
+| Scenario | Test File | Tests (est.) |
+|----------|-----------|-------------|
+| Full query → response cycle | `tests/integration/reputation-query.test.ts` | 5–6 |
+| Startup seeding from mock PG | `tests/integration/collection-seed.test.ts` | 3–4 |
+| Three-witness PG durability | `tests/integration/knowledge-pg.test.ts` | 4–5 |
 
-### 5.3 Initialization Order
+### 5.3 Test Patterns
 
-```typescript
-// In server.ts or init module:
-
-// 1. Create DB pool
-const pool = createDbPool({ connectionString: config.databaseUrl! });
-
-// 2. Run migrations
-await migrate(pool);
-
-// 3. Create stores
-const reputationStore = config.databaseUrl
-  ? new PostgreSQLReputationStore(pool)
-  : new InMemoryReputationStore();
-
-const mutationLog = new MutationLogStore(pool);
-const auditTrail = new AuditTrailStore(pool);
-const contractStore = new DynamicContractStore(pool);
-
-// 4. Create services with injected stores
-const reputationService = new ReputationService(reputationStore);
-const knowledgeGovernor = new KnowledgeGovernor();
-
-// 5. Register governors
-governorRegistry.register(knowledgeGovernor);
-```
-
-**Graceful degradation**: When `config.databaseUrl` is null, fall back to `InMemoryReputationStore`. This preserves the development and test experience where PostgreSQL is optional.
+- **Route tests**: Use Hono test client (`app.request()`) with mock services
+- **Store tests**: Use `createMockPool()` from `tests/fixtures/pg-test.ts`
+- **Regression tests**: Reproduce the exact scenario from the bug report, verify fix
 
 ---
 
-## 6. Security Architecture
+## 6. Invariants
 
-### 6.1 Audit Trail Integrity
+### Existing (Verified)
 
-- All audit entries are hash-chained using domain-separated SHA-256.
-- Hash domain tag format: `loa-dixie:audit:<resource_type>:<version>`.
-- `verifyIntegrity()` can detect tampering by recomputing the chain.
-- Audit entries are append-only (no UPDATE/DELETE on `audit_entries` table).
+| ID | Statement | Component |
+|----|-----------|-----------|
+| INV-006 | EMA-dampened score stays within [0, 1] | ReputationService |
+| INV-007 | Session ID monotonically increases | ReputationService |
+| INV-009 | Knowledge freshness decays monotonically between ingestions | KnowledgeGovernor |
+| INV-010 | Citation integrity: all cited sources exist in known corpus | KnowledgeGovernor |
 
-### 6.2 Optimistic Concurrency
+### New
 
-- `reputation_aggregates.version` column prevents lost updates.
-- Every `put()` checks `WHERE version = expected_version`.
-- Version mismatch returns a typed `ConflictError`.
-
-### 6.3 SQL Injection Prevention
-
-- All queries use parameterized statements (`$1`, `$2`, etc.).
-- No string concatenation for SQL construction.
-- JSONB payloads are passed as parameters, not interpolated.
-
-### 6.4 Connection Security
-
-- Connection string from environment variable (`DATABASE_URL`).
-- SSL mode configurable via connection string parameters.
-- Connection timeout (5s) prevents hanging on network issues.
+| ID | Statement | Component |
+|----|-----------|-----------|
+| INV-013 | Collection score aggregator mean converges to true population mean within ε after N observations | CollectionScoreAggregator |
+| INV-014 | Reputation query endpoint returns null (not error) for unknown agents | Reputation Routes |
 
 ---
 
-## 7. Testing Strategy
+## 7. Security Considerations
 
-### 7.1 Test Matrix
-
-| Layer | Type | PostgreSQL Required | Count |
-|-------|------|---------------------|-------|
-| `PostgreSQLReputationStore` | Integration | Yes (Docker) | ~20 |
-| `MutationLogStore` | Integration | Yes | ~10 |
-| `AuditTrailStore` | Integration | Yes | ~10 |
-| `KnowledgeGovernor` | Unit | No | ~15 |
-| `DynamicContractStore` | Integration | Yes | ~8 |
-| `ExplorationConfig` + UCB1 | Unit | No | ~12 |
-| `CollectionScoreAggregator` | Unit | No | ~10 |
-| `ConvictionBoundary` (contract) | Unit | No | ~5 |
-| Three-Witness Integration | Integration | Yes | ~10 |
-| Migration Runner | Integration | Yes | ~5 |
-| **Total new** | | | **~105** |
-
-### 7.2 PostgreSQL Test Strategy
-
-Integration tests that require PostgreSQL use a shared Docker container:
-
-```typescript
-// tests/fixtures/pg-test.ts
-import { createDbPool, closeDbPool } from '../../src/db/client.js';
-import { migrate } from '../../src/db/migrate.js';
-
-let pool: DbPool;
-
-export async function setupTestDb(): Promise<DbPool> {
-  pool = createDbPool({
-    connectionString: process.env.TEST_DATABASE_URL
-      ?? 'postgresql://localhost:5432/dixie_test',
-  });
-  await migrate(pool);
-  return pool;
-}
-
-export async function teardownTestDb(): Promise<void> {
-  await closeDbPool(pool);
-}
-```
-
-### 7.3 Backward Compatibility
-
-All existing tests continue to pass without modification. The `InMemoryReputationStore` remains the default when no `ReputationStore` is injected.
+| Concern | Mitigation |
+|---------|-----------|
+| Reputation data leakage | conviction tier gating on agent-facing endpoints |
+| Admin endpoint exposure | Bearer token auth (existing `adminKey` pattern) |
+| Internal query endpoint abuse | No auth but network-gated; document deployment requirement |
+| SQL injection on query params | Parameterized queries (existing pattern) |
+| Timing attacks on reputation | Fixed-time response regardless of score existence |
 
 ---
 
-## 8. Performance Considerations
+## 8. Deployment Notes
 
-### 8.1 Query Performance
+### Network Topology
 
-| Operation | Expected Latency | Mitigation |
-|-----------|-----------------|------------|
-| `get(nftId)` | <5ms | Primary key lookup |
-| `put(nftId, aggregate)` | <10ms | Single UPSERT with version check |
-| `appendEvent(nftId, event)` | <5ms | Append-only INSERT |
-| `getEventHistory(nftId)` | <20ms (1000 events) | Index on `(nft_id, id)` |
-| `audit.verifyIntegrity()` | <100ms (1000 entries) | Sequential hash verification |
+The `/api/reputation/query` endpoint is designed for inter-service calls:
+- **Same-host deployment**: finn calls dixie via localhost — no auth needed
+- **Separate-host deployment**: Requires network-level access control (VPC, firewall)
+- **Future**: When `ReputationQueryProtocol` is formalized in hounfour, add JWT auth
 
-### 8.2 JSONB vs. Columns Tradeoff
+### Backward Compatibility
 
-`reputation_aggregates.data` uses JSONB for the full aggregate to absorb Hounfour schema evolution. Key fields (`state`, `blended_score`, `sample_count`, `version`) are lifted to columns for indexed queries. This avoids schema migrations when Hounfour adds new aggregate fields.
-
----
-
-## 9. Deployment Considerations
-
-### 9.1 PostgreSQL Requirement
-
-Cycle-009 makes PostgreSQL required for production but optional for development/test:
-
-| Environment | PostgreSQL | Behavior |
-|-------------|-----------|----------|
-| Production | Required (`DATABASE_URL` set) | `PostgreSQLReputationStore` + all durable stores |
-| Development | Optional | Falls back to `InMemoryReputationStore` |
-| Unit tests | Not needed | Uses in-memory stores |
-| Integration tests | Docker container | Full PostgreSQL test suite |
-
-### 9.2 Migration on Startup
-
-`migrate()` runs automatically on server startup when `DATABASE_URL` is set. The migration runner is idempotent — safe to run on every deployment.
+- All existing endpoints unchanged
+- New endpoints are additive only
+- `DEFAULT_COLLECTION_SCORE` change from 0 to 0.5 affects cold-start behavior
+  for agents with zero population data — this is an improvement, not a regression
+- `reconstructAggregateFromEvents` gains optional parameter — backward compatible
 
 ---
 
-## 10. Risk Mitigations
+## 9. Sprint Mapping
 
-| Risk | Mitigation |
-|------|-----------|
-| PostgreSQL unavailability | Graceful degradation to `InMemoryReputationStore` when `DATABASE_URL` not set |
-| Migration conflicts | Forward-only migrations with `IF NOT EXISTS`. No rollback needed. |
-| Hounfour schema changes | JSONB aggregate storage absorbs schema evolution without migration |
-| Performance regression | Integration tests include latency assertions. In-memory store remains default for unit tests. |
-| DynamicContract incompatibility | Direct import from Hounfour v8.2.0 (pinned via symlink). Monotonic expansion verified at write time. |
-
----
-
-## 11. File Inventory
-
-### New Files
-
-| File | Purpose | FR |
-|------|---------|-----|
-| `app/src/services/pg-reputation-store.ts` | PostgreSQL ReputationStore | FR-1 |
-| `app/src/services/mutation-log-store.ts` | Governance mutation log | FR-2 |
-| `app/src/services/audit-trail-store.ts` | Hash-chained audit trail | FR-3 |
-| `app/src/services/knowledge-governor.ts` | Knowledge freshness governance | FR-4, FR-5, FR-6 |
-| `app/src/services/dynamic-contract-store.ts` | DynamicContract persistence | FR-7 |
-| `app/src/services/exploration.ts` | UCB1 + exploration strategies | FR-9 |
-| `app/src/services/collection-score-aggregator.ts` | Dimension covariance | FR-10 |
-| `app/src/db/migrate.ts` | Migration runner | FR-13 |
-| `app/src/db/transaction.ts` | Transaction helper | FR-1 |
-| `app/src/db/migrations/005_reputation_aggregates.sql` | Schema | FR-1 |
-| `app/src/db/migrations/006_reputation_task_cohorts.sql` | Schema | FR-1 |
-| `app/src/db/migrations/007_reputation_events.sql` | Schema | FR-1 |
-| `app/src/db/migrations/008_mutation_log.sql` | Schema | FR-2 |
-| `app/src/db/migrations/009_audit_trail.sql` | Schema | FR-3 |
-| `app/src/db/migrations/010_knowledge_freshness.sql` | Schema | FR-4 |
-| `app/src/db/migrations/011_dynamic_contracts.sql` | Schema | FR-7 |
-| `app/tests/integration/governance-three-witness.test.ts` | Integration test | FR-12 |
-| `app/tests/fixtures/pg-test.ts` | PostgreSQL test helpers | — |
-
-### Modified Files
-
-| File | Change | FR |
-|------|--------|-----|
-| `app/src/services/conviction-boundary.ts` | Add `dynamicContract` to `EconomicBoundaryOptions` | FR-8 |
-| `app/src/server.ts` | Initialize PostgreSQL stores on startup | FR-1 |
-| `app/src/types/reputation-evolution.ts` | Add knowledge event types | FR-4 |
-
-### Unchanged Files
-
-All existing service files, type files, middleware, routes, and tests remain unchanged. The `InMemoryReputationStore` continues to work for development.
-
----
-
-## 12. Sprint Mapping
-
-| Sprint | Components | FRs | New Tests |
-|--------|-----------|------|-----------|
-| **1** | Migration framework, PostgreSQLReputationStore, transaction helper | FR-1, FR-13 | ~25 |
-| **2** | MutationLogStore, AuditTrailStore | FR-2, FR-3 | ~20 |
-| **3** | KnowledgeGovernor, KnowledgeItem types, invariants INV-009/INV-010 | FR-4, FR-5, FR-6 | ~15 |
-| **4** | DynamicContractStore, capability-gated access extension | FR-7, FR-8 | ~13 |
-| **5** | UCB1 exploration, CollectionScoreAggregator covariance | FR-9, FR-10 | ~22 |
-| **6** | GovernorRegistry integration, three-witness test, server wiring | FR-11, FR-12 | ~10 |
-| **Total** | | 13 FRs | **~105** |
-
----
-
-*"The interface was always the contract. The PostgreSQL adapter is just the court reporter finally taking their seat."*
-
-*-- Bridgebuilder Review, PR #25*
+| Sprint | SDD Section | PRD FRs |
+|--------|-------------|---------|
+| Sprint 1 | §2.2, regression tests | FR-1, FR-2 |
+| Sprint 2 | §2.1 (query, nftId, route module), §2.3 | FR-4, FR-6, FR-8 |
+| Sprint 3 | §2.1 (cohorts, population) | FR-5, FR-7 |
+| Sprint 4 | §2.4, §3.2 | FR-9 |
+| Sprint 5 | §2.5, §2.6 | FR-10, FR-11 |
