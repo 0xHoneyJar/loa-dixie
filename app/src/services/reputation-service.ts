@@ -397,14 +397,22 @@ export class InMemoryReputationStore implements ReputationStore {
   async transact<T>(fn: (store: ReputationStore) => Promise<T>): Promise<T> {
     const snapshot = new Map(this.store);
     const cohortSnapshot = new Map(this.taskCohorts);
+    const eventLogSnapshot = new Map(
+      [...this.eventLog.entries()].map(([k, v]) => [k, [...v]] as const),
+    );
     try {
       return await fn(this);
     } catch (err) {
       // Restore state on failure — the "rollback"
+      // BB-008-001: Event log must be transactionally consistent with aggregates.
+      // Without this, reconstructAggregateFromEvents() replays events whose
+      // aggregate effects were rolled back, creating divergence.
       this.store.clear();
       for (const [k, v] of snapshot) this.store.set(k, v);
       this.taskCohorts.clear();
       for (const [k, v] of cohortSnapshot) this.taskCohorts.set(k, v);
+      this.eventLog.clear();
+      for (const [k, v] of eventLogSnapshot) this.eventLog.set(k, v);
       throw err;
     }
   }
@@ -702,27 +710,34 @@ export class ReputationService
    * @since cycle-007 — Sprint 73, Task S1-T4
    */
   async processEvent(nftId: string, event: ReputationEvent): Promise<void> {
-    // Append the raw event to the log first (event sourcing)
-    await this.store.appendEvent(nftId, event);
+    // BB-008-001: Wrap entire event processing in a single transaction so
+    // event log and aggregate/cohort state are atomically consistent. If any
+    // handler fails, both the event append and state changes are rolled back.
+    // This ensures reconstructAggregateFromEvents() stays in sync with
+    // materialized aggregates.
+    await this.store.transact(async (tx) => {
+      // Append event to log inside the transaction
+      await tx.appendEvent(nftId, event);
 
-    // Dispatch by variant type (exhaustive)
-    switch (event.type) {
-      case 'quality_signal':
-        await this.handleQualitySignal(nftId, event);
-        break;
-      case 'task_completed':
-        await this.handleTaskCompleted(nftId, event);
-        break;
-      case 'credential_update':
-        await this.handleCredentialUpdate(nftId, event);
-        break;
-      case 'model_performance':
-        await this.handleModelPerformance(nftId, event);
-        break;
-      default:
-        // TypeScript exhaustiveness check — should never reach here
-        assertNever(event);
-    }
+      // Dispatch by variant type (exhaustive)
+      switch (event.type) {
+        case 'quality_signal':
+          await this._handleQualitySignalInTx(tx, nftId, event);
+          break;
+        case 'task_completed':
+          await this._handleTaskCompletedInTx(tx, nftId, event);
+          break;
+        case 'credential_update':
+          // No-op: credentials affect access policy, not scores
+          break;
+        case 'model_performance':
+          await this._handleModelPerformanceInTx(tx, nftId, event);
+          break;
+        default:
+          // TypeScript exhaustiveness check — should never reach here
+          assertNever(event);
+      }
+    });
   }
 
   /**
@@ -758,7 +773,8 @@ export class ReputationService
       pseudoCount: existing.pseudo_count,
     });
 
-    // FR-6: Update population statistics with this observation
+    // FR-6: Update population statistics AFTER blending — the current
+    // observation must not influence its own Bayesian prior (BB-008-010).
     this.collectionAggregator.update(newPersonalScore);
 
     return {
@@ -772,16 +788,16 @@ export class ReputationService
   }
 
   /**
-   * Handle quality_signal event — update blended score.
-   * @since cycle-007 — Sprint 73, Task S1-T4
-   * @since cycle-008 — Sprint 81, Task 1.2 (FR-1: consistent blended score recomputation)
-   * @since cycle-008 — Sprint 82, Task 2.3 (FR-4: transactional wrapper)
+   * In-transaction quality_signal handler. Operates on the provided store
+   * (which is the transact() context from processEvent).
+   * @since cycle-008 — BB-008-001 (event log transactional consistency)
    */
-  private async handleQualitySignal(
+  private async _handleQualitySignalInTx(
+    tx: ReputationStore,
     nftId: string,
     event: Extract<ReputationEvent, { type: 'quality_signal' }>,
   ): Promise<void> {
-    const aggregate = await this.store.get(nftId);
+    const aggregate = await tx.get(nftId);
     if (!aggregate) return;
 
     const dampenedScore = computeDampenedScore(
@@ -790,26 +806,24 @@ export class ReputationService
       aggregate.sample_count,
     );
     const updated = this.buildUpdatedAggregate(aggregate, dampenedScore, event.timestamp);
-    await this.store.transact(async (tx) => {
-      await tx.put(nftId, updated);
-    });
+    await tx.put(nftId, updated);
   }
 
   /**
-   * Handle task_completed event — increment sample count.
-   * @since cycle-007 — Sprint 73, Task S1-T4
+   * In-transaction task_completed handler.
+   * @since cycle-008 — BB-008-001 (event log transactional consistency)
    */
-  private async handleTaskCompleted(
+  private async _handleTaskCompletedInTx(
+    tx: ReputationStore,
     nftId: string,
     event: Extract<ReputationEvent, { type: 'task_completed' }>,
   ): Promise<void> {
-    const aggregate = await this.store.get(nftId);
+    const aggregate = await tx.get(nftId);
     if (!aggregate) return;
 
-    // Update task cohort if task_type is specified
-    const cohort = await this.store.getTaskCohort(nftId, 'default', event.task_type);
+    const cohort = await tx.getTaskCohort(nftId, 'default', event.task_type);
     if (cohort) {
-      await this.store.putTaskCohort(nftId, {
+      await tx.putTaskCohort(nftId, {
         ...cohort,
         sample_count: cohort.sample_count + 1,
         last_updated: event.timestamp,
@@ -818,47 +832,22 @@ export class ReputationService
   }
 
   /**
-   * Handle credential_update event — record in event log (no aggregate change).
-   *
-   * **Current behavior**: Event recorded in event log (via processEvent's
-   * appendEvent call above). No aggregate computation change.
-   *
-   * **Architectural rationale**: Credentials operate on the trust layer
-   * (access policy evaluation via DynamicContract surfaces), while scores
-   * operate on the quality layer (Bayesian blending via computeBlendedScore).
-   * Mixing them couples "who you are" with "how well you perform."
-   * This mirrors the OIDC separation between identity claims and authorization scopes.
-   *
-   * **Future consideration**: If credentials should contribute to reputation
-   * (e.g., verified API key as trust signal), add a `credential_weight`
-   * parameter to the blending function rather than mixing into quality scores.
-   *
-   * @since cycle-007 — Sprint 73, Task S1-T4
-   * @since cycle-007 — Sprint 79, Task S2-T2 (Bridgebuilder F5: decision trail)
-   */
-  private async handleCredentialUpdate(
-    _nftId: string,
-    _event: Extract<ReputationEvent, { type: 'credential_update' }>,
-  ): Promise<void> {
-    // ADR: credentials ⊥ scores — see Bridgebuilder F5 (PR #15)
-    // Credential updates are recorded in the event log (already done in processEvent).
-    // No aggregate computation change — credentials affect access policy, not scores.
-  }
-
-  /**
-   * Handle model_performance event — decompose into quality signal pipeline.
-   * Wrapped in transact() so aggregate + cohort updates are atomic.
-   * Threads dimensions through computeDimensionalBlended() when present.
+   * In-transaction model_performance handler. Decomposes into quality
+   * signal pipeline. Threads dimensions through computeDimensionalBlended()
+   * when present. Applies dampening to task cohort scores (BB-008-009).
    *
    * @since cycle-007 — Sprint 73, Task S1-T4
    * @since cycle-008 — Sprint 82, Task 2.3 (FR-4: transactional wrapper)
    * @since cycle-008 — Sprint 83, Task 3.5 (FR-7: dimensional blending)
+   * @since cycle-008 — BB-008-001 (event log transactional consistency)
+   * @since cycle-008 — BB-008-009 (cohort dampening consistency)
    */
-  private async handleModelPerformance(
+  private async _handleModelPerformanceInTx(
+    tx: ReputationStore,
     nftId: string,
     event: Extract<ReputationEvent, { type: 'model_performance' }>,
   ): Promise<void> {
-    const aggregate = await this.store.get(nftId);
+    const aggregate = await tx.get(nftId);
     if (!aggregate) return;
 
     const rawScore = event.quality_observation.score;
@@ -868,7 +857,6 @@ export class ReputationService
       aggregate.sample_count,
     );
 
-    // Update aggregate via shared helper (FR-1: consistent blended score)
     const updated = this.buildUpdatedAggregate(aggregate, dampenedScore, event.timestamp);
 
     // FR-7: Thread dimensions when available in quality_observation
@@ -890,29 +878,31 @@ export class ReputationService
         }
       : updated;
 
-    // Atomic: aggregate + cohort update (FR-4: transaction boundary)
-    await this.store.transact(async (tx) => {
-      await tx.put(nftId, updatedWithDimensions);
+    await tx.put(nftId, updatedWithDimensions);
 
-      // Update task-specific cohort
-      const existingCohort = await tx.getTaskCohort(nftId, event.model_id, event.task_type);
-      if (existingCohort) {
-        await tx.putTaskCohort(nftId, {
-          ...existingCohort,
-          personal_score: rawScore,
-          sample_count: existingCohort.sample_count + 1,
-          last_updated: event.timestamp,
-        });
-      } else {
-        await tx.putTaskCohort(nftId, {
-          model_id: event.model_id,
-          task_type: event.task_type,
-          personal_score: rawScore,
-          sample_count: 1,
-          last_updated: event.timestamp,
-        });
-      }
-    });
+    // Update task-specific cohort with dampened score (BB-008-009)
+    const existingCohort = await tx.getTaskCohort(nftId, event.model_id, event.task_type);
+    if (existingCohort) {
+      const cohortDampened = computeDampenedScore(
+        existingCohort.personal_score,
+        rawScore,
+        existingCohort.sample_count,
+      );
+      await tx.putTaskCohort(nftId, {
+        ...existingCohort,
+        personal_score: cohortDampened,
+        sample_count: existingCohort.sample_count + 1,
+        last_updated: event.timestamp,
+      });
+    } else {
+      await tx.putTaskCohort(nftId, {
+        model_id: event.model_id,
+        task_type: event.task_type,
+        personal_score: rawScore,
+        sample_count: 1,
+        last_updated: event.timestamp,
+      });
+    }
   }
 }
 
@@ -948,7 +938,11 @@ export function computeDimensionalBlended(
   collectionScore: number,
   pseudoCount: number,
 ): Record<string, number> {
-  const result: Record<string, number> = {};
+  // BB-008-003: Carry forward existing dimensions not present in the new
+  // observation. Without this, intermittent dimension coverage causes data
+  // loss — e.g., an observation with only {accuracy} would drop {coherence}
+  // from a previous observation that had both.
+  const result: Record<string, number> = { ...(existingDimensions ?? {}) };
   for (const [key, score] of Object.entries(dimensions)) {
     const existingScore = existingDimensions?.[key] ?? null;
     const dampened = computeDampenedScore(existingScore, score, sampleCount);

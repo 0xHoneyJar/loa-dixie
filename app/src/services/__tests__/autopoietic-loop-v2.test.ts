@@ -234,7 +234,7 @@ describe('cross-chain verification catches tampering', () => {
     const result = tracker.verifyCrossChainConsistency();
     expect(result.consistent).toBe(true);
     expect(result.checks.entry_count_match).toBe(true);
-    expect(result.checks.tip_hash_match).toBe(true);
+    expect(result.checks.tip_entry_exists).toBe(true);
   });
 
   it('periodic cross-verification triggers quarantine on divergence', () => {

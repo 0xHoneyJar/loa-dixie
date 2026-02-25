@@ -141,7 +141,9 @@ export interface ScoringPathTrackerOptions {
 export interface CrossChainVerificationResult {
   readonly consistent: boolean;
   readonly checks: {
-    readonly tip_hash_match: boolean;
+    /** Whether the audit trail tip entry exists (not a hash comparison — the
+     *  two chains use different hash algorithms). @since cycle-008 BB-008-002 */
+    readonly tip_entry_exists: boolean;
     readonly entry_count_match: boolean;
   };
   readonly divergence_point?: number;
@@ -385,18 +387,21 @@ export class ScoringPathTracker
     const auditEntryCount = this._auditTrail.entries.length;
     const entryCountMatch = this.entryCount === auditEntryCount;
 
-    let tipHashMatch = true;
+    // BB-008-002: The two chains use different hash algorithms (computeScoringPathHash
+    // vs computeAuditEntryHash with domain tags), so direct hash comparison is not
+    // possible. We verify structural consistency: entry count match + tip entry existence.
+    let tipEntryExists = true;
     if (auditEntryCount > 0) {
       const lastAuditEntry = this._auditTrail.entries[auditEntryCount - 1];
-      tipHashMatch = lastAuditEntry !== undefined;
+      tipEntryExists = lastAuditEntry !== undefined;
     } else {
-      tipHashMatch = this.entryCount === 0;
+      tipEntryExists = this.entryCount === 0;
     }
 
-    const consistent = entryCountMatch && tipHashMatch;
+    const consistent = entryCountMatch && tipEntryExists;
     return {
       consistent,
-      checks: { tip_hash_match: tipHashMatch, entry_count_match: entryCountMatch },
+      checks: { tip_entry_exists: tipEntryExists, entry_count_match: entryCountMatch },
       divergence_point: consistent ? undefined : Math.min(this.entryCount, auditEntryCount),
       detail: consistent
         ? `Cross-chain consistent: ${this.entryCount} entries verified`
