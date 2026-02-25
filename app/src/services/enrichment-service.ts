@@ -364,8 +364,8 @@ export class EnrichmentService {
     const avgScore = (evts: typeof qualityEvents): number => {
       const scores = evts
         .map(e => {
-          const payload = e.payload as { score?: number } | null;
-          return payload?.score ?? null;
+          // v8.2.0: QualitySignalEvent has flat `score` field (not nested payload)
+          return e.type === 'quality_signal' ? e.score : null;
         })
         .filter((s): s is number => s !== null);
       if (scores.length === 0) return 0;

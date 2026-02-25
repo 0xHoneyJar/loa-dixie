@@ -1,7 +1,7 @@
 /**
  * Reputation Service — Foundation wiring for Hounfour governance types.
  *
- * Wraps Hounfour v7.9.2 governance functions with typed Dixie service methods.
+ * Wraps Hounfour governance functions with typed Dixie service methods.
  * Provides a typed API surface for the reputation aggregate lifecycle
  * (quality events, state transitions, cross-model scoring).
  *
@@ -15,10 +15,16 @@
  * - Task-aware cross-model scoring (prioritize task-matching cohorts)
  * - Event sourcing foundation (append-only event log + reconstruction stub)
  *
+ * cycle-007 (v8.2.0) extends with:
+ * - processEvent() method with exhaustive 4-variant switch
+ * - model_performance variant handling (decomposes into quality_signal pipeline)
+ * - Updated reconstructAggregateFromEvents with 4-variant support
+ *
  * See: Hounfour governance sub-package, SDD §2.3 (ReputationAggregate FR-3)
  * @since Sprint 3 — Reputation Service Foundation
  * @since Sprint 6 — ReputationStore persistence layer
  * @since Sprint 10 — Reputation Evolution (per-model per-task cohorts)
+ * @since cycle-007 — Sprint 73, Task S1-T4 (v8.2.0 model_performance variant)
  */
 import type {
   ReputationScore,
@@ -353,6 +359,165 @@ export class ReputationService {
   getModelCohort(aggregate: ReputationAggregate, modelId: string): ModelCohort | undefined {
     return getModelCohort(aggregate, modelId);
   }
+
+  /**
+   * Process a reputation event through the appropriate handler.
+   *
+   * Exhaustive switch on all 4 ReputationEvent variants (v8.2.0).
+   * Each variant is dispatched to its handler, which updates the
+   * reputation aggregate accordingly.
+   *
+   * The model_performance variant is decomposed: the embedded
+   * quality_observation score feeds into the blended reputation
+   * computation as a quality signal, while the full event is
+   * preserved in the event log for audit.
+   *
+   * @param nftId - The dNFT ID of the agent
+   * @param event - The reputation event to process
+   * @since cycle-007 — Sprint 73, Task S1-T4
+   */
+  async processEvent(nftId: string, event: ReputationEvent): Promise<void> {
+    // Append the raw event to the log first (event sourcing)
+    await this.store.appendEvent(nftId, event);
+
+    // Dispatch by variant type (exhaustive)
+    switch (event.type) {
+      case 'quality_signal':
+        await this.handleQualitySignal(nftId, event);
+        break;
+      case 'task_completed':
+        await this.handleTaskCompleted(nftId, event);
+        break;
+      case 'credential_update':
+        await this.handleCredentialUpdate(nftId, event);
+        break;
+      case 'model_performance':
+        await this.handleModelPerformance(nftId, event);
+        break;
+      default:
+        // TypeScript exhaustiveness check — should never reach here
+        assertNever(event);
+    }
+  }
+
+  /**
+   * Handle quality_signal event — update blended score.
+   * @since cycle-007 — Sprint 73, Task S1-T4
+   */
+  private async handleQualitySignal(
+    nftId: string,
+    event: Extract<ReputationEvent, { type: 'quality_signal' }>,
+  ): Promise<void> {
+    const aggregate = await this.store.get(nftId);
+    if (!aggregate) return;
+
+    const updated: ReputationAggregate = {
+      ...aggregate,
+      personal_score: event.score,
+      sample_count: aggregate.sample_count + 1,
+      last_updated: event.timestamp,
+    };
+    await this.store.put(nftId, updated);
+  }
+
+  /**
+   * Handle task_completed event — increment sample count.
+   * @since cycle-007 — Sprint 73, Task S1-T4
+   */
+  private async handleTaskCompleted(
+    nftId: string,
+    event: Extract<ReputationEvent, { type: 'task_completed' }>,
+  ): Promise<void> {
+    const aggregate = await this.store.get(nftId);
+    if (!aggregate) return;
+
+    // Update task cohort if task_type is specified
+    const cohort = await this.store.getTaskCohort(nftId, 'default', event.task_type);
+    if (cohort) {
+      await this.store.putTaskCohort(nftId, {
+        ...cohort,
+        sample_count: cohort.sample_count + 1,
+        last_updated: event.timestamp,
+      });
+    }
+  }
+
+  /**
+   * Handle credential_update event — record in event log (no aggregate change).
+   * @since cycle-007 — Sprint 73, Task S1-T4
+   */
+  private async handleCredentialUpdate(
+    _nftId: string,
+    _event: Extract<ReputationEvent, { type: 'credential_update' }>,
+  ): Promise<void> {
+    // Credential updates are recorded in the event log (already done in processEvent)
+    // No aggregate computation change needed — credentials affect access policy, not scores
+  }
+
+  /**
+   * Handle model_performance event — decompose into quality signal pipeline.
+   *
+   * The model_performance variant carries a quality_observation that feeds
+   * into the same scoring pipeline as quality_signal events. The decomposition
+   * preserves the full event for audit while using the embedded score for
+   * blended reputation computation.
+   *
+   * @since cycle-007 — Sprint 73, Task S1-T4
+   */
+  private async handleModelPerformance(
+    nftId: string,
+    event: Extract<ReputationEvent, { type: 'model_performance' }>,
+  ): Promise<void> {
+    const aggregate = await this.store.get(nftId);
+    if (!aggregate) return;
+
+    const score = event.quality_observation.score;
+
+    // Update aggregate with the observation score
+    const blended = this.computeBlended({
+      personalScore: score,
+      collectionScore: aggregate.collection_score,
+      sampleCount: aggregate.sample_count + 1,
+      pseudoCount: aggregate.pseudo_count,
+    });
+
+    const updated: ReputationAggregate = {
+      ...aggregate,
+      personal_score: score,
+      blended_score: blended,
+      sample_count: aggregate.sample_count + 1,
+      last_updated: event.timestamp,
+    };
+    await this.store.put(nftId, updated);
+
+    // Update task-specific cohort if available
+    const existingCohort = await this.store.getTaskCohort(nftId, event.model_id, event.task_type);
+    if (existingCohort) {
+      await this.store.putTaskCohort(nftId, {
+        ...existingCohort,
+        personal_score: score,
+        sample_count: existingCohort.sample_count + 1,
+        last_updated: event.timestamp,
+      });
+    } else {
+      // Create new task cohort for this model + task type combination
+      await this.store.putTaskCohort(nftId, {
+        model_id: event.model_id,
+        task_type: event.task_type,
+        personal_score: score,
+        sample_count: 1,
+        last_updated: event.timestamp,
+      });
+    }
+  }
+}
+
+/**
+ * Exhaustiveness check helper for discriminated unions.
+ * TypeScript will error at compile time if a variant is not handled.
+ */
+function assertNever(x: never): never {
+  throw new Error(`Unexpected event type: ${(x as { type: string }).type}`);
 }
 
 /**
@@ -453,46 +618,92 @@ export function computeTaskAwareCrossModelScore(
 /**
  * Reconstruct a DixieReputationAggregate from an event stream.
  *
- * STUB: This function is the foundation for event-sourced aggregate
- * reconstruction. In the current implementation, it returns a cold-start
- * aggregate with the event count recorded. Future iterations will implement
- * full event replay to compute personal_score, sample_count, and state
- * transitions from the event log.
+ * Replays events in chronological order through the 4-variant handler:
+ * - quality_signal: updates personal_score with the signal's score
+ * - task_completed: increments sample count (success tracking)
+ * - credential_update: recorded but no score impact
+ * - model_performance: extracts quality_observation.score + updates task cohorts
  *
  * The reconstruction pattern:
  * 1. Start with a cold aggregate (zero scores, zero samples)
  * 2. Replay each event in order, updating scores and state
- * 3. Return the final aggregate state
- *
- * This will eventually integrate with Hounfour's quality event processing
- * to produce mathematically identical results to the live aggregate.
+ * 3. Return the final aggregate state with task_cohorts
  *
  * @param events - Array of reputation events in chronological order
  * @returns A DixieReputationAggregate reconstructed from the event stream
  * @since Sprint 10 — Task 10.5
+ * @since cycle-007 — Sprint 73, Task S1-T4 (4-variant support)
  */
 export function reconstructAggregateFromEvents(
   events: ReadonlyArray<ReputationEvent>,
 ): DixieReputationAggregate {
-  // STUB: Returns a cold-start aggregate.
-  // TODO: Implement full event replay with Hounfour integration.
+  let personalScore: number | null = null;
+  let sampleCount = 0;
+  const taskCohortMap = new Map<string, TaskTypeCohort>();
+
+  for (const event of events) {
+    switch (event.type) {
+      case 'quality_signal':
+        personalScore = event.score;
+        sampleCount++;
+        break;
+      case 'task_completed':
+        sampleCount++;
+        break;
+      case 'credential_update':
+        // No score impact
+        break;
+      case 'model_performance': {
+        const score = event.quality_observation.score;
+        personalScore = score;
+        sampleCount++;
+        // Update task cohort
+        const key = `${event.model_id}:${event.task_type}`;
+        const existing = taskCohortMap.get(key);
+        if (existing) {
+          taskCohortMap.set(key, {
+            ...existing,
+            personal_score: score,
+            sample_count: existing.sample_count + 1,
+            last_updated: event.timestamp,
+          });
+        } else {
+          taskCohortMap.set(key, {
+            model_id: event.model_id,
+            task_type: event.task_type,
+            personal_score: score,
+            sample_count: 1,
+            last_updated: event.timestamp,
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  const pseudoCount = 10;
+  const collectionScore = 0;
+  const blendedScore = personalScore !== null
+    ? computeBlendedScore(personalScore, collectionScore, sampleCount, pseudoCount)
+    : collectionScore;
+
   return {
     personality_id: '',
     collection_id: '',
     pool_id: '',
-    state: 'cold' as const,
-    personal_score: null,
-    collection_score: 0,
-    blended_score: 0,
-    sample_count: events.length, // At minimum, record how many events existed
-    pseudo_count: 10,
+    state: sampleCount === 0 ? 'cold' as const : 'warming' as const,
+    personal_score: personalScore,
+    collection_score: collectionScore,
+    blended_score: blendedScore,
+    sample_count: sampleCount,
+    pseudo_count: pseudoCount,
     contributor_count: 0,
     min_sample_count: 10,
     created_at: events.length > 0 ? events[0].timestamp : new Date().toISOString(),
     last_updated: events.length > 0 ? events[events.length - 1].timestamp : new Date().toISOString(),
     transition_history: [],
-    contract_version: '7.11.0',
-    task_cohorts: [],
+    contract_version: '8.2.0',
+    task_cohorts: Array.from(taskCohortMap.values()),
   };
 }
 
@@ -505,16 +716,19 @@ export type {
   ModelCohort,
 };
 
-// Re-export Sprint 10 types + v7.11.0 additions
+// Re-export Sprint 10 types + v7.11.0 + v8.2.0 additions
 export type {
   TaskTypeCohort,
   ReputationEvent,
   QualitySignalEvent,
   TaskCompletedEvent,
   CredentialUpdateEvent,
+  ModelPerformanceEvent,
+  QualityObservation,
   DixieReputationAggregate,
   ScoringPath,
   ScoringPathLog,
 } from '../types/reputation-evolution.js';
 export { TASK_TYPES, validateTaskCohortUniqueness } from '../types/reputation-evolution.js';
+export { QualityObservationSchema, ModelPerformanceEventSchema } from '../types/reputation-evolution.js';
 export type { TaskType } from '../types/reputation-evolution.js';

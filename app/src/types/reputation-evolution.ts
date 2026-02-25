@@ -1,5 +1,5 @@
 /**
- * Reputation Evolution — Re-export Barrel for Hounfour v7.11.0 Governance Types
+ * Reputation Evolution — Re-export Barrel for Hounfour v8.2.0 Governance Types
  *
  * This module re-exports canonical protocol types from @0xhoneyjar/loa-hounfour/governance.
  * Local stub definitions have been replaced with protocol-canonical imports as of v7.11.0.
@@ -13,9 +13,15 @@
  * - ReputationEvent: generic {type, timestamp, payload} → discriminated union of 3 structured variants
  * - ScoringPathLog: 3 fields → 7 fields (adds reason, scored_at, entry_hash, previous_hash)
  *
- * See: Hounfour v7.11.0 governance barrel, ADR-001 (barrel precedence), ADR-003 (community task types)
+ * v8.2.0 additions:
+ * - ModelPerformanceEvent: 4th ReputationEvent variant (closes autopoietic feedback loop)
+ * - QualityObservation: structured quality result schema (score, dimensions, latency, evaluator)
+ * - 'unspecified' TaskType literal: explicit aggregate-only routing
+ *
+ * See: Hounfour v8.2.0 governance barrel, ADR-001 (barrel precedence), ADR-003 (community task types)
  * @since Sprint 10 — Reputation Evolution (Per-Model Per-Task Cohorts)
  * @since cycle-005 — Hounfour v7.11.0 Full Adoption (re-export barrel)
+ * @since cycle-007 — Hounfour v8.2.0 Full Adoption (ModelPerformanceEvent, QualityObservation)
  */
 import type {
   ReputationAggregate,
@@ -34,8 +40,8 @@ export type { TaskType } from '@0xhoneyjar/loa-hounfour/governance';
 export type { TaskTypeCohort } from '@0xhoneyjar/loa-hounfour/governance';
 export { validateTaskCohortUniqueness } from '@0xhoneyjar/loa-hounfour/governance';
 
-// ─── Reputation Events (v7.10.0) ────────────────────────────────────────────
-// ReputationEvent is a discriminated union of 3 structured event variants.
+// ─── Reputation Events (v7.10.0 + v8.2.0 ModelPerformanceEvent) ─────────────
+// ReputationEvent is a discriminated union of 4 structured event variants.
 // Each variant has envelope fields (event_id, agent_id, collection_id, timestamp)
 // plus variant-specific data fields.
 export type {
@@ -43,7 +49,14 @@ export type {
   QualitySignalEvent,
   TaskCompletedEvent,
   CredentialUpdateEvent,
+  ModelPerformanceEvent,
 } from '@0xhoneyjar/loa-hounfour/governance';
+
+// ─── Quality Observation (v8.2.0) ───────────────────────────────────────────
+// QualityObservation: reusable quality result sub-schema (score, dimensions, latency, evaluator).
+// Used as embedded field in ModelPerformanceEvent.quality_observation and standalone.
+export type { QualityObservation } from '@0xhoneyjar/loa-hounfour/governance';
+export { QualityObservationSchema, ModelPerformanceEventSchema } from '@0xhoneyjar/loa-hounfour/governance';
 
 // ─── Scoring Path (v7.10.0 + v7.11.0 hash chain) ───────────────────────────
 // ScoringPath: 'task_cohort' | 'aggregate' | 'tier_default'

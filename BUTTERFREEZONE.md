@@ -13,7 +13,8 @@ capability_requirements:
   - git: read_write
   - shell: execute
   - github_api: read_write (scope: external)
-version: loa@v1.39.1
+version: v2.0.0
+installation_mode: unknown
 trust_level: L2-verified
 -->
 
@@ -61,7 +62,7 @@ graph TD
     grimoires[grimoires]
     knowledge[knowledge]
     persona[persona]
-    tests[tests]
+    scripts[scripts]
     Root[Project Root]
     Root --> app
     Root --> deploy
@@ -70,11 +71,12 @@ graph TD
     Root --> grimoires
     Root --> knowledge
     Root --> persona
-    Root --> tests
+    Root --> scripts
 ```
 Directory structure:
 ```
 ./app
+./app/scripts
 ./app/src
 ./app/tests
 ./deploy
@@ -96,35 +98,34 @@ Directory structure:
 ./grimoires/loa
 ./grimoires/pub
 ./knowledge
+./knowledge/contracts
 ./knowledge/sources
 ./persona
+./scripts
 ./tests
 ./tests/e2e
 ./tests/edge-cases
-./tests/fixtures
-./tests/gold-set
-./tests/helpers
 ```
 
 ## Interfaces
 <!-- provenance: DERIVED -->
 ### HTTP Routes
 
-- **DELETE** `/allowlist/:entry` (`app/src/routes/admin.ts:100`)
-- **GET** `/:nftId/audit` (`app/src/routes/autonomous.ts:101`)
-- **GET** `/:nftId/gaps` (`app/src/routes/learning.ts:53`)
-- **GET** `/:nftId/insights` (`app/src/routes/learning.ts:22`)
-- **GET** `/:nftId/permissions` (`app/src/routes/autonomous.ts:34`)
-- **GET** `/:nftId/summary` (`app/src/routes/autonomous.ts:133`)
-- **GET** `/:nftId` (`app/src/routes/memory.ts:135`)
-- **GET** `/` (`app/src/routes/health.ts:25`)
-- **GET** `/allowlist` (`app/src/routes/admin.ts:59`)
-- **GET** `/capabilities` (`app/src/routes/agent.ts:239`)
-- **GET** `/knowledge` (`app/src/routes/agent.ts:292`)
-- **GET** `/oracle` (`app/src/routes/identity.ts:47`)
+- **DELETE** `/allowlist/:entry` (`app/src/routes/admin.ts:86`)
+- **GET** `/:nftId/audit` (`app/src/routes/autonomous.ts:102`)
+- **GET** `/:nftId/permissions` (`app/src/routes/autonomous.ts:35`)
+- **GET** `/:nftId/summary` (`app/src/routes/autonomous.ts:134`)
+- **GET** `/` (`app/src/routes/health.ts:34`)
+- **GET** `/allowlist` (`app/src/routes/admin.ts:45`)
+- **GET** `/capabilities` (`app/src/routes/agent.ts:299`)
+- **GET** `/governance` (`app/src/routes/health.ts:94`)
+- **GET** `/knowledge/priorities` (`app/src/routes/agent.ts:514`)
+- **GET** `/knowledge` (`app/src/routes/agent.ts:352`)
+- **GET** `/self-knowledge` (`app/src/routes/agent.ts:410`)
 - **GET** `/verify` (`app/src/routes/auth.ts:78`)
-- **POST** `/:nftId/seal` (`app/src/routes/memory.ts:171`)
-- **POST** `/` (`app/src/routes/chat.ts:51`)
+- **POST** `/` (`app/src/routes/chat.ts:52`)
+- **POST** `/allowlist` (`app/src/routes/admin.ts:50`)
+- **POST** `/knowledge/priorities/vote` (`app/src/routes/agent.ts:451`)
 
 ### Skill Commands
 
@@ -164,20 +165,21 @@ Directory structure:
 <!-- provenance: DERIVED -->
 | Module | Files | Purpose | Documentation |
 |--------|-------|---------|---------------|
-| `app/` | 60056 | Source code | \u2014 |
+| `app/` | 60113 | Source code | \u2014 |
 | `deploy/` | 6 | Infrastructure and deployment | \u2014 |
 | `docs/` | 9 | Documentation | \u2014 |
 | `evals/` | 122 | Benchmarking and regression framework for the Loa agent development system. Ensures framework changes don't degrade agent behavior through | [evals/README.md](evals/README.md) |
-| `grimoires/` | 58 | Home to all grimoire directories for the Loa | [grimoires/README.md](grimoires/README.md) |
-| `knowledge/` | 23 | Documentation | \u2014 |
+| `grimoires/` | 206 | Home to all grimoire directories for the Loa | [grimoires/README.md](grimoires/README.md) |
+| `knowledge/` | 25 | Documentation | \u2014 |
 | `persona/` | 1 | Persona | \u2014 |
-| `tests/` | 156 | Test suites | \u2014 |
+| `scripts/` | 3 | Utility scripts | \u2014 |
+| `tests/` | 172 | Test suites | \u2014 |
 | `web/` | 96673 | Web | \u2014 |
 
 ## Verification
 <!-- provenance: CODE-FACTUAL -->
 - Trust Level: **L2 — CI Verified**
-- 157 test files across 1 suite
+- 173 test files across 1 suite
 - CI/CD: GitHub Actions (0 workflows)
 - Security: SECURITY.md present
 
@@ -189,15 +191,15 @@ The project defines 1 specialized agent persona.
 |-------|----------|-------|
 | Bridgebuilder | You are the Bridgebuilder — a senior engineering mentor who has spent decades building systems at scale. | Your voice is warm, precise, and rich with analogy. |
 <!-- ground-truth-meta
-head_sha: 34580e3d7947f5c09fba3aaf1cfb5d49bc371807
-generated_at: 2026-02-21T05:27:50Z
+head_sha: a6776c31b80b94c28cb3f5d935492c6eb01cc135
+generated_at: 2026-02-25T07:46:42Z
 generator: butterfreezone-gen v1.0.0
 sections:
-  agent_context: 58765014d4b1d2099c2917bbc2958aafa67a8bc0717a2aecab4def9162b97839
+  agent_context: 2ce7bcd812342baabd13ae33d3cff76b551975309ad212a804f31d47df41a07d
   capabilities: ab2576b1f2e7e8141f0e93e807d26ed2b7b155e21c96d787507a3ba933bb9795
-  architecture: fdc96e78bd0a06581b17eb997d1593cf88917e37bccbfe10beb9f94e31026a4e
-  interfaces: 55125fdf09985fc93e1c8dad1c4cc88dce14287a2bd03d296f3c4d5aff97e7fd
-  module_map: fb550c56b7bec2841adc1874734a92024f26f4d53afbba2a65ad7a30a66d6665
-  verification: c3957dbf54ca4365ee41e393b8a4d4e24f6e746c31b81b1c9387dc147544664d
+  architecture: 8b5471e1396192887e28d1d4f789a36c5a088d2ae7d3a372e609f3142bd2826c
+  interfaces: 37ec6bccceafc4c72cf4088db6c0a984271532250f8f04e30bc7eee89e6f7365
+  module_map: 22bf7fa8c08e2a99ec362a8e99850910162ef79eeceaf9f00595978d3589cdda
+  verification: d79771ca63d10ad195a9e8b8927e983fb42b7949843682f477662319e486161a
   agents: ca263d1e05fd123434a21ef574fc8d76b559d22060719640a1f060527ef6a0b6
 -->

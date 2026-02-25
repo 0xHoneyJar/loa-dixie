@@ -252,13 +252,19 @@ export function evaluateEconomicBoundaryForWallet(
     reason: `No reputation aggregate available; using static tier-based score ${weightsTag}`,
   };
 
+  // cycle-007 — Sprint 73, Task S1-T5: Handle 'unspecified' TaskType explicitly.
+  // When taskType is 'unspecified' or undefined, skip cohort lookup entirely
+  // and route directly to aggregate-only scoring. The 'unspecified' literal
+  // is the v8.2.0 explicit aggregate-only routing signal.
+  const isUnspecifiedTask = taskType === undefined || taskType === 'unspecified';
+
   if (reputationAggregate) {
     // Sprint 10 — Task 10.4: Try task-specific cohort first
     const dixieAggregate = reputationAggregate as DixieReputationAggregate;
     const taskCohorts = dixieAggregate.task_cohorts;
     let usedTaskCohort = false;
 
-    if (taskType && taskCohorts && taskCohorts.length > 0) {
+    if (!isUnspecifiedTask && taskType && taskCohorts && taskCohorts.length > 0) {
       // Find cohorts matching the requested task type
       const matchingCohorts = taskCohorts.filter(c => c.task_type === taskType);
       if (matchingCohorts.length > 0) {
@@ -294,7 +300,13 @@ export function evaluateEconomicBoundaryForWallet(
         reputationAggregate.pseudo_count,
       );
       reputationState = reputationAggregate.state;
-      scoringPathInput = { path: 'aggregate', reason: `Using aggregate personal score (no task-specific cohort) ${weightsTag}` };
+      // Differentiated reason messages for aggregate-only routing
+      const aggregateReason = isUnspecifiedTask
+        ? (taskType === 'unspecified'
+          ? `Explicit 'unspecified' TaskType — aggregate-only routing (v8.2.0) ${weightsTag}`
+          : `No task type provided — aggregate-only routing ${weightsTag}`)
+        : `Using aggregate personal score (no task-specific cohort for '${taskType}') ${weightsTag}`;
+      scoringPathInput = { path: 'aggregate', reason: aggregateReason };
     }
   }
 
@@ -660,5 +672,5 @@ export const CONVICTION_ACCESS_MATRIX_ORIGIN: GovernanceAnnotation = {
 };
 
 export { TIER_TRUST_PROFILES, DEFAULT_CRITERIA };
-export type { TierTrustProfile, EconomicBoundaryOptions };
+export type { TierTrustProfile };
 export type { ScoringPathLog } from '../types/reputation-evolution.js';
