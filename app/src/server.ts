@@ -40,6 +40,12 @@ import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
 import { KnowledgePriorityStore } from './services/knowledge-priority-store.js';
 import { ReputationService, InMemoryReputationStore } from './services/reputation-service.js';
+import { PostgreSQLReputationStore } from './services/pg-reputation-store.js';
+import { MutationLogStore } from './services/mutation-log-store.js';
+import { AuditTrailStore } from './services/audit-trail-store.js';
+import { DynamicContractStore } from './services/dynamic-contract-store.js';
+import { KnowledgeGovernor } from './services/knowledge-governor.js';
+import { migrate } from './db/migrate.js';
 import { EnrichmentService } from './services/enrichment-service.js';
 import { createEnrichmentRoutes } from './routes/enrich.js';
 import type { TBAVerification } from './types/agent-api.js';
@@ -80,6 +86,16 @@ export interface DixieApp {
   reputationService: ReputationService;
   /** Phase 2: Enrichment service for autopoietic loop (Sprint 11) */
   enrichmentService: EnrichmentService;
+  /** cycle-009: Mutation log store (null when DATABASE_URL not configured) */
+  mutationLogStore: MutationLogStore | null;
+  /** cycle-009: Audit trail store (null when DATABASE_URL not configured) */
+  auditTrailStore: AuditTrailStore | null;
+  /** cycle-009: Dynamic contract store (null when DATABASE_URL not configured) */
+  dynamicContractStore: DynamicContractStore | null;
+  /** cycle-009: Knowledge governor */
+  knowledgeGovernor: KnowledgeGovernor;
+  /** cycle-009: Async initialization promise (migration + store setup) */
+  ready: Promise<void>;
 }
 
 /**
@@ -187,14 +203,43 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Phase 2: Compound learning engine (batch processing every 10 interactions)
   const learningEngine = new CompoundLearningEngine();
 
-  // Phase 2: Reputation service with in-memory store (Sprint 6, Task 6.2)
-  // TODO: Replace InMemoryReputationStore with PostgreSQL adapter when available
-  const reputationService = new ReputationService(new InMemoryReputationStore());
+  // Phase 2 / cycle-009: Reputation service — PostgreSQL when available, in-memory fallback
+  const reputationStore = dbPool
+    ? new PostgreSQLReputationStore(dbPool)
+    : new InMemoryReputationStore();
+  const reputationService = new ReputationService(reputationStore);
 
   // Phase 2: Enrichment service for autopoietic loop (Sprint 11, Task 11.1)
   // Assembles governance context from in-memory caches for review prompt enrichment.
   // All data sourced from in-memory caches — no database calls in the hot path.
   const enrichmentService = new EnrichmentService({ reputationService });
+
+  // cycle-009: Governance stores (require PostgreSQL)
+  const mutationLogStore = dbPool ? new MutationLogStore(dbPool) : null;
+  const auditTrailStore = dbPool ? new AuditTrailStore(dbPool) : null;
+  const dynamicContractStore = dbPool ? new DynamicContractStore(dbPool) : null;
+
+  // cycle-009: Knowledge governor — third ResourceGovernor witness
+  const knowledgeGovernor = new KnowledgeGovernor();
+
+  // cycle-009: Async initialization — run migrations before stores are used
+  const ready = (async () => {
+    if (dbPool) {
+      try {
+        await migrate(dbPool);
+        log('info', { event: 'migrations_applied', backend: 'postgresql' });
+      } catch (err) {
+        log('error', {
+          event: 'migration_error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    log('info', {
+      event: 'reputation_store_backend',
+      backend: dbPool ? 'postgresql' : 'in-memory',
+    });
+  })();
 
   // Phase 2: Knowledge priority store (conviction-weighted community governance, Task 21.4)
   // Task 22.4: Persist votes to disk so they survive restarts
@@ -426,12 +471,14 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     },
   }));
 
-  // --- Resource governance registration (Task 20.5) ---
+  // --- Resource governance registration (Task 20.5 + cycle-009 Task 6.1) ---
   // Register all resource governors for unified observability via GET /health/governance.
-  // Additional governors (model pools, memory quotas, etc.) will register here as built.
   // Idempotent: skip if already registered (e.g., multiple createDixieApp calls in tests).
   if (!governorRegistry.get(corpusMeta.resourceType)) {
     governorRegistry.register(corpusMeta);
+  }
+  if (!governorRegistry.get(knowledgeGovernor.resourceType)) {
+    governorRegistry.register(knowledgeGovernor);
   }
 
   // --- SPA fallback (placeholder — web build integrated later) ---
@@ -456,5 +503,10 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     learningEngine,
     reputationService,
     enrichmentService,
+    mutationLogStore,
+    auditTrailStore,
+    dynamicContractStore,
+    knowledgeGovernor,
+    ready,
   };
 }
