@@ -18,6 +18,18 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import type { DbPool } from './client.js';
 
+/**
+ * Compute a deterministic advisory lock ID from an application name.
+ * Uses a simple hash to map a string to a 31-bit positive integer,
+ * preventing cross-app collisions in shared PostgreSQL clusters.
+ * @since cycle-014 Sprint 105 — BB-DEEP-04
+ */
+function computeLockId(appName: string): number {
+  const hash = createHash('sha256').update(appName).digest();
+  // Read first 4 bytes as unsigned 32-bit integer, mask to 31-bit positive
+  return hash.readUInt32BE(0) & 0x7FFFFFFF;
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = join(__dirname, 'migrations');
 
@@ -145,7 +157,9 @@ export async function migrate(pool: DbPool): Promise<MigrationResult> {
   };
 
   // 0. Acquire advisory lock (prevents concurrent migration across replicas)
-  const MIGRATION_LOCK_ID = 42_000_014; // Unique per-app (42_000_000 + cycle)
+  // BB-DEEP-04: Lock ID derived from app name hash for collision-resistance.
+  // Prevents cross-app collisions in shared PostgreSQL clusters.
+  const MIGRATION_LOCK_ID = computeLockId('dixie-bff:migration');
   const LOCK_TIMEOUT_MS = 30_000;
   const lockClient = await pool.connect();
   try {

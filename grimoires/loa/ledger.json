@@ -867,13 +867,21 @@
           "label": "Bridgebuilder Excellence — Observability Correctness & Staging Hardening",
           "tasks": 9,
           "status": "pending"
+        },
+        {
+          "id": "sprint-5",
+          "global_id": 105,
+          "local_label": "sprint-5",
+          "label": "Bridgebuilder Deep Review — Governance Excellence & Architectural Extraction",
+          "tasks": 11,
+          "status": "pending"
         }
       ]
     }
   ],
   "active_cycle": "cycle-014",
   "active_bugfix": null,
-  "global_sprint_counter": 104,
+  "global_sprint_counter": 105,
   "bugfix_cycles": [],
   "release_cycles": [
     {

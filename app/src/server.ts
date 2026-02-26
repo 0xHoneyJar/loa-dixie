@@ -50,6 +50,7 @@ import { DynamicContractStore } from './services/dynamic-contract-store.js';
 import { KnowledgeGovernor } from './services/knowledge-governor.js';
 import { migrate } from './db/migrate.js';
 import { EnrichmentService } from './services/enrichment-service.js';
+import { FleetGovernor } from './services/fleet-governor.js';
 import { createEnrichmentRoutes } from './routes/enrich.js';
 import type { TBAVerification } from './types/agent-api.js';
 import { createDbPool, type DbPool } from './db/client.js';
@@ -302,6 +303,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Allowlist (community membership) gates payment (economic access), which gates
   // routes (capability access). This ordering ensures community governance controls
   // economic flows, not the other way around. Reordering is an architectural decision.
+  // See: docs/adr/001-middleware-pipeline-ordering.md (canonical source)
   // See: grimoires/loa/context/adr-communitarian-agents.md
   // See: grimoires/loa/context/adr-conway-positioning.md
   //
@@ -535,6 +537,16 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   }
   if (!governorRegistry.get(knowledgeGovernor.resourceType)) {
     governorRegistry.register(knowledgeGovernor);
+  }
+
+  // --- Fleet governor registration (BB-DEEP-01: FleetGovernor must participate in governance health) ---
+  // Register as GovernedResource so verifyAllResources() checks INV-014/015/016
+  // and GET /health/governance includes fleet state.
+  if (dbPool) {
+    const fleetGovernor = new FleetGovernor(dbPool);
+    if (!governorRegistry.getResource(fleetGovernor.resourceType)) {
+      governorRegistry.registerResource(fleetGovernor);
+    }
   }
 
   // --- SPA fallback (placeholder — web build integrated later) ---

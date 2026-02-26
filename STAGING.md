@@ -87,7 +87,7 @@ If status is `degraded`, check which service is unhealthy via the `infrastructur
 
 ## 5. Migrations
 
-Migrations run automatically on dixie-bff startup. An advisory lock (`pg_advisory_lock(42000014)`) ensures only one instance runs migrations at a time.
+Migrations run automatically on dixie-bff startup. An advisory lock (derived from SHA-256 hash of `dixie-bff:migration`) ensures only one instance runs migrations at a time.
 
 ### Manual Migration
 
@@ -189,8 +189,9 @@ docker compose -f deploy/docker-compose.staging.yml exec postgres \
   psql -U dixie -d dixie -c "SELECT * FROM pg_locks WHERE locktype = 'advisory';"
 
 # Force-release (if safe — ensure no migration is actually running)
+# Lock ID is derived from SHA-256('dixie-bff:migration') — check migrate.ts for current value
 docker compose -f deploy/docker-compose.staging.yml exec postgres \
-  psql -U dixie -d dixie -c "SELECT pg_advisory_unlock(42000014);"
+  psql -U dixie -d dixie -c "SELECT pg_advisory_unlock_all();"
 ```
 
 ### Health reports "degraded"
@@ -287,17 +288,22 @@ curl -s "http://localhost:3200/api/traces/$TRACE_ID" | jq '.batches[].scopeSpans
 | Networking | Single Docker network | VPC with private subnets |
 | Scaling | Single instance per service | Auto-scaling groups |
 | Secrets | `.env.staging` file | AWS SSM Parameter Store / Secrets Manager |
-| Database | Compose-managed PostgreSQL | RDS with multi-AZ |
-| Redis | Compose-managed Redis | ElastiCache cluster |
-| NATS | Compose-managed single node | NATS cluster (3-node) |
-| Load balancing | Direct port mapping | ALB with TLS termination |
-| Traces | Tempo (local) | AWS X-Ray or hosted Grafana Cloud |
+| Database | Compose-managed PostgreSQL (postgres) | RDS with multi-AZ |
+| Redis | Compose-managed Redis (redis) | ElastiCache cluster |
+| NATS | Compose-managed single node (nats) | NATS cluster (3-node) |
+| Inference | loa-finn (single container) | loa-finn fleet (auto-scaled) |
+| Circuit breaker | Per-process (singleton FinnClient) | Per-instance — see [ADR-002](docs/adr/002-circuit-breaker-topology.md) |
+| Load balancing | Direct port mapping (3001:3001) | ALB with TLS termination |
+| Traces | Tempo (local, observability profile) | AWS X-Ray or hosted Grafana Cloud |
+| NATS monitoring | Port 8222 (not exposed by default) | Dedicated monitoring endpoint |
 
 **Key differences to watch for**:
 - Staging runs on a single host — no network partitions possible
 - Staging uses persistent Docker volumes — production uses EBS/RDS snapshots
 - Staging health checks are local — production checks traverse ALB
+- Circuit breaker state is per-process — in production with multiple instances, each has independent state (see [ADR-002](docs/adr/002-circuit-breaker-topology.md))
 - OTEL collector in staging is Tempo direct; production may need an OTEL Collector sidecar
+- NATS monitoring (port 8222) available in staging for debugging — production uses dedicated monitoring
 
 ## 11. Teardown
 

@@ -1,12 +1,12 @@
 # Sprint Plan: Staging Launch Readiness
 
-**Version**: 14.1.0
+**Version**: 14.2.0
 **Date**: 2026-02-26
 **Cycle**: cycle-014
 **PRD**: v14.1.0
 **SDD**: v14.1.0
-**Total Sprints**: 4
-**Global Sprint Range**: 101-104
+**Total Sprints**: 5
+**Global Sprint Range**: 101-105
 
 ---
 
@@ -204,6 +204,87 @@ Sprint 1-3 (Complete — PR #50)
          ├── T8: Smoke test idempotency (independent)
          └── T9: STAGING.md updates (independent)
 ```
+
+---
+
+## Sprint 5: Bridgebuilder Deep Review — Governance Excellence & Architectural Extraction
+
+**Goal**: Address all findings from the Bridgebuilder Deep Review (BB-DEEP-01 through BB-DEEP-08) plus deferred LOWs from bridge iterations. Elevate governance observability, extract god objects, formalize ADRs, and lay the foundation for cross-governor coordination.
+
+**Source**: Bridgebuilder Deep Review — PR #50 ([Part I](https://github.com/0xHoneyJar/loa-dixie/pull/50#issuecomment-3965979758) | [Part II](https://github.com/0xHoneyJar/loa-dixie/pull/50#issuecomment-3966002756) | [Part III](https://github.com/0xHoneyJar/loa-dixie/pull/50#issuecomment-3966005321))
+
+**Acceptance Criteria**:
+- FleetGovernor appears in `GET /health/governance` response
+- `verifyAllResources()` checks fleet invariants (INV-014, 015, 016)
+- ReputationService extracted into 3+ focused modules (<400 lines each)
+- All existing tests pass after extraction (zero behavior change)
+- Advisory lock ID derived from app name hash (collision-resistant)
+- Two ADR documents created (middleware pipeline + span sanitizer privacy)
+- GovernorRegistry has `coordinate()` stub with typed event interface
+- Zero raw `span.setAttribute()` calls in fleet-governor (all sanitized)
+- Production topology table in STAGING.md matches actual staging stack
+
+### Task Ordering
+
+Execute in this order to manage dependencies on shared files:
+
+1. **T1** (FleetGovernor registration) — foundational; changes `server.ts`
+2. **T2** (fleet-governor sanitizer adoption) — changes `fleet-governor.ts`, depends on T1 for registration context
+3. **T3** (circuit breaker docs) — independent, documentation only
+4. **T4** (ReputationService extraction: scoring engine) — largest task, no file conflicts
+5. **T5** (ReputationService extraction: event store) — depends on T4 for module boundary design
+6. **T6** (ReputationService re-export barrel) — depends on T4+T5, updates imports in `server.ts`
+7. **T7** (advisory lock ID) — independent, changes `migrate.ts`
+8. **T8** (middleware pipeline ADR) — independent, new file
+9. **T9** (span sanitizer privacy ADR) — independent, new file
+10. **T10** (GovernorRegistry coordination) — depends on T1 for registration pattern context
+11. **T11** (tracing test dedup + topology docs) — independent, do last
+
+### Tasks
+
+| # | Task | File(s) | AC | Finding |
+|---|------|---------|-----|---------|
+| 1 | Register FleetGovernor in GovernorRegistry | `app/src/server.ts` | After FleetGovernor construction, call `governorRegistry.registerResource(fleetGovernor)`. `GET /health/governance` includes `fleet-governor` in response. `verifyAllResources()` runs INV-014/015/016. Idempotent guard: skip if already registered. | BB-DEEP-01 |
+| 2 | Replace raw `span.setAttribute()` in FleetGovernor with `addSanitizedAttributes()` | `app/src/services/fleet-governor.ts` | All 5 `span.setAttribute()` calls in `admitAndInsert()` replaced with `addSanitizedAttributes('dixie.governance.check', ...)`. Behavior unchanged — same attributes set. Existing fleet governor tests pass. | BB-S4-003 |
+| 3 | Document singleton circuit breaker limitation + production roadmap | `app/src/proxy/finn-client.ts`, `docs/adr/002-circuit-breaker-topology.md` | JSDoc comment on `FinnClient` class documents singleton limitation. ADR documents 3 production options: (a) Redis-backed state, (b) service mesh delegation, (c) NATS-coordinated health. ADR links to Netflix Hystrix→Envoy migration pattern. | BB-DEEP-02 |
+| 4 | Extract `ReputationScoringEngine` — pure scoring computation | `app/src/services/reputation-scoring-engine.ts` (new), `app/src/services/reputation-service.ts` | Extract `computeBlendedScore()`, `computeEma()`, `computeCohortScore()`, `computeCollectionScore()` into dedicated module. ReputationService delegates to scoring engine. All existing reputation tests pass unchanged. New module has unit tests for edge cases (empty collections, NaN guards). | BB-DEEP-03 |
+| 5 | Extract `ReputationEventStore` — event sourcing operations | `app/src/services/reputation-event-store.ts` (new), `app/src/services/reputation-service.ts` | Extract `appendEvent()`, `reconstructFromEvents()`, `verifyEventChain()` into dedicated module. ReputationService delegates to event store. All existing event sourcing tests pass unchanged. New module <200 lines. | BB-DEEP-03 |
+| 6 | ReputationService re-export barrel + import updates | `app/src/services/reputation-service.ts`, `app/src/server.ts` | ReputationService re-exports `ReputationScoringEngine` and `ReputationEventStore` for backward compatibility. Direct imports updated where appropriate. ReputationService reduced to <500 lines (lifecycle + CRUD + orchestration). All tests pass. | BB-DEEP-03 |
+| 7 | Derive advisory lock ID from app name hash | `app/src/db/migrate.ts` | Lock ID computed as `Math.abs(hashCode('dixie-bff:migration')) & 0x7FFFFFFF` with deterministic `hashCode()` function. Comment documents collision-resistance. Hardcoded `42_000_014` replaced. Migration integration tests pass. | BB-DEEP-04 |
+| 8 | Extract middleware pipeline to first-class ADR | `docs/adr/001-middleware-pipeline-ordering.md` (new) | ADR documents 15-position middleware ordering with rationale per position. References Zanzibar, TAO, Ostrom. Status: Accepted. Source code comment updated to reference ADR. RTFM-validatable. | BB-DEEP-05 |
+| 9 | Extract span sanitizer privacy constitution ADR | `docs/adr/003-span-sanitizer-privacy-constitution.md` (new) | ADR documents default-deny allowlist architecture, PII hashing strategy, per-span-type granularity. References GDPR purpose limitation, Stripe PCI telemetry. Identifies future governance target (configurable allowlists). Status: Accepted. | BB-DEEP-06 |
+| 10 | GovernorRegistry `coordinate()` foundation + typed event interface | `app/src/services/governor-registry.ts`, `app/src/services/__tests__/governor-registry-coordinate.test.ts` (new) | Add `GovernorCoordinationEvent` type with `source`, `target`, `eventType`, `payload`. Add `coordinate(event)` method that dispatches to registered resource governors. Initial implementation: logging + span emission only (no cross-governor side effects yet). Unit tests verify event dispatch, unknown target handling. | BB-DEEP-08 |
+| 11 | Deduplicate tracing tests + fix production topology table | `app/tests/unit/tracing.test.ts`, `STAGING.md` | Remove duplicate test case (malformed traceparent test that duplicates test 3). Production topology table in STAGING.md Section 10 updated: verify all service names match actual compose services, add missing NATS monitoring note. | BB-S4-008, BB-S4-013 |
+
+---
+
+## Dependency Graph (Updated with Sprint 5)
+
+```
+Sprint 1-3 (Complete — PR #50)
+  └──→ Sprint 4 (Complete — Bridgebuilder Excellence)
+         └──→ Sprint 5 (Deep Review — Governance Excellence)
+                ├── T1: FleetGovernor registration (server.ts)
+                │    ├──→ T2: Fleet-governor sanitizer adoption
+                │    └──→ T10: GovernorRegistry coordinate()
+                ├── T4: Extract ReputationScoringEngine
+                │    └──→ T5: Extract ReputationEventStore
+                │         └──→ T6: Re-export barrel + import cleanup
+                ├── T3: Circuit breaker ADR (independent)
+                ├── T7: Advisory lock ID hash (independent)
+                ├── T8: Middleware pipeline ADR (independent)
+                ├── T9: Span sanitizer privacy ADR (independent)
+                └── T11: Test dedup + topology fix (independent)
+```
+
+## Risk Mitigation (Sprint 5)
+
+| Risk | Mitigation |
+|------|------------|
+| ReputationService extraction breaks consumers | Re-export barrel preserves all public APIs; extraction is internal refactoring only |
+| Advisory lock ID change breaks running staging | New lock ID is a different number; no conflict with existing locks. Old lock auto-releases on disconnect |
+| GovernorRegistry coordinate() introduces coupling | Initial implementation is logging-only with no side effects — foundation for future cross-governor governance |
+| ADR documents become stale | RTFM-validatable format; middleware ordering comment references ADR for bidirectional link |
 
 ---
 

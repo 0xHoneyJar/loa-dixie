@@ -14,6 +14,19 @@ export type LogCallback = (level: 'error' | 'warn' | 'info', data: Record<string
  * Typed HTTP client for loa-finn.
  * Includes a circuit breaker: opens after `maxFailures` consecutive
  * failures within `windowMs`, half-opens after `cooldownMs`.
+ *
+ * **Singleton limitation (BB-DEEP-02):** Circuit breaker state is purely
+ * in-memory on this instance. In multi-instance production (ECS auto-scaling),
+ * each instance maintains independent circuit state. This means:
+ * - Instance A may trip open while Instance B still sends traffic
+ * - Half-open probe results don't propagate across instances
+ *
+ * This is acceptable for staging (single-instance docker-compose). For production,
+ * see `docs/adr/002-circuit-breaker-topology.md` for migration options:
+ * (a) Redis-backed shared state, (b) service mesh delegation (Envoy),
+ * (c) NATS-coordinated health reporting.
+ *
+ * @see Netflix Hystrix → Envoy migration pattern
  */
 export class FinnClient {
   private readonly baseUrl: string;

@@ -21,7 +21,7 @@
  * @since cycle-012 — Sprint 90, Fleet Governor
  */
 import type { DbPool } from '../db/client.js';
-import { startSanitizedSpan } from '../utils/span-sanitizer.js';
+import { startSanitizedSpan, addSanitizedAttributes } from '../utils/span-sanitizer.js';
 import type { ConvictionTier } from '../types/conviction.js';
 import type { FleetTaskStatus, CreateFleetTaskInput, FleetTaskRecord } from '../types/fleet.js';
 import type {
@@ -388,8 +388,7 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
       async (span) => {
     const limit = this.tierLimits[tier];
     if (limit <= 0) {
-      span.setAttribute('decision', 'denied');
-      span.setAttribute('denial_reason', 'tier_not_permitted');
+      addSanitizedAttributes(span, 'dixie.governance.check', { decision: 'denied', denial_reason: 'tier_not_permitted' });
       throw new SpawnDeniedError(
         { operatorId: input.operatorId, tier, activeCount: 0, tierLimit: limit },
         `Tier '${tier}' is not permitted to spawn agents (limit=0)`,
@@ -412,7 +411,7 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
 
       if (activeCount >= limit) {
         await client.query('ROLLBACK');
-        span.setAttribute('denial_reason', 'tier_limit_exceeded');
+        addSanitizedAttributes(span, 'dixie.governance.check', { denial_reason: 'tier_limit_exceeded' });
         const state: FleetState = {
           operatorId: input.operatorId,
           tier,
@@ -463,8 +462,7 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
       };
       this._version++;
 
-      span.setAttribute('decision', 'admit');
-      span.setAttribute('witness_count', activeCount + 1);
+      addSanitizedAttributes(span, 'dixie.governance.check', { decision: 'admit', witness_count: activeCount + 1 });
       return record;
     } catch (err) {
       // Rollback on any non-SpawnDeniedError failure
@@ -476,7 +474,7 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
         }
       }
       if (err instanceof SpawnDeniedError) {
-        span.setAttribute('decision', 'denied');
+        addSanitizedAttributes(span, 'dixie.governance.check', { decision: 'denied' });
       }
       throw err;
     } finally {
