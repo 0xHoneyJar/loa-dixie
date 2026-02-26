@@ -1,6 +1,7 @@
 import type { CircuitState, FinnHealthResponse } from '../types.js';
 import { computeReqHash, deriveIdempotencyKey } from '@0xhoneyjar/loa-hounfour/integrity';
 import { BffError } from '../errors.js';
+import { startSanitizedSpan } from '../utils/span-sanitizer.js';
 
 // Re-export BffError for consumers that imported it from finn-client
 export { BffError } from '../errors.js';
@@ -72,65 +73,74 @@ export class FinnClient {
       nftId?: string;
     },
   ): Promise<T> {
-    this.checkCircuit();
+    return startSanitizedSpan(
+      'dixie.finn.inference',
+      { model: path, tokens: 0, latency_ms: 0 },
+      async (span) => {
+        this.checkCircuit();
 
-    const url = `${this.baseUrl}${path}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      opts?.timeoutMs ?? this.timeoutMs,
+        const url = `${this.baseUrl}${path}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(
+          () => controller.abort(),
+          opts?.timeoutMs ?? this.timeoutMs,
+        );
+
+        const start = Date.now();
+
+        // Compute integrity headers for mutation methods (POST/PUT/PATCH)
+        // Serialize body once and reuse for both hash and fetch (Bridge iter2-medium-3)
+        const isMutation = ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase());
+        const integrityHeaders: Record<string, string> = {};
+        const serializedBody = opts?.body ? JSON.stringify(opts.body) : undefined;
+
+        if (isMutation && serializedBody) {
+          const bodyBuffer = Buffer.from(serializedBody, 'utf-8');
+          const reqHash = computeReqHash(bodyBuffer);
+          integrityHeaders['X-Req-Hash'] = reqHash;
+
+          const tenant = opts?.nftId ?? 'anonymous';
+          const idempotencyKey = deriveIdempotencyKey(tenant, reqHash, 'loa-finn', path);
+          integrityHeaders['X-Idempotency-Key'] = idempotencyKey;
+        }
+
+        try {
+          const res = await fetch(url, {
+            method,
+            headers: {
+              'Content-Type': 'application/json',
+              ...integrityHeaders,
+              ...opts?.headers,
+            },
+            body: serializedBody,
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeout);
+          span.setAttribute('latency_ms', Date.now() - start);
+
+          if (!res.ok) {
+            const errorBody = await res.json().catch(() => ({}));
+            this.recordFailure();
+            throw mapFinnError(res.status, errorBody);
+          }
+
+          this.recordSuccess();
+          return (await res.json()) as T;
+        } catch (err) {
+          clearTimeout(timeout);
+          span.setAttribute('latency_ms', Date.now() - start);
+          if (BffError.isBffError(err)) {
+            throw err;
+          }
+          this.recordFailure();
+          throw new BffError(503, {
+            error: 'upstream_error',
+            message: 'Backend service unavailable',
+          });
+        }
+      },
     );
-
-    // Compute integrity headers for mutation methods (POST/PUT/PATCH)
-    // Serialize body once and reuse for both hash and fetch (Bridge iter2-medium-3)
-    const isMutation = ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase());
-    const integrityHeaders: Record<string, string> = {};
-    const serializedBody = opts?.body ? JSON.stringify(opts.body) : undefined;
-
-    if (isMutation && serializedBody) {
-      const bodyBuffer = Buffer.from(serializedBody, 'utf-8');
-      const reqHash = computeReqHash(bodyBuffer);
-      integrityHeaders['X-Req-Hash'] = reqHash;
-
-      // Derive idempotency key: tenant + reqHash + provider + model
-      const tenant = opts?.nftId ?? 'anonymous';
-      const idempotencyKey = deriveIdempotencyKey(tenant, reqHash, 'loa-finn', path);
-      integrityHeaders['X-Idempotency-Key'] = idempotencyKey;
-    }
-
-    try {
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          ...integrityHeaders,
-          ...opts?.headers,
-        },
-        body: serializedBody,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
-
-      if (!res.ok) {
-        const errorBody = await res.json().catch(() => ({}));
-        this.recordFailure();
-        throw mapFinnError(res.status, errorBody);
-      }
-
-      this.recordSuccess();
-      return (await res.json()) as T;
-    } catch (err) {
-      clearTimeout(timeout);
-      if (BffError.isBffError(err)) {
-        throw err; // Already a BffError
-      }
-      this.recordFailure();
-      throw new BffError(503, {
-        error: 'upstream_error',
-        message: 'Backend service unavailable',
-      });
-    }
   }
 
   /**

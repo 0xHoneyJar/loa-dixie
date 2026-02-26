@@ -21,6 +21,7 @@
  * @since cycle-012 — Sprint 90, Fleet Governor
  */
 import type { DbPool } from '../db/client.js';
+import { startSanitizedSpan } from '../utils/span-sanitizer.js';
 import type { ConvictionTier } from '../types/conviction.js';
 import type { FleetTaskStatus, CreateFleetTaskInput, FleetTaskRecord } from '../types/fleet.js';
 import type {
@@ -381,8 +382,13 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
     input: CreateFleetTaskInput,
     tier: ConvictionTier,
   ): Promise<FleetTaskRecord> {
+    return startSanitizedSpan(
+      'dixie.governance.check',
+      { resource_type: 'fleet_task', decision: 'pending', witness_count: 0, operator_id: input.operatorId },
+      async (span) => {
     const limit = this.tierLimits[tier];
     if (limit <= 0) {
+      span.setAttribute('decision', 'denied');
       throw new SpawnDeniedError(
         { operatorId: input.operatorId, tier, activeCount: 0, tierLimit: limit },
         `Tier '${tier}' is not permitted to spawn agents (limit=0)`,
@@ -455,6 +461,8 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
       };
       this._version++;
 
+      span.setAttribute('decision', 'admit');
+      span.setAttribute('witness_count', activeCount + 1);
       return record;
     } catch (err) {
       // Rollback on any non-SpawnDeniedError failure
@@ -465,10 +473,15 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
           // Swallow rollback errors
         }
       }
+      if (err instanceof SpawnDeniedError) {
+        span.setAttribute('decision', 'denied');
+      }
       throw err;
     } finally {
       client.release();
     }
+      },
+    );
   }
 
   // -------------------------------------------------------------------------

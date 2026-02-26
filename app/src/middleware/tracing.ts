@@ -1,15 +1,13 @@
 import { createMiddleware } from 'hono/factory';
 import { randomUUID } from 'node:crypto';
+import { startSanitizedSpan } from '../utils/span-sanitizer.js';
 
 /**
- * Lightweight OTel-compatible tracing middleware.
+ * Request tracing middleware — W3C traceparent propagation + OTEL spans.
  *
- * Creates a W3C traceparent header for each request and propagates it
- * to downstream services. When OTEL_EXPORTER_OTLP_ENDPOINT is configured,
- * integrate the full @opentelemetry/sdk-node at startup instead.
- *
- * This middleware provides request correlation without pulling in the
- * full OTel SDK dependency — sufficient for Phase 1 observability.
+ * When OTEL SDK is active, creates a `dixie.request` span with sanitized
+ * attributes (method, url, status_code, duration_ms). When OTEL is not
+ * configured, falls back to lightweight W3C traceparent header propagation.
  */
 export function createTracing(serviceName: string) {
   return createMiddleware(async (c, next) => {
@@ -17,7 +15,6 @@ export function createTracing(serviceName: string) {
     let traceId: string;
 
     if (incoming) {
-      // Parse W3C traceparent: version-traceId-parentId-flags
       const parts = incoming.split('-');
       if (parts.length === 4) {
         traceId = parts[1];
@@ -31,14 +28,22 @@ export function createTracing(serviceName: string) {
     const spanId = randomUUID().replace(/-/g, '').slice(0, 16);
     const traceparent = `00-${traceId}-${spanId}-01`;
 
-    // Set trace context as response headers for downstream debugging and proxy calls.
-    // Uses headers instead of c.set() to avoid `as never` type assertions —
-    // Hono's typed context requires a global Variables type declaration that
-    // would be invasive across all route definitions.
     c.header('traceparent', traceparent);
     c.header('x-trace-id', traceId);
     c.header('x-span-id', spanId);
 
-    await next();
+    const start = Date.now();
+
+    await startSanitizedSpan(
+      'dixie.request',
+      { method: c.req.method, url: c.req.path },
+      async (span) => {
+        await next();
+
+        const duration_ms = Date.now() - start;
+        span.setAttribute('status_code', c.res.status);
+        span.setAttribute('duration_ms', duration_ms);
+      },
+    );
   });
 }

@@ -1,5 +1,6 @@
 import { createMiddleware } from 'hono/factory';
 import * as jose from 'jose';
+import { startSanitizedSpan, hashForSpan } from '../utils/span-sanitizer.js';
 
 // ADR: HS256 JWT — Phase 1 single-service auth
 //
@@ -36,29 +37,35 @@ export function createJwtMiddleware(jwtSecret: string, issuer: string) {
 
     if (authHeader?.startsWith('Bearer ') && !authHeader.startsWith('Bearer dxk_')) {
       const token = authHeader.slice(7);
-      try {
-        const { payload } = await jose.jwtVerify(token, secret, { issuer });
-        if (payload.sub) {
-          c.set('wallet', payload.sub);
-        }
-      } catch (err) {
-        // Invalid JWT — continue without setting wallet.
-        // Allowlist middleware will handle 401/403.
-        const errorType =
-          err instanceof jose.errors.JWTExpired ? 'expired' :
-          err instanceof jose.errors.JWTClaimValidationFailed ? 'invalid_claims' :
-          err instanceof jose.errors.JWSSignatureVerificationFailed ? 'invalid_signature' :
-          'malformed';
-        process.stderr.write(
-          JSON.stringify({
-            level: 'warn',
-            event: 'jwt_verification_failed',
-            error_type: errorType,
-            timestamp: new Date().toISOString(),
-            service: 'dixie-bff',
-          }) + '\n',
-        );
-      }
+      await startSanitizedSpan(
+        'dixie.auth',
+        { auth_type: 'jwt', wallet: 'unknown', tier: 'unknown' },
+        async (span) => {
+          try {
+            const { payload } = await jose.jwtVerify(token, secret, { issuer });
+            if (payload.sub) {
+              c.set('wallet', payload.sub);
+              span.setAttribute('wallet_hash', hashForSpan(payload.sub));
+            }
+          } catch (err) {
+            const errorType =
+              err instanceof jose.errors.JWTExpired ? 'expired' :
+              err instanceof jose.errors.JWTClaimValidationFailed ? 'invalid_claims' :
+              err instanceof jose.errors.JWSSignatureVerificationFailed ? 'invalid_signature' :
+              'malformed';
+            span.setAttribute('auth_type', errorType);
+            process.stderr.write(
+              JSON.stringify({
+                level: 'warn',
+                event: 'jwt_verification_failed',
+                error_type: errorType,
+                timestamp: new Date().toISOString(),
+                service: 'dixie-bff',
+              }) + '\n',
+            );
+          }
+        },
+      );
     }
 
     await next();

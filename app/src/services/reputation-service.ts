@@ -55,6 +55,7 @@ import type {
 } from '../types/reputation-evolution.js';
 import { MutationLog, createMutation } from './governance-mutation.js';
 import type { MutationLogPersistence } from './governance-mutation.js';
+import { startSanitizedSpan } from '../utils/span-sanitizer.js';
 
 // ---------------------------------------------------------------------------
 // Feedback Dampening (Bridgebuilder F1 — autopoietic loop safety)
@@ -726,33 +727,43 @@ export class ReputationService
    * @since cycle-007 — Sprint 73, Task S1-T4
    */
   async processEvent(nftId: string, event: ReputationEvent): Promise<void> {
-    // BB-008-001: Wrap entire event processing in a single transaction so
-    // event log and aggregate/cohort state are atomically consistent. If any
-    // handler fails, both the event append and state changes are rolled back.
-    // This ensures reconstructAggregateFromEvents() stays in sync with
-    // materialized aggregates.
-    await this.store.transact(async (tx) => {
-      // Append event to log inside the transaction
-      await tx.appendEvent(nftId, event);
+    const spanAttrs: Record<string, unknown> = {
+      model_id: 'type' in event && event.type === 'model_performance'
+        ? (event as { model_id?: string }).model_id ?? 'unknown'
+        : 'n/a',
+      score: 0,
+      ema_value: 0,
+    };
 
-      // Dispatch by variant type (exhaustive)
-      switch (event.type) {
-        case 'quality_signal':
-          await this._handleQualitySignalInTx(tx, nftId, event);
-          break;
-        case 'task_completed':
-          await this._handleTaskCompletedInTx(tx, nftId, event);
-          break;
-        case 'credential_update':
-          // No-op: credentials affect access policy, not scores
-          break;
-        case 'model_performance':
-          await this._handleModelPerformanceInTx(tx, nftId, event);
-          break;
-        default:
-          // TypeScript exhaustiveness check — should never reach here
-          assertNever(event);
-      }
+    await startSanitizedSpan('dixie.reputation.update', spanAttrs, async () => {
+      // BB-008-001: Wrap entire event processing in a single transaction so
+      // event log and aggregate/cohort state are atomically consistent. If any
+      // handler fails, both the event append and state changes are rolled back.
+      // This ensures reconstructAggregateFromEvents() stays in sync with
+      // materialized aggregates.
+      await this.store.transact(async (tx) => {
+        // Append event to log inside the transaction
+        await tx.appendEvent(nftId, event);
+
+        // Dispatch by variant type (exhaustive)
+        switch (event.type) {
+          case 'quality_signal':
+            await this._handleQualitySignalInTx(tx, nftId, event);
+            break;
+          case 'task_completed':
+            await this._handleTaskCompletedInTx(tx, nftId, event);
+            break;
+          case 'credential_update':
+            // No-op: credentials affect access policy, not scores
+            break;
+          case 'model_performance':
+            await this._handleModelPerformanceInTx(tx, nftId, event);
+            break;
+          default:
+            // TypeScript exhaustiveness check — should never reach here
+            assertNever(event);
+        }
+      });
     });
   }
 

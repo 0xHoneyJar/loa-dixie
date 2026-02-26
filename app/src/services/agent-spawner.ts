@@ -18,6 +18,7 @@ import * as crypto from 'node:crypto';
 
 import type { AgentSecretProvider } from './agent-secret-provider.js';
 import type { AgentType } from '../types/fleet.js';
+import { startSanitizedSpan } from '../utils/span-sanitizer.js';
 
 const execFile = promisify(execFileRaw);
 
@@ -187,61 +188,67 @@ export class AgentSpawner {
     agentType: AgentType,
     prompt: string,
   ): Promise<AgentHandle> {
-    const worktreePath = path.join(this.config.worktreeBaseDir, taskId);
+    return startSanitizedSpan(
+      'dixie.fleet.spawn',
+      { task_type: agentType, cost: 0, identity: taskId },
+      async () => {
+        const worktreePath = path.join(this.config.worktreeBaseDir, taskId);
 
-    // Step 1: Validate
-    validateBranch(branch);
-    validateWorktreePath(worktreePath, this.config.worktreeBaseDir);
+        // Step 1: Validate
+        validateBranch(branch);
+        validateWorktreePath(worktreePath, this.config.worktreeBaseDir);
 
-    // Track cleanup steps that need to be reversed on failure
-    let worktreeCreated = false;
+        // Track cleanup steps that need to be reversed on failure
+        let worktreeCreated = false;
 
-    try {
-      // Step 2: Create git worktree
-      await this.createWorktree(worktreePath, branch);
-      worktreeCreated = true;
+        try {
+          // Step 2: Create git worktree
+          await this.createWorktree(worktreePath, branch);
+          worktreeCreated = true;
 
-      // Step 3: Install dependencies
-      await this.installDependencies(worktreePath);
+          // Step 3: Install dependencies
+          await this.installDependencies(worktreePath);
 
-      // Step 4: Copy Loa hooks if configured
-      if (this.config.loaHooksPath) {
-        await this.copyLoaHooks(worktreePath);
-      }
+          // Step 4: Copy Loa hooks if configured
+          if (this.config.loaHooksPath) {
+            await this.copyLoaHooks(worktreePath);
+          }
 
-      // Step 5: Launch process
-      let processRef: string;
-      if (this.config.mode === 'local') {
-        processRef = await this.spawnLocal(taskId, worktreePath, agentType, prompt);
-      } else {
-        processRef = await this.spawnContainer(taskId, worktreePath, agentType, prompt);
-      }
+          // Step 5: Launch process
+          let processRef: string;
+          if (this.config.mode === 'local') {
+            processRef = await this.spawnLocal(taskId, worktreePath, agentType, prompt);
+          } else {
+            processRef = await this.spawnContainer(taskId, worktreePath, agentType, prompt);
+          }
 
-      // Step 6: Build handle
-      const handle: AgentHandle = {
-        taskId,
-        branch,
-        worktreePath,
-        processRef,
-        mode: this.config.mode,
-        spawnedAt: new Date().toISOString(),
-      };
+          // Step 6: Build handle
+          const handle: AgentHandle = {
+            taskId,
+            branch,
+            worktreePath,
+            processRef,
+            mode: this.config.mode,
+            spawnedAt: new Date().toISOString(),
+          };
 
-      this.activeHandles.set(taskId, handle);
-      return handle;
-    } catch (err) {
-      // Cleanup partial state on failure
-      await this.cleanupPartialState(worktreePath, worktreeCreated);
+          this.activeHandles.set(taskId, handle);
+          return handle;
+        } catch (err) {
+          // Cleanup partial state on failure
+          await this.cleanupPartialState(worktreePath, worktreeCreated);
 
-      if (err instanceof SpawnError) {
-        throw err;
-      }
-      throw new SpawnError(
-        'PROCESS_FAILED',
-        `Spawn failed for task ${taskId}: ${err instanceof Error ? err.message : String(err)}`,
-        { cause: err },
-      );
-    }
+          if (err instanceof SpawnError) {
+            throw err;
+          }
+          throw new SpawnError(
+            'PROCESS_FAILED',
+            `Spawn failed for task ${taskId}: ${err instanceof Error ? err.message : String(err)}`,
+            { cause: err },
+          );
+        }
+      },
+    );
   }
 
   // -------------------------------------------------------------------------
