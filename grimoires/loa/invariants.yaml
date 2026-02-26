@@ -322,3 +322,101 @@ invariants:
         file: "app/tests/unit/reputation-evolution.test.ts"
         symbol: "reconstructAggregateFromEvents (stub)"
         note: "Verifies warming aggregate, sample_count, and contract_version from quality_signal events"
+
+  - id: INV-014
+    description: "Fleet tier limit enforcement — active agent count never exceeds conviction tier limit"
+    severity: critical
+    category: fleet-governance
+    properties:
+      - "active_count_per_operator <= tier_limit"
+      - "FleetGovernor.admitAndInsert() uses SELECT FOR UPDATE to serialize concurrent checks"
+      - "canSpawn() pre-check uses cached count as fast-reject gate"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/fleet-governor.test.ts"
+        symbol: "FleetGovernor.admitAndInsert"
+        note: "Verifies SpawnDeniedError on limit reached and correct transaction sequence"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/fleet-invariants.test.ts"
+        symbol: "INV-014: Tier limit enforcement"
+        note: "Integration test across governor admission, tier changes, and invariant verification"
+
+  - id: INV-015
+    description: "Cancelled tasks never retried — cancelled status has no outgoing transitions"
+    severity: high
+    category: fleet-lifecycle
+    properties:
+      - "VALID_TRANSITIONS['cancelled'] is empty array"
+      - "TERMINAL_STATUSES includes 'cancelled'"
+      - "RetryEngine.canRetry() returns false for cancelled tasks"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/task-registry.test.ts"
+        symbol: "VALID_TRANSITIONS constant"
+        note: "Verifies cancelled has empty transition array and is terminal"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/retry-engine.test.ts"
+        symbol: "canRetry()"
+        note: "Verifies canRetry returns false for cancelled tasks"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/fleet-invariants.test.ts"
+        symbol: "INV-015: Cancelled tasks never retried"
+        note: "Cross-component verification: state machine + RetryEngine + FleetGovernor"
+
+  - id: INV-016
+    description: "Tier downgrade safe — cannot spawn above new tier limit"
+    severity: high
+    category: fleet-governance
+    properties:
+      - "canSpawn checks current tier limit, not historical"
+      - "admitAndInsert uses provided tier parameter, not cached tier"
+      - "TIER_CHANGED event updates state to reflect new limit"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/fleet-governor.test.ts"
+        symbol: "INV-016: tier downgrade cannot spawn above new limit"
+        note: "Verifies verify(INV-016) detects violation after TIER_CHANGED to lower tier"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/fleet-invariants.test.ts"
+        symbol: "INV-016: Tier downgrade safe"
+        note: "Integration test across admitAndInsert, TIER_CHANGED, and canSpawn"
+
+  - id: INV-017
+    description: "Retry count bounded — retryCount never exceeds maxRetries"
+    severity: high
+    category: fleet-lifecycle
+    properties:
+      - "retry_count < max_retries guarded by DB WHERE clause in recordFailure()"
+      - "RetryEngine.canRetry() returns false when retryCount >= maxRetries"
+      - "RetryEngine.attemptRetry() transitions to abandoned when budget exhausted"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/task-registry.test.ts"
+        symbol: "TaskRegistry — Failure Recording"
+        note: "Verifies WHERE retry_count < max_retries guard and null return at max"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/retry-engine.test.ts"
+        symbol: "canRetry() / attemptRetry()"
+        note: "Verifies budget exhaustion logic and abandoned transition"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/fleet-invariants.test.ts"
+        symbol: "INV-017: Retry count bounded"
+        note: "Cross-component verification: TaskRegistry atomic guard + RetryEngine budget check"
+
+  - id: INV-018
+    description: "Notification guarantee — notification record inserted before delivery attempt"
+    severity: medium
+    category: fleet-observability
+    properties:
+      - "INSERT INTO fleet_notifications before any delivery HTTP call"
+      - "Record exists even if delivery fails (crash-safe auditability)"
+      - "Record updated with delivery outcome after attempt"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/notification-service.test.ts"
+        symbol: "INV-018"
+        note: "Verifies INSERT before fetch and record creation on delivery failure"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/fleet-invariants.test.ts"
+        symbol: "INV-018: Notification guarantee"
+        note: "Integration test verifying insert-before-delivery ordering and update after delivery"
