@@ -36,11 +36,13 @@ import { createTBAAuthMiddleware } from './middleware/tba-auth.js';
 import { createAgentRoutes } from './routes/agent.js';
 import { CompoundLearningEngine } from './services/compound-learning.js';
 import { createLearningRoutes } from './routes/learning.js';
+import { createReputationRoutes } from './routes/reputation.js';
+import { ReputationCache } from './services/reputation-cache.js';
 import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
 import { protocolVersionMiddleware } from './services/protocol-version.js';
 import { KnowledgePriorityStore } from './services/knowledge-priority-store.js';
-import { ReputationService, InMemoryReputationStore } from './services/reputation-service.js';
+import { ReputationService, InMemoryReputationStore, seedCollectionAggregator } from './services/reputation-service.js';
 import { PostgreSQLReputationStore } from './services/pg-reputation-store.js';
 import { MutationLogStore } from './services/mutation-log-store.js';
 import { AuditTrailStore } from './services/audit-trail-store.js';
@@ -239,6 +241,31 @@ export function createDixieApp(config: DixieConfig): DixieApp {
         throw err;
       }
     }
+    // cycle-011 T1.4: Two-phase CollectionScoreAggregator seeding from PG.
+    // Build a fresh aggregator from existing agents, then restore into the service.
+    // Failure falls back to neutral default (mean=0.5).
+    if (dbPool) {
+      try {
+        const seed = await seedCollectionAggregator(reputationStore, 5000);
+        if (seed.seeded) {
+          reputationService.collectionAggregator.restore(seed.aggregator.toJSON());
+          log('info', {
+            event: 'collection_aggregator_seeded',
+            agent_count: seed.agentCount,
+            mean: seed.aggregator.mean,
+            variance: seed.aggregator.variance,
+          });
+        } else {
+          log('info', { event: 'collection_aggregator_seeded', agent_count: 0, mean: 0.5 });
+        }
+      } catch (err) {
+        log('warn', {
+          event: 'collection_aggregator_seed_failed',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     log('info', {
       event: 'reputation_store_backend',
       backend: dbPool ? 'postgresql' : 'in-memory',
@@ -417,6 +444,19 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Assembles governance context for review prompt enrichment.
   // Conviction-gated: builder+ tier required. 50ms latency budget enforced.
   app.route('/api/enrich', createEnrichmentRoutes({ enrichmentService }));
+
+  // --- cycle-011: Reputation query surface — autopoietic loop closure ---
+  // Closes the feedback loop: finn can query dixie for agent reputation scores.
+  // GET /query: lightweight score query (finn bridge)
+  // GET /:nftId: full aggregate (builder+)
+  // GET /:nftId/cohorts: per-model task cohorts (builder+)
+  // GET /population: population stats (admin-gated)
+  const reputationCache = new ReputationCache(); // 5s TTL, 10K max entries
+  app.route('/api/reputation', createReputationRoutes({
+    reputationService,
+    adminKey: config.adminKey,
+    cache: reputationCache,
+  }));
 
   // --- Phase 2: Agent API with TBA authentication ---
   // TBA auth middleware applies only to /api/agent/* routes

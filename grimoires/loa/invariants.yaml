@@ -291,3 +291,34 @@ invariants:
         file: "app/src/services/__tests__/autopoietic-loop-v2.test.ts"
         symbol: "GovernedResource.verifyAll()"
         note: "Proves all resource implementations satisfy invariants"
+
+  - id: INV-013
+    description: "Reputation conservation — blended_score at time T must be derivable from collection_score, personal_score, sample_count, and pseudo_count at time T via the Bayesian formula. The reconstructAggregateFromEvents() function is the formal proof: replaying events reconstructs the score. If blended_score diverges from the formula, the aggregate is corrupt."
+    severity: critical
+    category: conservation
+    properties:
+      - "blended_score == (pseudo_count * collection_score + sample_count * personal_score) / (pseudo_count + sample_count)"
+      - "When personal_score is null (cold agent): blended_score == collection_score"
+      - "reconstructAggregateFromEvents(events).blended_score == computeBlendedScore(personal, collection, n, k) for the same inputs"
+      - "buildUpdatedAggregate always recomputes blended_score from the Bayesian formula (no stale cache)"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/reputation-service.ts"
+        symbol: "reconstructAggregateFromEvents"
+        note: "Event-sourced reconstruction: replays events and recomputes blended_score via computeBlendedScore (line 1084)"
+      - repo: loa-dixie
+        file: "app/src/services/reputation-service.ts"
+        symbol: "ReputationService.buildUpdatedAggregate"
+        note: "Every event path recomputes blended_score from the Bayesian formula (line 773)"
+      - repo: loa-hounfour
+        file: "src/governance/reputation-aggregate.ts"
+        symbol: "computeBlendedScore"
+        note: "Canonical Bayesian blend: (k * q_collection + n * q_personal) / (k + n) — the conservation equation"
+      - repo: loa-dixie
+        file: "app/src/services/__tests__/autopoietic-loop.test.ts"
+        symbol: "reconstructAggregateFromEvents"
+        note: "Verifies reconstruction from model_performance, mixed events, and empty streams"
+      - repo: loa-dixie
+        file: "app/tests/unit/reputation-evolution.test.ts"
+        symbol: "reconstructAggregateFromEvents (stub)"
+        note: "Verifies warming aggregate, sample_count, and contract_version from quality_signal events"

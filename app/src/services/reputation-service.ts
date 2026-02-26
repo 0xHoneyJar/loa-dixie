@@ -135,10 +135,12 @@ export const DEFAULT_PSEUDO_COUNT = 10;
 /**
  * Default collection score for Bayesian reputation blending.
  * The prior mean — what we assume an agent's quality is before any observations.
- * Zero represents "no information" — the neutral starting point.
+ * 0.5 represents "no opinion" — the neutral Bayesian prior (neither penalized nor boosted).
+ * Distinguished from empirical mean: 0.5 is epistemic neutrality, not observed average.
  * @since cycle-007 — Sprint 78, Task S1-T5 (Bridgebuilder F4)
+ * @since cycle-011 — T1.3: Changed from 0 to 0.5 (neutral prior, Flatline SKP-004)
  */
-export const DEFAULT_COLLECTION_SCORE = 0;
+export const DEFAULT_COLLECTION_SCORE = 0.5;
 
 // ---------------------------------------------------------------------------
 // Collection Score Aggregator (FR-6: Empirical Collection Score)
@@ -198,6 +200,20 @@ export class CollectionScoreAggregator {
     agg._mean = data.mean;
     agg._m2 = data.m2;
     return agg;
+  }
+
+  /**
+   * Restore this instance's state from a snapshot (in-place mutation).
+   * Used for startup seeding — avoids constructing a new service.
+   * @since cycle-011 — Sprint 82, Task T1.4
+   */
+  restore(data: { count: number; mean: number; m2: number }): void {
+    if (!Number.isFinite(data.count) || data.count < 0) return;
+    if (!Number.isFinite(data.mean)) return;
+    if (!Number.isFinite(data.m2) || data.m2 < 0) return;
+    this._count = data.count;
+    this._mean = data.mean;
+    this._m2 = data.m2;
   }
 }
 
@@ -1067,6 +1083,7 @@ export function computeTaskAwareCrossModelScore(
  */
 export function reconstructAggregateFromEvents(
   events: ReadonlyArray<ReputationEvent>,
+  collectionScore: number = DEFAULT_COLLECTION_SCORE,
 ): DixieReputationAggregate {
   let personalScore: number | null = null;
   let sampleCount = 0;
@@ -1113,7 +1130,7 @@ export function reconstructAggregateFromEvents(
   }
 
   const pseudoCount = DEFAULT_PSEUDO_COUNT;
-  const collectionScore = DEFAULT_COLLECTION_SCORE;
+  // collectionScore now comes from the parameter (default: DEFAULT_COLLECTION_SCORE)
   const blendedScore = personalScore !== null
     ? computeBlendedScore(personalScore, collectionScore, sampleCount, pseudoCount)
     : collectionScore;
@@ -1136,6 +1153,51 @@ export function reconstructAggregateFromEvents(
     contract_version: '8.2.0',
     task_cohorts: Array.from(taskCohortMap.values()),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Startup Seeding — Two-Phase CollectionScoreAggregator Bootstrap (cycle-011)
+// ---------------------------------------------------------------------------
+
+/**
+ * Seed a CollectionScoreAggregator from an existing ReputationStore.
+ *
+ * Two-phase approach per SDD §2.2:
+ * 1. Load all aggregates from PG (paginated batch of 1000, 5s max)
+ * 2. Feed each agent's personal_score into a fresh aggregator
+ * 3. Return the seeded aggregator for swap-on-complete
+ *
+ * On failure, returns a neutral aggregator (mean=0.5 via DEFAULT_COLLECTION_SCORE).
+ *
+ * @param store - The reputation store to read from
+ * @param timeoutMs - Maximum time for seeding (default: 5000ms)
+ * @returns Promise<{ aggregator, seeded, agentCount }>
+ * @since cycle-011 — Sprint 82, Task T1.4
+ */
+export async function seedCollectionAggregator(
+  store: ReputationStore,
+  timeoutMs = 5000,
+): Promise<{ aggregator: CollectionScoreAggregator; seeded: boolean; agentCount: number }> {
+  const aggregator = new CollectionScoreAggregator();
+
+  try {
+    const deadline = Date.now() + timeoutMs;
+    const allAgents = await store.listAll();
+
+    let count = 0;
+    for (const { aggregate } of allAgents) {
+      if (Date.now() > deadline) break;
+      if (aggregate.personal_score !== null) {
+        aggregator.update(aggregate.personal_score);
+        count++;
+      }
+    }
+
+    return { aggregator, seeded: count > 0, agentCount: count };
+  } catch {
+    // Failure: return neutral aggregator (mean defaults to DEFAULT_COLLECTION_SCORE = 0.5)
+    return { aggregator: new CollectionScoreAggregator(), seeded: false, agentCount: 0 };
+  }
 }
 
 // Re-export types for consumer convenience

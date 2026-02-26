@@ -118,7 +118,7 @@ Directory structure:
 - **GET** `/` (`app/src/routes/health.ts:34`)
 - **GET** `/allowlist` (`app/src/routes/admin.ts:45`)
 - **GET** `/capabilities` (`app/src/routes/agent.ts:299`)
-- **GET** `/governance` (`app/src/routes/health.ts:94`)
+- **GET** `/governance` (`app/src/routes/health.ts:110`)
 - **GET** `/knowledge/priorities` (`app/src/routes/agent.ts:514`)
 - **GET** `/knowledge` (`app/src/routes/agent.ts:352`)
 - **GET** `/self-knowledge` (`app/src/routes/agent.ts:410`)
@@ -165,11 +165,11 @@ Directory structure:
 <!-- provenance: DERIVED -->
 | Module | Files | Purpose | Documentation |
 |--------|-------|---------|---------------|
-| `app/` | 60113 | Source code | \u2014 |
+| `app/` | 60157 | Source code | \u2014 |
 | `deploy/` | 6 | Infrastructure and deployment | \u2014 |
 | `docs/` | 9 | Documentation | \u2014 |
 | `evals/` | 122 | Benchmarking and regression framework for the Loa agent development system. Ensures framework changes don't degrade agent behavior through | [evals/README.md](evals/README.md) |
-| `grimoires/` | 206 | Home to all grimoire directories for the Loa | [grimoires/README.md](grimoires/README.md) |
+| `grimoires/` | 221 | Home to all grimoire directories for the Loa | [grimoires/README.md](grimoires/README.md) |
 | `knowledge/` | 25 | Documentation | \u2014 |
 | `persona/` | 1 | Persona | \u2014 |
 | `scripts/` | 3 | Utility scripts | \u2014 |
@@ -191,15 +191,15 @@ The project defines 1 specialized agent persona.
 |-------|----------|-------|
 | Bridgebuilder | You are the Bridgebuilder — a senior engineering mentor who has spent decades building systems at scale. | Your voice is warm, precise, and rich with analogy. |
 <!-- ground-truth-meta
-head_sha: a6776c31b80b94c28cb3f5d935492c6eb01cc135
-generated_at: 2026-02-25T07:46:42Z
+head_sha: 605cad96a957a92e73f8434501de6ea01a0959d4
+generated_at: 2026-02-25T23:56:48Z
 generator: butterfreezone-gen v1.0.0
 sections:
   agent_context: 2ce7bcd812342baabd13ae33d3cff76b551975309ad212a804f31d47df41a07d
   capabilities: ab2576b1f2e7e8141f0e93e807d26ed2b7b155e21c96d787507a3ba933bb9795
   architecture: 8b5471e1396192887e28d1d4f789a36c5a088d2ae7d3a372e609f3142bd2826c
-  interfaces: 37ec6bccceafc4c72cf4088db6c0a984271532250f8f04e30bc7eee89e6f7365
-  module_map: 22bf7fa8c08e2a99ec362a8e99850910162ef79eeceaf9f00595978d3589cdda
+  interfaces: 20a2cc65006984c05aaeb9e858ecf7fce9eae4f32ef6e8076eebd450a539eb6c
+  module_map: 8581519dda47587814d5b8635420de7d6cde954635356cb0db35ffeeeb32753c
   verification: d79771ca63d10ad195a9e8b8927e983fb42b7949843682f477662319e486161a
   agents: ca263d1e05fd123434a21ef574fc8d76b559d22060719640a1f060527ef6a0b6
 -->

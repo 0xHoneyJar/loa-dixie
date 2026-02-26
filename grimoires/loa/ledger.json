@@ -571,35 +571,35 @@
         {
           "id": "sprint-2",
           "global_id": 74,
-          "label": "Durable Governance — Mutation Log & Audit Trail",
+          "label": "Durable Governance \u2014 Mutation Log & Audit Trail",
           "tasks": 6,
           "status": "completed"
         },
         {
           "id": "sprint-3",
           "global_id": 75,
-          "label": "Knowledge Governance — The Third Witness",
+          "label": "Knowledge Governance \u2014 The Third Witness",
           "tasks": 7,
           "status": "completed"
         },
         {
           "id": "sprint-4",
           "global_id": 76,
-          "label": "Capability Evolution — DynamicContract Adoption",
+          "label": "Capability Evolution \u2014 DynamicContract Adoption",
           "tasks": 6,
           "status": "completed"
         },
         {
           "id": "sprint-5",
           "global_id": 77,
-          "label": "Self-Improvement — UCB1 & Dimension Covariance",
+          "label": "Self-Improvement \u2014 UCB1 & Dimension Covariance",
           "tasks": 6,
           "status": "completed"
         },
         {
           "id": "sprint-6",
           "global_id": 78,
-          "label": "Integration & Hardening — Three-Witness Convergence",
+          "label": "Integration & Hardening \u2014 Three-Witness Convergence",
           "tasks": 6,
           "status": "completed"
         }
@@ -623,7 +623,7 @@
         {
           "id": "sprint-1",
           "global_id": 79,
-          "label": "ADR Coverage — Documenting the Architecture We Built",
+          "label": "ADR Coverage \u2014 Documenting the Architecture We Built",
           "tasks": 8,
           "status": "completed"
         },
@@ -642,11 +642,50 @@
           "status": "completed"
         }
       ]
+    },
+    {
+      "id": "cycle-011",
+      "label": "Autopoietic Loop Closure \u2014 Reputation Query Surface & Governance Hardening",
+      "started": "2026-02-26",
+      "status": "active",
+      "prd": "grimoires/loa/prd.md",
+      "sdd": "grimoires/loa/sdd.md",
+      "sprint_plan": "grimoires/loa/sprint.md",
+      "sprints": [
+        {
+          "id": "sprint-1",
+          "global_id": 82,
+          "label": "Correctness Foundation & Startup Seeding",
+          "tasks": 6,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-2",
+          "global_id": 83,
+          "label": "Reputation Route Scaffold & Finn Bridge",
+          "tasks": 7,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-3",
+          "global_id": 84,
+          "label": "Cohort & Population Endpoints + Contract Tests",
+          "tasks": 6,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-4",
+          "global_id": 85,
+          "label": "ADR Documentation, Merge Prep & Cross-Repo Communication",
+          "tasks": 5,
+          "status": "planned"
+        }
+      ]
     }
   ],
-  "active_cycle": null,
+  "active_cycle": "cycle-011",
   "active_bugfix": null,
-  "global_sprint_counter": 81,
+  "global_sprint_counter": 85,
   "bugfix_cycles": [],
   "release_cycles": [
     {

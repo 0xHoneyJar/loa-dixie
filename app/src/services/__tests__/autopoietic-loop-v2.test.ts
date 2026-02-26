@@ -418,12 +418,11 @@ describe('collection score provides welcoming cold-start', () => {
     expect(restored.variance).toBeCloseTo(agg.variance, 10);
   });
 
-  it('empty CollectionScoreAggregator returns DEFAULT_COLLECTION_SCORE (0)', () => {
+  it('empty CollectionScoreAggregator returns DEFAULT_COLLECTION_SCORE (0.5)', () => {
     const agg = new CollectionScoreAggregator();
     expect(agg.populationSize).toBe(0);
-    // When no observations, falls back to DEFAULT_COLLECTION_SCORE = 0
-    // This is the legacy behavior; the aggregator upgrades the prior once
-    // population data is available via update() calls
-    expect(agg.mean).toBe(0);
+    // When no observations, falls back to DEFAULT_COLLECTION_SCORE = 0.5
+    // Neutral Bayesian prior — neither penalized nor boosted (cycle-011 T1.3)
+    expect(agg.mean).toBe(0.5);
   });
 });
