@@ -244,3 +244,4 @@ web/node_modules/
 
 # Deploy secrets (never commit)
 deploy/.env
+deploy/.env.*

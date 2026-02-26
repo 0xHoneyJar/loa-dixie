@@ -39,7 +39,7 @@ export function createJwtMiddleware(jwtSecret: string, issuer: string) {
       const token = authHeader.slice(7);
       await startSanitizedSpan(
         'dixie.auth',
-        { auth_type: 'jwt', wallet: 'unknown', tier: 'unknown' },
+        { auth_type: 'jwt' },
         async (span) => {
           try {
             const { payload } = await jose.jwtVerify(token, secret, { issuer });

@@ -76,6 +76,20 @@ export function sanitizeAttributes(
 }
 
 /**
+ * Add sanitized attributes to an existing span.
+ * Filters through the same allowlist as sanitizeAttributes().
+ * Use this for attributes that are only known after the span starts.
+ */
+export function addSanitizedAttributes(
+  span: Span,
+  spanName: string,
+  attrs: Record<string, unknown>,
+): void {
+  const sanitized = sanitizeAttributes(spanName, attrs);
+  span.setAttributes(sanitized as Record<string, string | number | boolean>);
+}
+
+/**
  * Start a sanitized span with enforced attribute allowlisting.
  *
  * Usage:

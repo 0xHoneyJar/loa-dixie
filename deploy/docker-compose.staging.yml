@@ -69,7 +69,7 @@ services:
       PORT: "3000"
       NODE_ENV: staging
       REDIS_URL: "redis://redis:6379"
-      JWT_SECRET: ${DIXIE_JWT_PRIVATE_KEY:-change-me-minimum-32-characters-long}
+      JWT_SECRET: ${DIXIE_JWT_PRIVATE_KEY:?DIXIE_JWT_PRIVATE_KEY must be set}
       JWT_ISSUER: "dixie-bff"
     depends_on:
       redis:

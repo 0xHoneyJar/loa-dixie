@@ -19,8 +19,8 @@ cp .env.example deploy/.env.staging
 #   DIXIE_JWT_PRIVATE_KEY     — generate with: openssl rand -hex 32
 #   POSTGRES_PASSWORD         — strong password for PostgreSQL
 #   DIXIE_ADMIN_KEY           — admin API key for health/governance endpoints
-#   FINN_URL                  — loa-finn base URL (default: http://loa-finn:4000)
-#   FINN_WS_URL               — loa-finn WebSocket URL (default: ws://loa-finn:4000)
+#   FINN_URL                  — loa-finn base URL (default: http://loa-finn:3000)
+#   FINN_WS_URL               — loa-finn WebSocket URL (default: ws://loa-finn:3000)
 #   DIXIE_CORS_ORIGINS        — comma-separated allowed origins
 #   DIXIE_ALLOWLIST_PATH      — path to allowlist.json (default: /app/allowlist.json)
 ```
@@ -47,7 +47,7 @@ Services started:
 | postgres | 5432 (internal) | Reputation + fleet + governance stores |
 | redis | 6379 (internal) | Projection cache, rate limiting |
 | nats | 4222 (internal) | Cross-service signal events |
-| loa-finn | 4000 (internal) | Inference engine |
+| loa-finn | 3000 (internal) | Inference engine |
 | dixie-bff | 3001 (host) | BFF API — the only externally exposed service |
 | tempo | 4317 (internal) | Trace collector (observability profile only) |
 
@@ -122,7 +122,7 @@ DROP TABLE IF EXISTS reputation_task_cohorts CASCADE;
 DROP TABLE IF EXISTS reputation_aggregates CASCADE;
 
 -- 5. Remove the migration record
-DELETE FROM _migrations WHERE name = '014_fleet_tasks.sql';
+DELETE FROM _migrations WHERE filename = '014_fleet_tasks.sql';
 
 -- 6. Exit and restart dixie-bff (migrations will re-run if needed)
 \q

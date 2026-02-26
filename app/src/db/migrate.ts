@@ -149,7 +149,7 @@ export async function migrate(pool: DbPool): Promise<MigrationResult> {
   const LOCK_TIMEOUT_MS = 30_000;
   const lockClient = await pool.connect();
   try {
-    await lockClient.query(`SET lock_timeout = '${LOCK_TIMEOUT_MS}ms'`);
+    await lockClient.query(`SELECT set_config('lock_timeout', $1, false)`, [`${LOCK_TIMEOUT_MS}ms`]);
     try {
       await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
     } catch (err) {

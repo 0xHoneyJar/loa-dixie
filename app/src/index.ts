@@ -48,7 +48,10 @@ async function gracefulShutdown(signal: string) {
   }
 
   console.log('Shutdown complete');
-  process.exit(0);
+
+  // Safety net: force exit if event loop doesn't drain within 10s
+  // (e.g., leaked timers, open sockets). Unref'd so it doesn't keep the process alive.
+  setTimeout(() => process.exit(1), 10_000).unref();
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

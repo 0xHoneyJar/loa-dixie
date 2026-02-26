@@ -4,15 +4,17 @@
  * Usage: Called by vitest globalSetup or manually before running smoke tests.
  */
 import { execSync } from 'node:child_process';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { waitForHealthy } from './helpers/wait.js';
 
-const COMPOSE_FILE = 'deploy/docker-compose.staging.yml';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const COMPOSE_FILE = resolve(__dirname, '../../../deploy/docker-compose.staging.yml');
 
 export async function setup(): Promise<void> {
   console.log('[e2e] Starting staging compose...');
-  execSync(`docker compose -f ${COMPOSE_FILE} up -d`, {
+  execSync(`docker compose -f "${COMPOSE_FILE}" up -d`, {
     stdio: 'inherit',
-    cwd: process.cwd(),
   });
 
   console.log('[e2e] Waiting for health check...');
@@ -22,9 +24,8 @@ export async function setup(): Promise<void> {
 
 export async function teardown(): Promise<void> {
   console.log('[e2e] Stopping staging compose...');
-  execSync(`docker compose -f ${COMPOSE_FILE} down -v`, {
+  execSync(`docker compose -f "${COMPOSE_FILE}" down -v`, {
     stdio: 'inherit',
-    cwd: process.cwd(),
   });
   console.log('[e2e] Staging environment stopped');
 }

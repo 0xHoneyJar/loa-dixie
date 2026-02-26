@@ -75,7 +75,7 @@ export class FinnClient {
   ): Promise<T> {
     return startSanitizedSpan(
       'dixie.finn.inference',
-      { model: path, tokens: 0, latency_ms: 0 },
+      { model: path, latency_ms: 0 },
       async (span) => {
         this.checkCircuit();
 

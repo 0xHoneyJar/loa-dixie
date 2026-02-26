@@ -1,6 +1,6 @@
 import { createMiddleware } from 'hono/factory';
 import { randomUUID } from 'node:crypto';
-import { startSanitizedSpan } from '../utils/span-sanitizer.js';
+import { startSanitizedSpan, addSanitizedAttributes } from '../utils/span-sanitizer.js';
 
 /**
  * Request tracing middleware — W3C traceparent propagation + OTEL spans.
@@ -16,7 +16,7 @@ export function createTracing(serviceName: string) {
 
     if (incoming) {
       const parts = incoming.split('-');
-      if (parts.length === 4) {
+      if (parts.length === 4 && /^[0-9a-f]{32}$/.test(parts[1])) {
         traceId = parts[1];
       } else {
         traceId = randomUUID().replace(/-/g, '');
@@ -40,9 +40,10 @@ export function createTracing(serviceName: string) {
       async (span) => {
         await next();
 
-        const duration_ms = Date.now() - start;
-        span.setAttribute('status_code', c.res.status);
-        span.setAttribute('duration_ms', duration_ms);
+        addSanitizedAttributes(span, 'dixie.request', {
+          status_code: c.res.status,
+          duration_ms: Date.now() - start,
+        });
       },
     );
   });

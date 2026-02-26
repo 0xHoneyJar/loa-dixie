@@ -12,7 +12,11 @@ import { execSync } from 'node:child_process';
 import { waitForHealthy } from './helpers/wait.js';
 
 const TEST_NFT_ID = 'e2e-test-nft-001';
-const COMPOSE_FILE = 'deploy/docker-compose.staging.yml';
+// Resolve compose file relative to project root (test may run from app/ or project root)
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const COMPOSE_FILE = resolve(__dirname, '../../../deploy/docker-compose.staging.yml');
 
 describe('E2E-5: Reputation Persistence', () => {
   it('returns null score for unknown agent', async () => {
@@ -50,9 +54,8 @@ describe('E2E-5: Reputation Persistence', () => {
     const scoreBefore = beforeRes.body.score;
 
     // Step 2: Restart dixie-bff container
-    execSync(`docker compose -f ${COMPOSE_FILE} restart dixie-bff`, {
+    execSync(`docker compose -f "${COMPOSE_FILE}" restart dixie-bff`, {
       stdio: 'pipe',
-      cwd: process.cwd(),
       timeout: 30_000,
     });
 

@@ -27,5 +27,9 @@ export function initTelemetry(endpoint: string | null): NodeSDK | null {
  */
 export async function shutdownTelemetry(sdk: NodeSDK | null): Promise<void> {
   if (!sdk) return;
-  await sdk.shutdown();
+  // 5s deadline prevents hanging if OTEL collector is unreachable
+  await Promise.race([
+    sdk.shutdown(),
+    new Promise<void>((r) => setTimeout(r, 5_000)),
+  ]);
 }
