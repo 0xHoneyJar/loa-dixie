@@ -203,7 +203,7 @@ describe('GET /api/reputation/:nftId/cohorts', () => {
     app = createTestApp(store);
   });
 
-  it('returns cohorts for agent with model cohorts', async () => {
+  it('returns cohorts for agent with model cohorts and scores', async () => {
     const res = await app.request('/api/reputation/nft-cohorted/cohorts', {
       headers: { 'x-conviction-tier': 'builder' },
     });
@@ -211,7 +211,20 @@ describe('GET /api/reputation/:nftId/cohorts', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.cohorts).toHaveLength(2);
+    expect(body.cohorts[0].model_id).toBe('gpt-4o');
+    expect(body.cohorts[0].personal_score).toBe(0.8);
+    expect(body.cohorts[1].model_id).toBe('claude-3');
+    expect(body.cohorts[1].personal_score).toBe(0.7);
     expect(body.cross_model_score).not.toBeNull();
+    expect(typeof body.cross_model_score).toBe('number');
+  });
+
+  it('returns 404 for unknown agent', async () => {
+    const res = await app.request('/api/reputation/nft-missing/cohorts', {
+      headers: { 'x-conviction-tier': 'builder' },
+    });
+
+    expect(res.status).toBe(404);
   });
 
   it('returns empty cohorts array for agent without cohorts', async () => {
@@ -297,5 +310,24 @@ describe('GET /api/reputation/population', () => {
     const body = await res.json();
     // createTestApp seeds aggregator with 2 observations (0.7, 0.8)
     expect(body.population_size).toBe(2);
+  });
+
+  it('returns mean=0.5, variance=0, size=0 for fresh aggregator', async () => {
+    // Build app with a fresh (unseeded) aggregator
+    const freshAgg = new CollectionScoreAggregator();
+    const service = new ReputationService(store, freshAgg);
+    const app = new Hono();
+    app.route('/api/reputation', createReputationRoutes({
+      reputationService: service,
+    }));
+
+    const res = await app.request('/api/reputation/population');
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.mean).toBe(0.5);
+    expect(body.variance).toBe(0);
+    expect(body.population_size).toBe(0);
+    expect(body.store_count).toBe(0);
   });
 });
