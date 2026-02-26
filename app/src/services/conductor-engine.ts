@@ -175,10 +175,12 @@ export class ConductorEngine {
 
     // Step 2c: Sovereignty and cost (T-6.3)
     let autonomyLevel: SpawnResult['autonomyLevel'];
+    if (identity) {
+      autonomyLevel = identity.autonomyLevel;
+    }
     if (this.sovereignty && identity) {
       try {
         const resources = this.sovereignty.getResources(identity);
-        autonomyLevel = identity.autonomyLevel;
         // Resources are informational at spawn time — applied at retry/monitor layers
         void resources;
       } catch (err) {

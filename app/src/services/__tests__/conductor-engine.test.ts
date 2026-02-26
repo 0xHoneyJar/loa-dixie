@@ -527,6 +527,25 @@ describe('ConductorEngine', () => {
       expect(result.autonomyLevel).toBe('autonomous');
     });
 
+    it('autonomyLevel reported from identity even without sovereignty (BF-026)', async () => {
+      const identitySvc = createMockIdentityService();
+      // No sovereignty service — only identity
+
+      registry.get.mockResolvedValue(runningTask);
+
+      const ecoConductor = new ConductorEngine(
+        registry as any, governor as any, spawner as any, monitor as any,
+        router as any, enrichment as any, eventBus as any, notifications as any,
+        saga as any, undefined,
+        identitySvc as any, undefined, // no sovereignty
+      );
+
+      const result = await ecoConductor.spawn(makeSpawnRequest(), 'architect');
+
+      expect(result.autonomyLevel).toBe('autonomous');
+      expect(result.agentIdentityId).toBe('identity-001');
+    });
+
     it('spawn cost computed and returned', async () => {
       const circulationSvc = createMockCirculation();
 

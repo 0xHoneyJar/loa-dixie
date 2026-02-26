@@ -528,7 +528,7 @@ export class FleetMonitor {
         // 6. Insight harvesting (T-6.6) — harvest for running tasks with worktreePath
         if (this.insightService && task.worktreePath && task.status === 'running') {
           try {
-            await this.insightService.harvest(task.id, task.worktreePath);
+            await this.insightService.harvest(task.id, task.worktreePath, undefined, task.groupId ?? null);
           } catch {
             // Harvest failure is non-fatal — never break the cycle
           }

@@ -1506,7 +1506,37 @@ describe('FleetMonitor — insight harvesting (T-6.11)', () => {
 
     await monitor.runCycle();
 
-    expect(insightSvc.harvest).toHaveBeenCalledWith('harvest-1', '/tmp/fleet/harvest-1');
+    expect(insightSvc.harvest).toHaveBeenCalledWith('harvest-1', '/tmp/fleet/harvest-1', undefined, null);
+  });
+
+  it('harvest passes groupId to insightService (BF-025)', async () => {
+    const insightSvc = createMockInsightService();
+    const groupedTask = makeTask({
+      id: 'harvest-g',
+      status: 'running',
+      worktreePath: '/tmp/fleet/harvest-g',
+      prNumber: null,
+      groupId: 'group-abc',
+    });
+    registry.listLive.mockResolvedValue([groupedTask]);
+    spawner.isAlive.mockResolvedValue(true);
+
+    execFileSpy.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'gh' && args[0] === 'pr') {
+        return Promise.resolve({ stdout: '[]', stderr: '' });
+      }
+      return Promise.resolve({ stdout: '', stderr: '' });
+    });
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger, insightService: insightSvc as any },
+    );
+
+    await monitor.runCycle();
+
+    expect(insightSvc.harvest).toHaveBeenCalledWith('harvest-g', '/tmp/fleet/harvest-g', undefined, 'group-abc');
   });
 
   it('harvest skipped for tasks without worktreePath', async () => {
