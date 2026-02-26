@@ -17,6 +17,9 @@ import { promisify } from 'node:util';
 import type { TaskRegistry } from './task-registry.js';
 import type { AgentSpawner, AgentHandle } from './agent-spawner.js';
 import type { FleetTaskRecord, FleetTaskStatus } from '../types/fleet.js';
+import type { AgentIdentityService } from './agent-identity-service.js';
+import type { CollectiveInsightService } from './collective-insight-service.js';
+import type { TaskOutcome } from '../types/agent-identity.js';
 
 const execFile = promisify(execFileRaw);
 
@@ -78,6 +81,10 @@ export interface FleetMonitorConfig {
   readonly timeoutMinutes?: number;
   /** Logger implementation. Defaults to console. */
   readonly logger?: MonitorLogger;
+  /** Ecology: insight harvesting service (T-6.6). Optional — skipped when null. */
+  readonly insightService?: CollectiveInsightService;
+  /** Ecology: agent identity service for outcome recording (T-6.7). Optional. */
+  readonly identityService?: AgentIdentityService;
 }
 
 /** Minimal logger interface for the FleetMonitor. */
@@ -220,7 +227,11 @@ export class FleetMonitor {
   private readonly registry: TaskRegistry;
   private readonly spawner: AgentSpawner;
   private readonly ghCli: GitHubCli;
-  private readonly config: Required<Omit<FleetMonitorConfig, 'logger'>> & { logger: MonitorLogger };
+  private readonly config: Required<Omit<FleetMonitorConfig, 'logger' | 'insightService' | 'identityService'>> & { logger: MonitorLogger };
+
+  // Ecology services (optional — graceful degradation)
+  private readonly insightService: CollectiveInsightService | null;
+  private readonly identityService: AgentIdentityService | null;
 
   // Interval state
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
@@ -246,6 +257,8 @@ export class FleetMonitor {
       timeoutMinutes: config?.timeoutMinutes ?? 120,
       logger: config?.logger ?? console,
     };
+    this.insightService = config?.insightService ?? null;
+    this.identityService = config?.identityService ?? null;
     this.ghCli = new GitHubCli(this.config.logger);
   }
 
@@ -398,6 +411,9 @@ export class FleetMonitor {
               taskId: task.id,
               status: task.status,
             });
+
+            // T-6.7: Record identity outcome on dead agent (terminal status)
+            await this.recordIdentityOutcome(task.id, task.agentIdentityId, 'failed');
           } catch (transitionErr) {
             logger.error('Failed to transition dead agent to failed', {
               taskId: task.id,
@@ -495,6 +511,9 @@ export class FleetMonitor {
                   taskId: task.id,
                   ageMinutes: Math.round(ageMinutes),
                 });
+
+                // T-6.7: Record identity outcome on timeout (terminal status)
+                await this.recordIdentityOutcome(task.id, task.agentIdentityId, 'failed');
               }
             } catch (transitionErr) {
               logger.error('Failed to transition timed-out agent', {
@@ -505,6 +524,15 @@ export class FleetMonitor {
             }
           }
         }
+
+        // 6. Insight harvesting (T-6.6) — harvest for running tasks with worktreePath
+        if (this.insightService && task.worktreePath && task.status === 'running') {
+          try {
+            await this.insightService.harvest(task.id, task.worktreePath);
+          } catch {
+            // Harvest failure is non-fatal — never break the cycle
+          }
+        }
       } catch (err) {
         // Isolate per-task errors — never let one task's failure break the cycle
         errorTaskIds.push(task.id);
@@ -512,6 +540,15 @@ export class FleetMonitor {
           taskId: task.id,
           error: err instanceof Error ? err.message : String(err),
         });
+      }
+    }
+
+    // End-of-cycle: prune expired insights (T-6.6)
+    if (this.insightService) {
+      try {
+        await this.insightService.pruneExpired();
+      } catch {
+        // Prune failure is non-fatal
       }
     }
 
@@ -656,6 +693,41 @@ export class FleetMonitor {
       });
     } finally {
       this.cycleInProgress = false;
+    }
+  }
+
+  /**
+   * Record a task outcome against the agent identity (T-6.7).
+   *
+   * Maps task terminal status to TaskOutcome and calls identityService.recordTaskOutcome().
+   * Non-fatal — errors are logged but never propagated.
+   */
+  private async recordIdentityOutcome(
+    taskId: string,
+    agentIdentityId: string | null | undefined,
+    status: string,
+  ): Promise<void> {
+    if (!this.identityService || !agentIdentityId) return;
+
+    const outcomeMap: Record<string, TaskOutcome> = {
+      merged: 'merged',
+      failed: 'failed',
+      abandoned: 'abandoned',
+      cancelled: 'abandoned',
+    };
+
+    const outcome = outcomeMap[status];
+    if (!outcome) return;
+
+    try {
+      await this.identityService.recordTaskOutcome(agentIdentityId, taskId, outcome);
+    } catch (err) {
+      this.config.logger.warn('Failed to record identity outcome (non-fatal)', {
+        taskId,
+        agentIdentityId,
+        outcome,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

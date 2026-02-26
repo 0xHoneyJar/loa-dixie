@@ -420,3 +420,127 @@ invariants:
         file: "app/src/services/__tests__/fleet-invariants.test.ts"
         symbol: "INV-018: Notification guarantee"
         note: "Integration test verifying insert-before-delivery ordering and update after delivery"
+
+  - id: INV-019
+    description: "Agent identity task count conservation — agent identity taskCount equals the count of fleet_tasks linked to that identity. The sovereignty engine's internal taskCount must stay consistent with the identity service's DB record."
+    severity: high
+    category: conservation
+    properties:
+      - "identity.taskCount == COUNT(fleet_tasks WHERE agent_identity_id = identity.id)"
+      - "recordTaskOutcome increments taskCount by exactly 1"
+      - "sovereignty.taskCount matches identity.taskCount after each transition"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/agent-identity-service.ts"
+        symbol: "AgentIdentityService.recordTaskOutcome"
+        note: "Atomic task_count = task_count + 1 in UPDATE with optimistic concurrency"
+      - repo: loa-dixie
+        file: "app/src/services/sovereignty-engine.ts"
+        symbol: "SovereigntyEngine.verify(INV-019)"
+        note: "Returns taskCount with note that cross-service verification is required"
+      - repo: loa-dixie
+        file: "app/tests/integration/ecology-invariants-e2e.test.ts"
+        symbol: "INV-019: Agent identity task count conservation"
+        note: "Tests taskCount increments by exactly 1 and sovereignty verify(INV-019) returns satisfied"
+
+  - id: INV-020
+    description: "Agent autonomy non-regression — within a session, an agent's autonomy level never decreases unless explicitly overridden via MANUAL_OVERRIDE. Organic reputation changes only move the level upward."
+    severity: high
+    category: monotonicity
+    properties:
+      - "AUTONOMY_ORDER.indexOf(current.level) >= AUTONOMY_ORDER.indexOf(previous.level)"
+      - "Only MANUAL_OVERRIDE can decrease level (detected as violation)"
+      - "TASK_COMPLETED and REPUTATION_UPDATED never produce regression"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/sovereignty-engine.ts"
+        symbol: "SovereigntyEngine.verify(INV-020)"
+        note: "Compares AUTONOMY_ORDER indices of previousLevel and currentLevel"
+      - repo: loa-dixie
+        file: "app/tests/integration/ecology-invariants-e2e.test.ts"
+        symbol: "INV-020: Autonomy level non-regression"
+        note: "Tests both satisfied (stable/increasing) and violated (MANUAL_OVERRIDE downgrade) states"
+
+  - id: INV-021
+    description: "InsightPool bounds — the in-memory InsightPool never exceeds 1000 entries. FIFO eviction (oldest by capturedAt) enforces the cap on every add() call."
+    severity: important
+    category: bounded
+    properties:
+      - "insightPool.size <= MAX_POOL_SIZE (1000) at all times"
+      - "When size == MAX_POOL_SIZE, add() evicts oldest entry before inserting"
+      - "Eviction is FIFO by capturedAt timestamp (oldest removed first)"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/collective-insight-service.ts"
+        symbol: "InsightPool.add"
+        note: "Checks size >= maxSize and calls evictOldest() before inserting"
+      - repo: loa-dixie
+        file: "app/tests/integration/ecology-invariants-e2e.test.ts"
+        symbol: "INV-021: InsightPool entries <= 1000"
+        note: "Adds 1001 insights, verifies pool stays at 1000, verifies FIFO eviction order"
+      - repo: loa-dixie
+        file: "app/tests/integration/ecology-stress.test.ts"
+        symbol: "T-7.6: InsightPool stress test"
+        note: "5000 rapid insertions, invariant checked at every step, eviction order verified"
+
+  - id: INV-022
+    description: "Cross-agent context injection limit — getRelevantInsights returns at most 5 results per query, regardless of the requested limit. Prevents prompt bloat from unbounded insight injection."
+    severity: important
+    category: bounded
+    properties:
+      - "getRelevantInsights().length <= MAX_RELEVANT_RESULTS (5)"
+      - "effectiveLimit = Math.min(requestedLimit, 5)"
+      - "Default limit is 3, capped at 5"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/collective-insight-service.ts"
+        symbol: "CollectiveInsightService.getRelevantInsights"
+        note: "effectiveLimit = Math.min(limit, MAX_RELEVANT_RESULTS) applied before slicing"
+      - repo: loa-dixie
+        file: "app/tests/integration/ecology-invariants-e2e.test.ts"
+        symbol: "INV-022: Cross-agent context injection <= 5 entries per prompt"
+        note: "Adds 20 relevant insights, verifies result capped at 5; verifies default limit of 3"
+
+  - id: INV-023
+    description: "Dynamic spawn cost floor — CirculationProtocol.computeCost() always returns finalCost >= 0.1, regardless of utilization, reputation, or complexity inputs. No free spawns."
+    severity: critical
+    category: bounded
+    properties:
+      - "finalCost = Math.max(costFloor, rawCost) where costFloor defaults to 0.1"
+      - "For any (utilization, reputation, taskType, descriptionLength): finalCost >= 0.1"
+      - "All sub-components (utilizationMultiplier, reputationDiscount, complexityFactor) are non-negative"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/circulation-protocol.ts"
+        symbol: "CirculationProtocol.computeCost"
+        note: "Math.max(this.costFloor, rawCost) enforces floor in final computation"
+      - repo: loa-dixie
+        file: "app/tests/integration/ecology-invariants-e2e.test.ts"
+        symbol: "INV-023: Dynamic spawn cost >= floor (0.1) for any input"
+        note: "Tests floor enforcement with defaults, minimum inputs, and custom low baseCost"
+      - repo: loa-dixie
+        file: "app/tests/integration/ecology-stress.test.ts"
+        symbol: "T-7.7: CirculationProtocol property-based test"
+        note: "1000 random input combinations all satisfy finalCost >= 0.1"
+
+  - id: INV-024
+    description: "Geometry group isolation — agents in different meeting geometry groups share zero insights. getRelevantInsights filters by groupId such that cross-group queries return empty results."
+    severity: high
+    category: isolation
+    properties:
+      - "For groupId A != groupId B: getRelevantInsights(desc, A) intersect getRelevantInsights(desc, B) == empty (when insights are in different groups)"
+      - "null groupId (factory geometry) only sees insights with null groupId"
+      - "undefined groupId means no filtering (admin/diagnostic use)"
+    verified_in:
+      - repo: loa-dixie
+        file: "app/src/services/collective-insight-service.ts"
+        symbol: "CollectiveInsightService.getRelevantInsights"
+        note: "groupId filtering: null matches null, string matches string, undefined skips filter"
+      - repo: loa-dixie
+        file: "app/tests/integration/ecology-invariants-e2e.test.ts"
+        symbol: "INV-024: Agents in different geometry groups share zero insights"
+        note: "Tests cross-group isolation, same-group visibility, factory isolation, and undefined bypass"
+      - repo: loa-dixie
+        file: "app/tests/integration/ecology-e2e.test.ts"
+        symbol: "T-7.3: Cross-agent insight propagation"
+        note: "E2E test verifying group isolation in multi-agent scenarios"

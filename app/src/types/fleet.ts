@@ -6,7 +6,11 @@
  *
  * See: SDD §1.2 (lifecycle), §2.1 (type contracts), §2.3 (DB record)
  * @since cycle-012 — Sprint 86, Task T-1.1
+ * @updated cycle-013 — Sprint 94, Task T-1.3 (ecology fields)
  */
+import type { MeetingGeometry } from './insight.js';
+import type { AutonomyLevel } from './agent-identity.js';
+import type { SpawnCost } from './circulation.js';
 
 // ---------------------------------------------------------------------------
 // Enums & Unions
@@ -62,6 +66,10 @@ export interface FleetTaskRecord {
   readonly completedAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** Persistent agent identity linked to this task (cycle-013). */
+  readonly agentIdentityId: string | null;
+  /** Geometry group this task belongs to (cycle-013). */
+  readonly groupId: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +100,10 @@ export interface SpawnRequest {
   readonly maxRetries?: number;
   readonly timeoutMinutes?: number;
   readonly contextOverrides?: Record<string, string>;
+  /** Explicit meeting geometry (cycle-013). */
+  readonly geometry?: MeetingGeometry;
+  /** Join an existing geometry group (cycle-013). */
+  readonly groupId?: string;
 }
 
 /** Result returned from ConductorEngine.spawn(). */
@@ -102,6 +114,12 @@ export interface SpawnResult {
   readonly agentType: AgentType;
   readonly model: string;
   readonly status: FleetTaskStatus;
+  /** Persistent agent identity (cycle-013). */
+  readonly agentIdentityId?: string;
+  /** Earned autonomy level (cycle-013). */
+  readonly autonomyLevel?: AutonomyLevel;
+  /** Dynamic spawn cost breakdown (cycle-013). */
+  readonly spawnCost?: SpawnCost;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +164,10 @@ export interface TransitionMetadata {
   readonly failureContext?: Record<string, unknown>;
   readonly spawnedAt?: string;
   readonly completedAt?: string;
+  /** Persistent agent identity linked to this task (cycle-013). */
+  readonly agentIdentityId?: string;
+  /** Geometry group this task belongs to (cycle-013). */
+  readonly groupId?: string;
 }
 
 // ---------------------------------------------------------------------------

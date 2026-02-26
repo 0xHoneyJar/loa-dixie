@@ -17,6 +17,8 @@ import type { TaskRegistry } from './task-registry.js';
 import type { AgentSpawner } from './agent-spawner.js';
 import type { ContextEnrichmentEngine } from './context-enrichment-engine.js';
 import type { CrossGovernorEventBus } from './cross-governor-event-bus.js';
+import type { AgentIdentityService } from './agent-identity-service.js';
+import type { SovereigntyEngine } from './sovereignty-engine.js';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -110,15 +112,24 @@ export class RetryEngine {
   private readonly config: RetryEngineConfig;
   private readonly sleep: (ms: number) => Promise<void>;
 
+  // Ecology services (optional — graceful degradation)
+  private readonly identityService: AgentIdentityService | null;
+  private readonly sovereignty: SovereigntyEngine | null;
+
   constructor(
     private readonly registry: TaskRegistry,
     private readonly spawner: AgentSpawner,
     private readonly enrichmentEngine: ContextEnrichmentEngine,
     private readonly eventBus: CrossGovernorEventBus,
     config?: Partial<RetryEngineConfig>,
+    // Ecology services (T-6.8) — all optional for backward compatibility
+    identityService?: AgentIdentityService,
+    sovereignty?: SovereigntyEngine,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.sleep = config?.sleep ?? defaultSleep;
+    this.identityService = identityService ?? null;
+    this.sovereignty = sovereignty ?? null;
   }
 
   /**
@@ -156,8 +167,25 @@ export class RetryEngine {
       return { retried: false, reason: `Task is not in failed status: ${task.status}` };
     }
 
-    // Step 2: Check retry budget
-    if (task.retryCount >= task.maxRetries) {
+    // Step 1b: Autonomy-aware retry budget (T-6.8)
+    let effectiveMaxRetries = task.maxRetries;
+    let effectiveContextTokens = this.config.maxPromptTokens;
+
+    if (task.agentIdentityId && this.identityService && this.sovereignty) {
+      try {
+        const identity = await this.identityService.getOrNull(task.agentIdentityId);
+        if (identity) {
+          const resources = this.sovereignty.getResources(identity);
+          effectiveMaxRetries = resources.maxRetries;
+          effectiveContextTokens = resources.contextTokens;
+        }
+      } catch {
+        // Identity/sovereignty lookup failure is non-fatal — fall back to config defaults
+      }
+    }
+
+    // Step 2: Check retry budget (using autonomy-aware max if available)
+    if (task.retryCount >= effectiveMaxRetries) {
       // Step 3: Budget exhausted — transition to abandoned
       const abandoned = await this.registry.transition(
         taskId,
@@ -175,7 +203,7 @@ export class RetryEngine {
 
       return {
         retried: false,
-        reason: `Retry budget exhausted (${task.retryCount}/${task.maxRetries})`,
+        reason: `Retry budget exhausted (${task.retryCount}/${effectiveMaxRetries})`,
         newTaskVersion: abandoned.version,
       };
     }
@@ -185,8 +213,9 @@ export class RetryEngine {
     await this.registry.recordFailure(taskId, failureContext);
 
     // Step 5: Build enriched retry prompt
+    // Use autonomy-aware context tokens if available (T-6.8), otherwise config default
     // Detect OOM and reduce token budget if configured
-    let promptTokenBudget = this.config.maxPromptTokens;
+    let promptTokenBudget = effectiveContextTokens;
     if (this.config.reduceContextOnOom && isOomFailure(task.failureContext)) {
       promptTokenBudget = Math.floor(promptTokenBudget * 0.75);
     }
@@ -242,7 +271,7 @@ export class RetryEngine {
     // Step 11: Return success
     return {
       retried: true,
-      reason: `Retry ${task.retryCount + 1}/${task.maxRetries} initiated`,
+      reason: `Retry ${task.retryCount + 1}/${effectiveMaxRetries} initiated`,
       newTaskVersion: spawning.version,
     };
   }

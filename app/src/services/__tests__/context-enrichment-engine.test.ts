@@ -620,3 +620,88 @@ describe('sanitize', () => {
     expect(result1).toContain('[PATH_REDACTED]');
   });
 });
+
+// ---------------------------------------------------------------------------
+// CROSS_AGENT Tier Tests (cycle-013 — Sprint 95)
+// ---------------------------------------------------------------------------
+
+describe('ContextEnrichmentEngine — CROSS_AGENT tier', () => {
+  it('CROSS_AGENT tier is a valid ContextTier', () => {
+    const section = createSection('CROSS_AGENT', 'Agent Insights', 'cross-agent discovery');
+    expect(section.tier).toBe('CROSS_AGENT');
+    expect(section.label).toBe('Agent Insights');
+  });
+
+  it('CROSS_AGENT tier sorts between RELEVANT and BACKGROUND', () => {
+    const engine = new ContextEnrichmentEngine({ maxPromptTokens: 10000 });
+
+    const sections = [
+      createSection('BACKGROUND', 'History', 'old history'),
+      createSection('CROSS_AGENT', 'Agent Insights', 'cross-agent data'),
+      createSection('RELEVANT', 'Code', 'related code'),
+      createSection('CRITICAL', 'Task', 'task definition'),
+    ];
+    const result = engine.buildPrompt(sections);
+
+    expect(result.sections[0].tier).toBe('CRITICAL');
+    expect(result.sections[1].tier).toBe('RELEVANT');
+    expect(result.sections[2].tier).toBe('CROSS_AGENT');
+    expect(result.sections[3].tier).toBe('BACKGROUND');
+  });
+
+  it('CROSS_AGENT sections included when budget allows', () => {
+    const engine = new ContextEnrichmentEngine({ maxPromptTokens: 10000 });
+
+    const sections = [
+      createSection('CRITICAL', 'Task', 'task'),
+      createSection('CROSS_AGENT', 'Insights', 'agent insights from fleet'),
+    ];
+    const result = engine.buildPrompt(sections);
+
+    expect(result.sections).toHaveLength(2);
+    expect(result.truncated).toBe(false);
+  });
+
+  it('CROSS_AGENT sections omitted when budget is tight', () => {
+    const engine = new ContextEnrichmentEngine({ maxPromptTokens: 5 });
+
+    const sections = [
+      createSection('CRITICAL', 'Task', 'task'),
+      createSection('CROSS_AGENT', 'Insights', 'x'.repeat(200)),
+    ];
+    const result = engine.buildPrompt(sections);
+
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0].tier).toBe('CRITICAL');
+    expect(result.truncated).toBe(true);
+  });
+
+  it('CROSS_AGENT included before BACKGROUND when budget is limited', () => {
+    // Budget enough for CRITICAL + CROSS_AGENT but not BACKGROUND
+    const engine = new ContextEnrichmentEngine({ maxPromptTokens: 15 });
+
+    const sections = [
+      createSection('CRITICAL', 'Task', 'abcd'),           // 1 token (always included)
+      createSection('CROSS_AGENT', 'Insights', 'abcdefgh'), // 2 tokens
+      createSection('BACKGROUND', 'History', 'x'.repeat(200)), // 50 tokens — won't fit
+    ];
+    const result = engine.buildPrompt(sections);
+
+    expect(result.sections).toHaveLength(2);
+    expect(result.sections[0].tier).toBe('CRITICAL');
+    expect(result.sections[1].tier).toBe('CROSS_AGENT');
+    expect(result.truncated).toBe(true);
+  });
+
+  it('prompt text includes CROSS_AGENT tier label', () => {
+    const engine = new ContextEnrichmentEngine({ maxPromptTokens: 10000 });
+
+    const sections = [
+      createSection('CROSS_AGENT', 'Fleet Discoveries', 'insight from agent-7'),
+    ];
+    const result = engine.buildPrompt(sections);
+
+    expect(result.prompt).toContain('--- Fleet Discoveries [CROSS_AGENT] ---');
+    expect(result.prompt).toContain('insight from agent-7');
+  });
+});

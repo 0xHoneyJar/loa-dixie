@@ -4,7 +4,7 @@
  * The main orchestrator that wires together all fleet services:
  * TaskRegistry, FleetGovernor, AgentSpawner, FleetMonitor,
  * AgentModelRouter, ContextEnrichmentEngine, CrossGovernorEventBus,
- * NotificationService, and FleetSaga.
+ * NotificationService, FleetSaga, and ecology services.
  *
  * Each method delegates to the appropriate specialized service.
  * The conductor never contains domain logic itself — it sequences
@@ -12,6 +12,7 @@
  *
  * See: SDD §6.1 (Conductor Engine), §6.2 (spawn flow)
  * @since cycle-012 — Sprint 91, Task T-6.1
+ * @updated cycle-013 — Sprint 99, Tasks T-6.1 through T-6.5 (ecology integration)
  */
 import type { TaskRegistry } from './task-registry.js';
 import { TERMINAL_STATUSES, TaskNotFoundError, ActiveTaskDeletionError } from './task-registry.js';
@@ -35,6 +36,12 @@ import type {
   FleetTaskRecord,
   FleetTaskStatus,
 } from '../types/fleet.js';
+import type { AgentIdentityService } from './agent-identity-service.js';
+import type { SovereigntyEngine } from './sovereignty-engine.js';
+import type { CirculationProtocol } from './circulation-protocol.js';
+import type { CollectiveInsightService } from './collective-insight-service.js';
+import type { MeetingGeometryRouter, GeometryResolution } from './meeting-geometry-router.js';
+import type { AgentIdentityRecord } from '../types/agent-identity.js';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -57,6 +64,13 @@ export { SpawnDeniedError, TaskNotFoundError, ActiveTaskDeletionError };
 export class ConductorEngine {
   private readonly defaultTimeoutMinutes: number;
 
+  // Ecology services (optional — graceful degradation when null/undefined)
+  private readonly identityService: AgentIdentityService | null;
+  private readonly sovereignty: SovereigntyEngine | null;
+  private readonly circulation: CirculationProtocol | null;
+  private readonly insightService: CollectiveInsightService | null;
+  private readonly geometryRouter: MeetingGeometryRouter | null;
+
   constructor(
     private readonly registry: TaskRegistry,
     private readonly governor: FleetGovernor,
@@ -68,8 +82,19 @@ export class ConductorEngine {
     private readonly notifications: NotificationService,
     private readonly saga: FleetSaga,
     config?: ConductorEngineConfig,
+    // Ecology services (T-6.1) — all optional for backward compatibility
+    identityService?: AgentIdentityService,
+    sovereignty?: SovereigntyEngine,
+    circulation?: CirculationProtocol,
+    insightService?: CollectiveInsightService,
+    geometryRouter?: MeetingGeometryRouter,
   ) {
     this.defaultTimeoutMinutes = config?.defaultTimeoutMinutes ?? 120;
+    this.identityService = identityService ?? null;
+    this.sovereignty = sovereignty ?? null;
+    this.circulation = circulation ?? null;
+    this.insightService = insightService ?? null;
+    this.geometryRouter = geometryRouter ?? null;
   }
 
   // -------------------------------------------------------------------------
@@ -112,6 +137,45 @@ export class ConductorEngine {
       explicitModel: request.model,
     });
 
+    // Step 2b: Identity resolution (T-6.2)
+    let identity: AgentIdentityRecord | null = null;
+    if (this.identityService) {
+      try {
+        identity = await this.identityService.resolveIdentity(
+          request.operatorId,
+          routing.model,
+        );
+      } catch {
+        // Identity resolution failure is non-fatal — continue without identity
+      }
+    }
+
+    // Step 2c: Sovereignty and cost (T-6.3)
+    let autonomyLevel: SpawnResult['autonomyLevel'];
+    if (this.sovereignty && identity) {
+      try {
+        const resources = this.sovereignty.getResources(identity);
+        autonomyLevel = identity.autonomyLevel;
+        // Resources are informational at spawn time — applied at retry/monitor layers
+        void resources;
+      } catch {
+        // Sovereignty failure is non-fatal
+      }
+    }
+
+    let spawnCost: SpawnResult['spawnCost'];
+    if (this.circulation) {
+      try {
+        spawnCost = await this.circulation.computeCost(
+          request.operatorId,
+          request.taskType,
+          request.description.length,
+        );
+      } catch {
+        // Cost computation failure is non-fatal
+      }
+    }
+
     // Step 3: Build enriched prompt
     const sections = [
       createSection('CRITICAL', 'Task Definition', request.description),
@@ -126,6 +190,37 @@ export class ConductorEngine {
     if (request.contextOverrides) {
       for (const [key, value] of Object.entries(request.contextOverrides)) {
         sections.push(createSection('BACKGROUND', key, value));
+      }
+    }
+
+    // Step 3b: Geometry resolution (T-6.4)
+    let geometryResolution: GeometryResolution | null = null;
+    let groupId: string | null = null;
+    if (this.geometryRouter) {
+      try {
+        geometryResolution = await this.geometryRouter.resolveGeometry(request);
+        if (geometryResolution.groupId) {
+          groupId = geometryResolution.groupId;
+        }
+      } catch {
+        // Geometry resolution failure is non-fatal
+      }
+    }
+
+    // Step 3c: Cross-agent insights (T-6.4)
+    if (this.insightService) {
+      try {
+        const insights = this.insightService.getRelevantInsights(
+          request.description,
+          groupId,
+        );
+        for (const insight of insights) {
+          sections.push(
+            createSection('CROSS_AGENT', `Insight: ${insight.sourceTaskId}`, insight.content),
+          );
+        }
+      } catch {
+        // Insight retrieval failure is non-fatal
       }
     }
 
@@ -170,7 +265,19 @@ export class ConductorEngine {
       throw new Error(`Task ${sagaResult.taskId} not found after saga completion`);
     }
 
-    // Step 8: Return result
+    // Step 7b: Link identity and group to task (T-6.5)
+    if (identity || groupId) {
+      try {
+        await this.registry.transition(taskRecord.id, taskRecord.version, taskRecord.status, {
+          ...(identity ? { agentIdentityId: identity.id } : {}),
+          ...(groupId ? { groupId } : {}),
+        });
+      } catch {
+        // Link failure is non-fatal — task is already spawned
+      }
+    }
+
+    // Step 8: Return result (extended with ecology fields — T-6.5)
     return {
       taskId: taskRecord.id,
       branch: taskRecord.branch,
@@ -178,6 +285,9 @@ export class ConductorEngine {
       agentType: routing.agentType,
       model: routing.model,
       status: taskRecord.status,
+      ...(identity ? { agentIdentityId: identity.id } : {}),
+      ...(autonomyLevel ? { autonomyLevel } : {}),
+      ...(spawnCost ? { spawnCost } : {}),
     };
   }
 

@@ -103,6 +103,8 @@ function makeTask(overrides: Partial<FleetTaskRecord> = {}): FleetTaskRecord {
     completedAt: null,
     createdAt: '2026-02-26T00:00:00.000Z',
     updatedAt: '2026-02-26T00:00:00.000Z',
+    agentIdentityId: null,
+    groupId: null,
     ...overrides,
   };
 }
@@ -1441,5 +1443,351 @@ describe('FleetMonitor — runCycle() edge cases', () => {
 
     // No stall because there's no commit timestamp to compare against
     expect(result.stallsDetected).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T-6.11: Insight Harvesting in runCycle()
+// ---------------------------------------------------------------------------
+
+describe('FleetMonitor — insight harvesting (T-6.11)', () => {
+  let registry: ReturnType<typeof createMockRegistry>;
+  let spawner: ReturnType<typeof createMockSpawner>;
+  let logger: ReturnType<typeof createMockLogger>;
+
+  function createMockInsightService() {
+    return {
+      harvest: vi.fn().mockResolvedValue(null),
+      pruneExpired: vi.fn().mockResolvedValue(0),
+      getRelevantInsights: vi.fn().mockReturnValue([]),
+      persist: vi.fn(),
+      loadFromDb: vi.fn(),
+      pruneExpiredFromDb: vi.fn(),
+      pruneByTask: vi.fn(),
+      getPoolStats: vi.fn(),
+      poolRef: {} as any,
+    };
+  }
+
+  beforeEach(() => {
+    resetExecFile();
+    registry = createMockRegistry();
+    spawner = createMockSpawner();
+    logger = createMockLogger();
+  });
+
+  it('harvest called for running tasks with worktreePath', async () => {
+    const insightSvc = createMockInsightService();
+    const runningTask = makeTask({
+      id: 'harvest-1',
+      status: 'running',
+      worktreePath: '/tmp/fleet/harvest-1',
+      prNumber: null,
+    });
+    registry.listLive.mockResolvedValue([runningTask]);
+    spawner.isAlive.mockResolvedValue(true);
+
+    // Mock gh calls to avoid interference
+    execFileSpy.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'gh' && args[0] === 'pr') {
+        return Promise.resolve({ stdout: '[]', stderr: '' });
+      }
+      if (cmd === 'gh' && args[0] === 'api') {
+        return Promise.resolve({ stdout: new Date().toISOString(), stderr: '' });
+      }
+      return Promise.resolve({ stdout: '', stderr: '' });
+    });
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger, insightService: insightSvc as any },
+    );
+
+    await monitor.runCycle();
+
+    expect(insightSvc.harvest).toHaveBeenCalledWith('harvest-1', '/tmp/fleet/harvest-1');
+  });
+
+  it('harvest skipped for tasks without worktreePath', async () => {
+    const insightSvc = createMockInsightService();
+    const noWorktreeTask = makeTask({
+      id: 'no-wt',
+      status: 'running',
+      worktreePath: null,
+      prNumber: null,
+    });
+    registry.listLive.mockResolvedValue([noWorktreeTask]);
+    spawner.isAlive.mockResolvedValue(true);
+    execFileSpy.mockResolvedValue({ stdout: '[]', stderr: '' });
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger, insightService: insightSvc as any },
+    );
+
+    await monitor.runCycle();
+
+    expect(insightSvc.harvest).not.toHaveBeenCalled();
+  });
+
+  it('harvest error does not crash cycle', async () => {
+    const insightSvc = createMockInsightService();
+    insightSvc.harvest.mockRejectedValue(new Error('git failed'));
+
+    const runningTask = makeTask({
+      id: 'harvest-err',
+      status: 'running',
+      worktreePath: '/tmp/fleet/harvest-err',
+      prNumber: null,
+    });
+    registry.listLive.mockResolvedValue([runningTask]);
+    spawner.isAlive.mockResolvedValue(true);
+
+    execFileSpy.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'gh' && args[0] === 'pr') {
+        return Promise.resolve({ stdout: '[]', stderr: '' });
+      }
+      if (cmd === 'gh' && args[0] === 'api') {
+        return Promise.resolve({ stdout: new Date().toISOString(), stderr: '' });
+      }
+      return Promise.resolve({ stdout: '', stderr: '' });
+    });
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger, insightService: insightSvc as any },
+    );
+
+    // Should not throw
+    const result = await monitor.runCycle();
+    expect(result.tasksChecked).toBe(1);
+    // Error should NOT appear in errorTaskIds since harvest failure is isolated
+    expect(result.errorTaskIds).toHaveLength(0);
+  });
+
+  it('pruneExpired called at end of cycle', async () => {
+    const insightSvc = createMockInsightService();
+    registry.listLive.mockResolvedValue([]);
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger, insightService: insightSvc as any },
+    );
+
+    await monitor.runCycle();
+
+    expect(insightSvc.pruneExpired).toHaveBeenCalledOnce();
+  });
+
+  it('pruneExpired error is non-fatal', async () => {
+    const insightSvc = createMockInsightService();
+    insightSvc.pruneExpired.mockRejectedValue(new Error('prune failed'));
+    registry.listLive.mockResolvedValue([]);
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger, insightService: insightSvc as any },
+    );
+
+    // Should not throw
+    const result = await monitor.runCycle();
+    expect(result.tasksChecked).toBe(0);
+  });
+
+  it('no harvest or prune when insightService is not provided', async () => {
+    registry.listLive.mockResolvedValue([
+      makeTask({ id: 'no-svc', status: 'running', worktreePath: '/tmp/wt', prNumber: null }),
+    ]);
+    spawner.isAlive.mockResolvedValue(true);
+    execFileSpy.mockResolvedValue({ stdout: '[]', stderr: '' });
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger },
+    );
+
+    // Should run without any insight-related errors
+    const result = await monitor.runCycle();
+    expect(result.tasksChecked).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T-6.12: Identity Outcome Recording
+// ---------------------------------------------------------------------------
+
+describe('FleetMonitor — identity outcome recording (T-6.12)', () => {
+  let registry: ReturnType<typeof createMockRegistry>;
+  let spawner: ReturnType<typeof createMockSpawner>;
+  let logger: ReturnType<typeof createMockLogger>;
+
+  function createMockIdentityService() {
+    return {
+      resolveIdentity: vi.fn(),
+      getOrNull: vi.fn(),
+      getByOperator: vi.fn(),
+      recordTaskOutcome: vi.fn().mockResolvedValue({}),
+      getHistory: vi.fn(),
+    };
+  }
+
+  beforeEach(() => {
+    resetExecFile();
+    registry = createMockRegistry();
+    spawner = createMockSpawner();
+    logger = createMockLogger();
+  });
+
+  it('outcome recorded on dead agent detection (task failure)', async () => {
+    const identitySvc = createMockIdentityService();
+    const deadTask = makeTask({
+      id: 'dead-id',
+      status: 'running',
+      agentIdentityId: 'identity-001',
+      version: 0,
+    });
+    registry.listLive.mockResolvedValue([deadTask]);
+    spawner.isAlive.mockResolvedValue(false);
+    registry.transition.mockResolvedValue(makeTask({ id: 'dead-id', status: 'failed' }));
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger, identityService: identitySvc as any },
+    );
+
+    await monitor.runCycle();
+
+    expect(identitySvc.recordTaskOutcome).toHaveBeenCalledWith(
+      'identity-001',
+      'dead-id',
+      'failed',
+    );
+  });
+
+  it('outcome recorded on timeout detection', async () => {
+    const identitySvc = createMockIdentityService();
+    const oldSpawn = new Date(Date.now() - 150 * 60_000).toISOString();
+    const timedOutTask = makeTask({
+      id: 'timeout-id',
+      status: 'running',
+      agentIdentityId: 'identity-002',
+      spawnedAt: oldSpawn,
+      prNumber: null,
+      version: 1,
+    });
+    registry.listLive.mockResolvedValue([timedOutTask]);
+    spawner.isAlive.mockResolvedValue(true);
+    registry.transition.mockResolvedValue(makeTask({ id: 'timeout-id', status: 'failed' }));
+
+    execFileSpy.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'gh' && args[0] === 'pr') {
+        return Promise.resolve({ stdout: '[]', stderr: '' });
+      }
+      if (cmd === 'gh' && args[0] === 'api') {
+        return Promise.resolve({ stdout: new Date().toISOString(), stderr: '' });
+      }
+      return Promise.resolve({ stdout: '', stderr: '' });
+    });
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger, identityService: identitySvc as any },
+    );
+
+    await monitor.runCycle();
+
+    expect(identitySvc.recordTaskOutcome).toHaveBeenCalledWith(
+      'identity-002',
+      'timeout-id',
+      'failed',
+    );
+  });
+
+  it('missing agentIdentityId — outcome recording skipped', async () => {
+    const identitySvc = createMockIdentityService();
+    const deadTask = makeTask({
+      id: 'no-identity',
+      status: 'running',
+      agentIdentityId: null, // No identity linked
+      version: 0,
+    });
+    registry.listLive.mockResolvedValue([deadTask]);
+    spawner.isAlive.mockResolvedValue(false);
+    registry.transition.mockResolvedValue(makeTask({ id: 'no-identity', status: 'failed' }));
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger, identityService: identitySvc as any },
+    );
+
+    await monitor.runCycle();
+
+    // recordTaskOutcome should NOT be called when agentIdentityId is null
+    expect(identitySvc.recordTaskOutcome).not.toHaveBeenCalled();
+  });
+
+  it('identity service error is non-fatal', async () => {
+    const identitySvc = createMockIdentityService();
+    identitySvc.recordTaskOutcome.mockRejectedValue(new Error('DB down'));
+
+    const deadTask = makeTask({
+      id: 'id-err',
+      status: 'running',
+      agentIdentityId: 'identity-003',
+      version: 0,
+    });
+    registry.listLive.mockResolvedValue([deadTask]);
+    spawner.isAlive.mockResolvedValue(false);
+    registry.transition.mockResolvedValue(makeTask({ id: 'id-err', status: 'failed' }));
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger, identityService: identitySvc as any },
+    );
+
+    // Should not throw
+    const result = await monitor.runCycle();
+    expect(result.deadAgentsDetected).toBe(1);
+
+    // Warning should be logged
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Failed to record identity outcome (non-fatal)',
+      expect.objectContaining({
+        taskId: 'id-err',
+        agentIdentityId: 'identity-003',
+      }),
+    );
+  });
+
+  it('no outcome recording when identityService is not provided', async () => {
+    const deadTask = makeTask({
+      id: 'no-svc',
+      status: 'running',
+      agentIdentityId: 'identity-004',
+      version: 0,
+    });
+    registry.listLive.mockResolvedValue([deadTask]);
+    spawner.isAlive.mockResolvedValue(false);
+    registry.transition.mockResolvedValue(makeTask({ id: 'no-svc', status: 'failed' }));
+
+    const monitor = new FleetMonitor(
+      registry as unknown as TaskRegistry,
+      spawner as unknown as AgentSpawner,
+      { logger }, // No identityService
+    );
+
+    // Should run without errors
+    const result = await monitor.runCycle();
+    expect(result.deadAgentsDetected).toBe(1);
   });
 });

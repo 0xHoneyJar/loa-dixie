@@ -2,13 +2,14 @@
  * Context Enrichment Engine — Three-Tier Prompt Assembly with Token Budget Management
  *
  * Assembles enriched prompts for agent tasks by layering context sections
- * in priority order (CRITICAL > RELEVANT > BACKGROUND). Each section carries
+ * in priority order (CRITICAL > RELEVANT > CROSS_AGENT > BACKGROUND). Each section carries
  * a token estimate (chars / 4) and a tier classification. Sections are
  * included in tier order until the token budget is exhausted.
  *
  * Context tiers:
  * - CRITICAL: Always included. Task definition, constraints, invariants.
  * - RELEVANT: Included if budget allows. Related code, recent changes.
+ * - CROSS_AGENT: Cross-agent insights from collective discovery. Included if budget allows.
  * - BACKGROUND: Included only if space remains. Architecture docs, history.
  *
  * Also provides captureFailureContext() for reading worktree state on failure,
@@ -28,13 +29,14 @@ import { createHash } from 'node:crypto';
  * Priority tier for context sections.
  * Determines inclusion order when assembling prompts under token budgets.
  */
-export type ContextTier = 'CRITICAL' | 'RELEVANT' | 'BACKGROUND';
+export type ContextTier = 'CRITICAL' | 'RELEVANT' | 'CROSS_AGENT' | 'BACKGROUND';
 
 /** Numeric priority for tier ordering (lower = higher priority). */
 const TIER_PRIORITY: Record<ContextTier, number> = {
   CRITICAL: 0,
   RELEVANT: 1,
-  BACKGROUND: 2,
+  CROSS_AGENT: 2,
+  BACKGROUND: 3,
 };
 
 // ---------------------------------------------------------------------------
@@ -171,8 +173,8 @@ export class ContextEnrichmentEngine {
    * CRITICAL sections are always included regardless of budget (they represent
    * the minimum viable context for a correct response).
    *
-   * RELEVANT and BACKGROUND sections are included only if they fit within
-   * the remaining token budget after higher-priority sections.
+   * RELEVANT, CROSS_AGENT, and BACKGROUND sections are included only if they
+   * fit within the remaining token budget after higher-priority sections.
    *
    * @param sections - Context sections to assemble
    * @param options - Override max token budget for this call

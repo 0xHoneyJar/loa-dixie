@@ -353,6 +353,14 @@ export class TaskRegistry {
       setClauses.push(`completed_at = $${paramIdx++}`);
       params.push(metadata.completedAt);
     }
+    if (metadata?.agentIdentityId !== undefined) {
+      setClauses.push(`agent_identity_id = $${paramIdx++}`);
+      params.push(metadata.agentIdentityId);
+    }
+    if (metadata?.groupId !== undefined) {
+      setClauses.push(`group_id = $${paramIdx++}`);
+      params.push(metadata.groupId);
+    }
 
     const setClause = setClauses.join(', ');
     const idParam = `$${paramIdx++}`;

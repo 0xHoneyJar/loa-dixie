@@ -44,6 +44,8 @@ function makeTaskRecord(overrides: Partial<FleetTaskRecord> = {}): FleetTaskReco
     completedAt: null,
     createdAt: '2026-02-26T00:00:00Z',
     updatedAt: '2026-02-26T00:00:00Z',
+    agentIdentityId: null,
+    groupId: null,
     ...overrides,
   };
 }
@@ -350,6 +352,337 @@ describe('ConductorEngine', () => {
   });
 
   // -------------------------------------------------------------------------
+  // spawn() — Ecology Integration (T-6.10)
+  // -------------------------------------------------------------------------
+
+  describe('spawn — ecology integration', () => {
+    const mockIdentity = {
+      id: 'identity-001',
+      operatorId: 'operator-1',
+      model: 'claude-opus-4-6',
+      autonomyLevel: 'autonomous' as const,
+      aggregateReputation: 0.85,
+      taskCount: 15,
+      successCount: 12,
+      failureCount: 3,
+      lastTaskId: null,
+      version: 1,
+      createdAt: '2026-02-26T00:00:00Z',
+      lastActiveAt: '2026-02-26T00:00:00Z',
+    };
+
+    const mockResources = {
+      timeoutMinutes: 240,
+      maxRetries: 5,
+      contextTokens: 12000,
+      canSelfModifyPrompt: true,
+    };
+
+    const mockSpawnCost = {
+      baseCost: 1.0,
+      utilizationMultiplier: 1.0,
+      reputationDiscount: 0.66,
+      complexityFactor: 1.0,
+      finalCost: 0.66,
+      breakdown: 'base=1.0 | final=0.66',
+    };
+
+    const mockGeometry = {
+      geometry: 'jam' as const,
+      groupId: 'group-001',
+      autoDetected: false,
+    };
+
+    const mockInsight = {
+      id: 'insight-001',
+      sourceTaskId: 'task-099',
+      sourceAgentId: 'agent-099',
+      groupId: 'group-001',
+      content: 'Auth module needs CORS headers',
+      keywords: ['auth', 'cors', 'headers'],
+      relevanceContext: 'Commits from task-099',
+      capturedAt: '2026-02-26T00:00:00Z',
+      expiresAt: '2026-02-26T04:00:00Z',
+    };
+
+    function createMockIdentityService() {
+      return {
+        resolveIdentity: vi.fn().mockResolvedValue(mockIdentity),
+        getOrNull: vi.fn().mockResolvedValue(mockIdentity),
+        getByOperator: vi.fn(),
+        recordTaskOutcome: vi.fn(),
+        getHistory: vi.fn(),
+      };
+    }
+
+    function createMockSovereignty() {
+      return {
+        getResources: vi.fn().mockReturnValue(mockResources),
+        transition: vi.fn(),
+        verify: vi.fn(),
+        verifyAll: vi.fn(),
+        current: { identityId: '', level: 'constrained' as const, reputation: 0, taskCount: 0, resources: mockResources },
+        version: 0,
+        auditTrail: { entries: [], hash_chain_head: null },
+        mutationLog: [],
+        resourceId: 'sovereignty-engine-singleton',
+        resourceType: 'sovereignty-engine',
+      };
+    }
+
+    function createMockCirculation() {
+      return {
+        computeCost: vi.fn().mockResolvedValue(mockSpawnCost),
+        getUtilizationSnapshot: vi.fn(),
+        getReputationDiscount: vi.fn(),
+      };
+    }
+
+    function createMockInsightService() {
+      return {
+        getRelevantInsights: vi.fn().mockReturnValue([mockInsight]),
+        harvest: vi.fn(),
+        pruneExpired: vi.fn(),
+        persist: vi.fn(),
+        loadFromDb: vi.fn(),
+        pruneExpiredFromDb: vi.fn(),
+        pruneByTask: vi.fn(),
+        getPoolStats: vi.fn(),
+        poolRef: {} as any,
+      };
+    }
+
+    function createMockGeometryRouter() {
+      return {
+        resolveGeometry: vi.fn().mockResolvedValue(mockGeometry),
+        createGroup: vi.fn(),
+        addToGroup: vi.fn(),
+        getGroup: vi.fn(),
+        dissolveGroup: vi.fn(),
+        detectGeometry: vi.fn(),
+      };
+    }
+
+    const runningTask = makeTaskRecord({ status: 'running', worktreePath: '/tmp/fleet/task-001' });
+
+    it('full spawn with all ecology services — identity resolved and linked', async () => {
+      const identitySvc = createMockIdentityService();
+      const sovereigntySvc = createMockSovereignty();
+      const circulationSvc = createMockCirculation();
+      const insightSvc = createMockInsightService();
+      const geometrySvc = createMockGeometryRouter();
+
+      registry.get.mockResolvedValue(runningTask);
+      registry.transition.mockResolvedValue(runningTask);
+
+      const ecoConductor = new ConductorEngine(
+        registry as any,
+        governor as any,
+        spawner as any,
+        monitor as any,
+        router as any,
+        enrichment as any,
+        eventBus as any,
+        notifications as any,
+        saga as any,
+        undefined, // config
+        identitySvc as any,
+        sovereigntySvc as any,
+        circulationSvc as any,
+        insightSvc as any,
+        geometrySvc as any,
+      );
+
+      const result = await ecoConductor.spawn(makeSpawnRequest(), 'architect');
+
+      // Identity resolved
+      expect(identitySvc.resolveIdentity).toHaveBeenCalledWith('operator-1', 'claude-opus-4-6');
+
+      // Identity linked to task via transition
+      expect(registry.transition).toHaveBeenCalledWith(
+        'task-001',
+        1,
+        'running',
+        expect.objectContaining({ agentIdentityId: 'identity-001' }),
+      );
+
+      // Result includes identity
+      expect(result.agentIdentityId).toBe('identity-001');
+    });
+
+    it('autonomy resources applied from sovereignty', async () => {
+      const identitySvc = createMockIdentityService();
+      const sovereigntySvc = createMockSovereignty();
+
+      registry.get.mockResolvedValue(runningTask);
+
+      const ecoConductor = new ConductorEngine(
+        registry as any, governor as any, spawner as any, monitor as any,
+        router as any, enrichment as any, eventBus as any, notifications as any,
+        saga as any, undefined,
+        identitySvc as any, sovereigntySvc as any,
+      );
+
+      const result = await ecoConductor.spawn(makeSpawnRequest(), 'architect');
+
+      expect(sovereigntySvc.getResources).toHaveBeenCalledWith(mockIdentity);
+      expect(result.autonomyLevel).toBe('autonomous');
+    });
+
+    it('spawn cost computed and returned', async () => {
+      const circulationSvc = createMockCirculation();
+
+      registry.get.mockResolvedValue(runningTask);
+
+      const ecoConductor = new ConductorEngine(
+        registry as any, governor as any, spawner as any, monitor as any,
+        router as any, enrichment as any, eventBus as any, notifications as any,
+        saga as any, undefined,
+        undefined, undefined, circulationSvc as any,
+      );
+
+      const result = await ecoConductor.spawn(makeSpawnRequest(), 'architect');
+
+      expect(circulationSvc.computeCost).toHaveBeenCalledWith(
+        'operator-1',
+        'feature',
+        'Build the thing'.length,
+      );
+      expect(result.spawnCost).toEqual(mockSpawnCost);
+    });
+
+    it('cross-agent insights injected as CROSS_AGENT sections', async () => {
+      const insightSvc = createMockInsightService();
+
+      registry.get.mockResolvedValue(runningTask);
+
+      const ecoConductor = new ConductorEngine(
+        registry as any, governor as any, spawner as any, monitor as any,
+        router as any, enrichment as any, eventBus as any, notifications as any,
+        saga as any, undefined,
+        undefined, undefined, undefined, insightSvc as any,
+      );
+
+      await ecoConductor.spawn(makeSpawnRequest(), 'architect');
+
+      // insightService.getRelevantInsights was called
+      expect(insightSvc.getRelevantInsights).toHaveBeenCalledWith(
+        'Build the thing',
+        null, // no groupId without geometry router
+      );
+
+      // Enrichment should include the CROSS_AGENT section
+      const buildPromptCall = enrichment.buildPrompt.mock.calls[0][0];
+      const crossAgentSections = buildPromptCall.filter(
+        (s: any) => s.tier === 'CROSS_AGENT',
+      );
+      expect(crossAgentSections).toHaveLength(1);
+      expect(crossAgentSections[0].content).toBe('Auth module needs CORS headers');
+    });
+
+    it('geometry resolved and groupId linked to task', async () => {
+      const geometrySvc = createMockGeometryRouter();
+
+      registry.get.mockResolvedValue(runningTask);
+      registry.transition.mockResolvedValue(runningTask);
+
+      const ecoConductor = new ConductorEngine(
+        registry as any, governor as any, spawner as any, monitor as any,
+        router as any, enrichment as any, eventBus as any, notifications as any,
+        saga as any, undefined,
+        undefined, undefined, undefined, undefined, geometrySvc as any,
+      );
+
+      await ecoConductor.spawn(makeSpawnRequest(), 'architect');
+
+      expect(geometrySvc.resolveGeometry).toHaveBeenCalled();
+
+      // groupId linked to task
+      expect(registry.transition).toHaveBeenCalledWith(
+        'task-001',
+        1,
+        'running',
+        expect.objectContaining({ groupId: 'group-001' }),
+      );
+    });
+
+    it('graceful degradation when all ecology services are null (backward compat)', async () => {
+      registry.get.mockResolvedValue(runningTask);
+
+      // Use the default conductor (no ecology services)
+      const result = await conductor.spawn(makeSpawnRequest(), 'architect');
+
+      // Should succeed without ecology fields
+      expect(result.taskId).toBe('task-001');
+      expect(result.agentIdentityId).toBeUndefined();
+      expect(result.autonomyLevel).toBeUndefined();
+      expect(result.spawnCost).toBeUndefined();
+    });
+
+    it('identity resolution failure is non-fatal', async () => {
+      const identitySvc = createMockIdentityService();
+      identitySvc.resolveIdentity.mockRejectedValue(new Error('DB down'));
+
+      registry.get.mockResolvedValue(runningTask);
+
+      const ecoConductor = new ConductorEngine(
+        registry as any, governor as any, spawner as any, monitor as any,
+        router as any, enrichment as any, eventBus as any, notifications as any,
+        saga as any, undefined,
+        identitySvc as any,
+      );
+
+      const result = await ecoConductor.spawn(makeSpawnRequest(), 'architect');
+
+      // Should succeed without identity
+      expect(result.taskId).toBe('task-001');
+      expect(result.agentIdentityId).toBeUndefined();
+    });
+
+    it('circulation failure is non-fatal', async () => {
+      const circulationSvc = createMockCirculation();
+      circulationSvc.computeCost.mockRejectedValue(new Error('Cost service down'));
+
+      registry.get.mockResolvedValue(runningTask);
+
+      const ecoConductor = new ConductorEngine(
+        registry as any, governor as any, spawner as any, monitor as any,
+        router as any, enrichment as any, eventBus as any, notifications as any,
+        saga as any, undefined,
+        undefined, undefined, circulationSvc as any,
+      );
+
+      const result = await ecoConductor.spawn(makeSpawnRequest(), 'architect');
+
+      expect(result.taskId).toBe('task-001');
+      expect(result.spawnCost).toBeUndefined();
+    });
+
+    it('geometry with insights — groupId passed to getRelevantInsights', async () => {
+      const geometrySvc = createMockGeometryRouter();
+      const insightSvc = createMockInsightService();
+
+      registry.get.mockResolvedValue(runningTask);
+      registry.transition.mockResolvedValue(runningTask);
+
+      const ecoConductor = new ConductorEngine(
+        registry as any, governor as any, spawner as any, monitor as any,
+        router as any, enrichment as any, eventBus as any, notifications as any,
+        saga as any, undefined,
+        undefined, undefined, undefined, insightSvc as any, geometrySvc as any,
+      );
+
+      await ecoConductor.spawn(makeSpawnRequest(), 'architect');
+
+      // Insight service should receive the groupId from geometry
+      expect(insightSvc.getRelevantInsights).toHaveBeenCalledWith(
+        'Build the thing',
+        'group-001',
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // getStatus()
   // -------------------------------------------------------------------------
 
@@ -636,6 +969,115 @@ describe('ConductorEngine', () => {
     it('stops monitor', async () => {
       await conductor.shutdown();
 
+      expect(monitor.stop).toHaveBeenCalledOnce();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // backward compatibility (T-7.8)
+  // -------------------------------------------------------------------------
+
+  describe('backward compatibility (T-7.8)', () => {
+    it('works without ecology services (original 9 args)', async () => {
+      // Construct conductor with ONLY the original 9 positional args — no ecology services
+      const legacyConductor = new ConductorEngine(
+        registry as any,
+        governor as any,
+        spawner as any,
+        monitor as any,
+        router as any,
+        enrichment as any,
+        eventBus as any,
+        notifications as any,
+        saga as any,
+      );
+
+      const runningTask = makeTaskRecord({ status: 'running', worktreePath: '/tmp/fleet/task-001' });
+      registry.get.mockResolvedValue(runningTask);
+
+      const result = await legacyConductor.spawn(makeSpawnRequest(), 'architect');
+
+      // Core spawn should work identically to cycle-012
+      expect(result.taskId).toBe('task-001');
+      expect(result.branch).toBe('fleet/task-001');
+      expect(result.agentType).toBe('claude_code');
+      expect(result.model).toBe('claude-opus-4-6');
+      expect(result.status).toBe('running');
+
+      // Ecology fields should be absent
+      expect(result.agentIdentityId).toBeUndefined();
+      expect(result.autonomyLevel).toBeUndefined();
+      expect(result.spawnCost).toBeUndefined();
+    });
+
+    it('getStatus works without ecology services', async () => {
+      const legacyConductor = new ConductorEngine(
+        registry as any,
+        governor as any,
+        spawner as any,
+        monitor as any,
+        router as any,
+        enrichment as any,
+        eventBus as any,
+        notifications as any,
+        saga as any,
+      );
+
+      registry.query.mockResolvedValue([
+        makeTaskRecord({ id: 't-1', status: 'running' }),
+        makeTaskRecord({ id: 't-2', status: 'merged' }),
+      ]);
+
+      const status = await legacyConductor.getStatus('operator-1');
+
+      expect(status.activeTasks).toBe(1);
+      expect(status.completedTasks).toBe(1);
+      expect(status.tasks).toHaveLength(2);
+    });
+
+    it('stopTask works without ecology services', async () => {
+      const legacyConductor = new ConductorEngine(
+        registry as any,
+        governor as any,
+        spawner as any,
+        monitor as any,
+        router as any,
+        enrichment as any,
+        eventBus as any,
+        notifications as any,
+        saga as any,
+      );
+
+      const task = makeTaskRecord({ status: 'running' });
+      registry.get.mockResolvedValue(task);
+      registry.transition.mockResolvedValue(makeTaskRecord({ status: 'cancelled' }));
+
+      await legacyConductor.stopTask('task-001');
+
+      expect(registry.transition).toHaveBeenCalled();
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'AGENT_CANCELLED' }),
+      );
+    });
+
+    it('start and shutdown work without ecology services', async () => {
+      const legacyConductor = new ConductorEngine(
+        registry as any,
+        governor as any,
+        spawner as any,
+        monitor as any,
+        router as any,
+        enrichment as any,
+        eventBus as any,
+        notifications as any,
+        saga as any,
+      );
+
+      await legacyConductor.start();
+      expect(monitor.reconcile).toHaveBeenCalledOnce();
+      expect(monitor.start).toHaveBeenCalledOnce();
+
+      await legacyConductor.shutdown();
       expect(monitor.stop).toHaveBeenCalledOnce();
     });
   });
