@@ -193,7 +193,7 @@ get_model_primary() {
 }
 
 get_model_secondary() {
-    read_config '.flatline_protocol.models.secondary' 'gpt-5.2'
+    read_config '.flatline_protocol.models.secondary' 'gpt-5.3-codex'
 }
 
 # FR-3: Optional tertiary model for 3-model Flatline (e.g., Gemini 3 Pro)
@@ -202,9 +202,13 @@ get_model_tertiary() {
     read_config '.hounfour.flatline_tertiary_model' ''
 }
 
+get_max_iterations() {
+    read_config '.flatline_protocol.max_iterations' '5'
+}
+
 # Valid model names accepted by model-adapter.sh.legacy MODEL_PROVIDERS registry.
 # Keep in sync with MODEL_PROVIDERS in model-adapter.sh.legacy (line ~69).
-VALID_FLATLINE_MODELS=(opus gpt-5.2 gpt-5.2-codex gpt-5.3-codex claude-opus-4.6 claude-opus-4.5 gemini-2.0 gemini-2.5-flash gemini-2.5-pro gemini-3-flash gemini-3-pro)
+VALID_FLATLINE_MODELS=(opus gpt-5.2 gpt-5.3-codex claude-opus-4.6 claude-opus-4.5 gemini-2.0 gemini-2.5-flash gemini-2.5-pro gemini-3-flash gemini-3-pro)
 
 validate_model() {
     local model="$1"
@@ -276,7 +280,7 @@ declare -A MODE_TO_AGENT=(
 # Legacy model name → provider:model-id for model-invoke --model override
 declare -A MODEL_TO_PROVIDER_ID=(
     ["gpt-5.2"]="openai:gpt-5.2"
-    ["gpt-5.2-codex"]="openai:gpt-5.2-codex"
+    ["gpt-5.3-codex"]="openai:gpt-5.3-codex"
     ["opus"]="anthropic:claude-opus-4-6"
     ["claude-opus-4.6"]="anthropic:claude-opus-4-6"
     ["gemini-2.0"]="google:gemini-2.0-flash"
