@@ -3,7 +3,7 @@
   "cycles": [
     {
       "id": "cycle-001",
-      "label": "Dixie MVP \u2014 Oracle Orchestration Layer",
+      "label": "Dixie MVP — Oracle Orchestration Layer",
       "started": "2026-02-20",
       "completed": "2026-02-21",
       "status": "archived",
@@ -150,7 +150,7 @@
     },
     {
       "id": "cycle-002",
-      "label": "Dixie Phase 2 \u2014 Experience Orchestrator with Economic Awareness",
+      "label": "Dixie Phase 2 — Experience Orchestrator with Economic Awareness",
       "started": "2026-02-21",
       "status": "archived",
       "completed": "2026-02-23",
@@ -282,42 +282,42 @@
         {
           "id": "sprint-18",
           "global_id": 37,
-          "label": "Bridge Convergence \u2014 LOW Findings + Determinism (Bridge Iter 2)",
+          "label": "Bridge Convergence — LOW Findings + Determinism (Bridge Iter 2)",
           "tasks": 3,
           "status": "completed"
         },
         {
           "id": "sprint-19",
           "global_id": 38,
-          "label": "Adaptive Retrieval from Self-Knowledge (Meditation \u00a7VII.1)",
+          "label": "Adaptive Retrieval from Self-Knowledge (Meditation §VII.1)",
           "tasks": 5,
           "status": "completed"
         },
         {
           "id": "sprint-20",
           "global_id": 39,
-          "label": "Resource Governance Generalization \u2014 ResourceGovernor<T> (Meditation \u00a7VII.2)",
+          "label": "Resource Governance Generalization — ResourceGovernor<T> (Meditation §VII.2)",
           "tasks": 5,
           "status": "completed"
         },
         {
           "id": "sprint-21",
           "global_id": 40,
-          "label": "Communitarian Knowledge Governance \u2014 Conviction Voting (Meditation \u00a7VII.3)",
+          "label": "Communitarian Knowledge Governance — Conviction Voting (Meditation §VII.3)",
           "tasks": 5,
           "status": "completed"
         },
         {
           "id": "sprint-22",
           "global_id": 41,
-          "label": "Meditation Convergence \u2014 Bridge Iteration 1 Findings",
+          "label": "Meditation Convergence — Bridge Iteration 1 Findings",
           "tasks": 4,
           "status": "completed"
         },
         {
           "id": "sprint-23",
           "global_id": 42,
-          "label": "Pre-Merge Polish \u2014 Shared Crypto Utility + Persistence Versioning",
+          "label": "Pre-Merge Polish — Shared Crypto Utility + Persistence Versioning",
           "tasks": 2,
           "status": "completed"
         }
@@ -325,7 +325,7 @@
     },
     {
       "id": "cycle-003",
-      "label": "Hounfour v7.9.2 Full Adoption \u2014 Civilizational Protocol Compliance",
+      "label": "Hounfour v7.9.2 Full Adoption — Civilizational Protocol Compliance",
       "started": "2026-02-23",
       "status": "archived",
       "completed": "2026-02-24",
@@ -366,7 +366,7 @@
         {
           "id": "sprint-5",
           "global_id": 47,
-          "label": "Protocol Hardening \u2014 Bridge Deferred Findings",
+          "label": "Protocol Hardening — Bridge Deferred Findings",
           "tasks": 6,
           "status": "completed"
         },
@@ -380,7 +380,7 @@
         {
           "id": "sprint-7",
           "global_id": 49,
-          "label": "Level 5 Foundation \u2014 Runtime Constitutional Enforcement",
+          "label": "Level 5 Foundation — Runtime Constitutional Enforcement",
           "tasks": 5,
           "status": "completed"
         },
@@ -401,7 +401,7 @@
         {
           "id": "sprint-10",
           "global_id": 52,
-          "label": "Reputation Evolution \u2014 Per-Model Per-Task Cohorts",
+          "label": "Reputation Evolution — Per-Model Per-Task Cohorts",
           "tasks": 6,
           "status": "completed"
         },
@@ -415,7 +415,7 @@
         {
           "id": "sprint-12",
           "global_id": 54,
-          "label": "Level 6 Foundation \u2014 Protocol Evolution Infrastructure",
+          "label": "Level 6 Foundation — Protocol Evolution Infrastructure",
           "tasks": 6,
           "status": "completed"
         }
@@ -423,7 +423,7 @@
     },
     {
       "id": "cycle-005",
-      "label": "Hounfour v7.11.0 Full Adoption \u2014 Task-Dimensional Protocol Compliance",
+      "label": "Hounfour v7.11.0 Full Adoption — Task-Dimensional Protocol Compliance",
       "started": "2026-02-24",
       "completed": "2026-02-25",
       "status": "archived",
@@ -475,7 +475,7 @@
     },
     {
       "id": "cycle-006",
-      "label": "Dixie Phase 3 \u2014 Production Wiring & Live Integration",
+      "label": "Dixie Phase 3 — Production Wiring & Live Integration",
       "started": "2026-02-25",
       "completed": "2026-02-25",
       "status": "archived",
@@ -540,7 +540,7 @@
         {
           "id": "sprint-8",
           "global_id": 72,
-          "label": "Bridge Convergence \u2014 Data Integrity & Infrastructure",
+          "label": "Bridge Convergence — Data Integrity & Infrastructure",
           "tasks": 7,
           "status": "completed"
         }
@@ -548,7 +548,7 @@
     },
     {
       "id": "cycle-009",
-      "label": "Institutional Memory \u2014 Durable Governance, Knowledge Sovereignty & the Court of Record",
+      "label": "Institutional Memory — Durable Governance, Knowledge Sovereignty & the Court of Record",
       "started": "2026-02-26",
       "completed": "2026-02-26",
       "status": "archived",
@@ -571,35 +571,35 @@
         {
           "id": "sprint-2",
           "global_id": 74,
-          "label": "Durable Governance \u2014 Mutation Log & Audit Trail",
+          "label": "Durable Governance — Mutation Log & Audit Trail",
           "tasks": 6,
           "status": "completed"
         },
         {
           "id": "sprint-3",
           "global_id": 75,
-          "label": "Knowledge Governance \u2014 The Third Witness",
+          "label": "Knowledge Governance — The Third Witness",
           "tasks": 7,
           "status": "completed"
         },
         {
           "id": "sprint-4",
           "global_id": 76,
-          "label": "Capability Evolution \u2014 DynamicContract Adoption",
+          "label": "Capability Evolution — DynamicContract Adoption",
           "tasks": 6,
           "status": "completed"
         },
         {
           "id": "sprint-5",
           "global_id": 77,
-          "label": "Self-Improvement \u2014 UCB1 & Dimension Covariance",
+          "label": "Self-Improvement — UCB1 & Dimension Covariance",
           "tasks": 6,
           "status": "completed"
         },
         {
           "id": "sprint-6",
           "global_id": 78,
-          "label": "Integration & Hardening \u2014 Three-Witness Convergence",
+          "label": "Integration & Hardening — Three-Witness Convergence",
           "tasks": 6,
           "status": "completed"
         }
@@ -607,7 +607,7 @@
     },
     {
       "id": "cycle-010",
-      "label": "Architectural Excellence \u2014 ADR Coverage, Vision Exploration & Knowledge Sovereignty",
+      "label": "Architectural Excellence — ADR Coverage, Vision Exploration & Knowledge Sovereignty",
       "started": "2026-02-26",
       "completed": "2026-02-26",
       "status": "archived",
@@ -623,7 +623,7 @@
         {
           "id": "sprint-1",
           "global_id": 79,
-          "label": "ADR Coverage \u2014 Documenting the Architecture We Built",
+          "label": "ADR Coverage — Documenting the Architecture We Built",
           "tasks": 8,
           "status": "completed"
         },
@@ -645,7 +645,7 @@
     },
     {
       "id": "cycle-011",
-      "label": "Autopoietic Loop Closure \u2014 Reputation Query Surface & Governance Hardening",
+      "label": "Autopoietic Loop Closure — Reputation Query Surface & Governance Hardening",
       "started": "2026-02-26",
       "completed": "2026-02-26",
       "status": "archived",
@@ -690,7 +690,7 @@
     },
     {
       "id": "cycle-012",
-      "label": "Agent Fleet Orchestration \u2014 From Oracle to Conductor",
+      "label": "Agent Fleet Orchestration — From Oracle to Conductor",
       "started": "2026-02-26",
       "completed": "2026-02-26",
       "status": "archived",
@@ -757,13 +757,15 @@
           "tasks": 11,
           "status": "completed"
         }
-      ]
+      ],
+      "archived": "2026-02-26T18:00:00Z",
+      "archive_path": "grimoires/loa/archive/2026-02-26-fleet-orchestration"
     },
     {
       "id": "cycle-013",
-      "label": "From Fleet to Collective \u2014 Agent Ecology & Governed Sovereignty",
+      "label": "From Fleet to Collective — Agent Ecology & Governed Sovereignty",
       "started": "2026-02-26",
-      "status": "active",
+      "status": "archived",
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
@@ -773,61 +775,67 @@
           "global_id": 94,
           "label": "Agent Identity Foundation",
           "tasks": 12,
-          "status": "planned"
+          "status": "completed"
         },
         {
           "id": "sprint-2",
           "global_id": 95,
           "label": "Collective Insight Service",
           "tasks": 13,
-          "status": "planned"
+          "status": "completed"
         },
         {
           "id": "sprint-3",
           "global_id": 96,
           "label": "Sovereignty Engine",
           "tasks": 11,
-          "status": "planned"
+          "status": "completed"
         },
         {
           "id": "sprint-4",
           "global_id": 97,
           "label": "Circulation Protocol",
           "tasks": 10,
-          "status": "planned"
+          "status": "completed"
         },
         {
           "id": "sprint-5",
           "global_id": 98,
           "label": "Meeting Geometry Router",
           "tasks": 9,
-          "status": "planned"
+          "status": "completed"
         },
         {
           "id": "sprint-6",
           "global_id": 99,
-          "label": "Conductor Engine v2 \u2014 Integration",
+          "label": "Conductor Engine v2 — Integration",
           "tasks": 13,
-          "status": "planned"
+          "status": "completed"
         },
         {
           "id": "sprint-7",
           "global_id": 100,
           "label": "Invariant Suite + Hardening + E2E",
           "tasks": 11,
-          "status": "planned"
+          "status": "completed"
         }
-      ]
+      ],
+      "completed": "2026-02-26",
+      "archived": "2026-02-26T19:00:00Z",
+      "archive_path": "grimoires/loa/archive/2026-02-26-fleet-to-collective",
+      "source_pr": "#47",
+      "bridge_reviews": 3,
+      "bridge_flatline": true
     }
   ],
-  "active_cycle": "cycle-013",
+  "active_cycle": null,
   "active_bugfix": null,
   "global_sprint_counter": 100,
   "bugfix_cycles": [],
   "release_cycles": [
     {
       "id": "cycle-004",
-      "label": "Tag Release v2.0.0 \u2014 Constitutional Architecture",
+      "label": "Tag Release v2.0.0 — Constitutional Architecture",
       "started": "2026-02-24",
       "status": "archived",
       "completed": "2026-02-24",
@@ -837,7 +845,7 @@
       "sdd": null,
       "sprint_plan": "grimoires/loa/sprint.md",
       "target_version": "2.0.0",
-      "semver_justification": "MAJOR \u2014 constitutional architecture, Level 6 protocol evolution",
+      "semver_justification": "MAJOR — constitutional architecture, Level 6 protocol evolution",
       "source_cycles": [
         "cycle-002",
         "cycle-003"

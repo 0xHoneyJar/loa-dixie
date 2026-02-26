@@ -1,32 +1,34 @@
 {
-  "plan_id": "plan-20260225-c007bridge",
-  "branch": "feature/cycle-007-hounfour-v8.2.0",
-  "state": "RUNNING",
+  "plan_id": "plan-20260226-dixie-mvp",
+  "branch": "feature/dixie-mvp",
+  "state": "JACKED_OUT",
   "timestamps": {
     "started": "2026-02-25T07:50:00Z",
-    "last_activity": "2026-02-25T07:50:00Z"
+    "last_activity": "2026-02-26T18:10:00Z"
   },
   "sprints": {
-    "total": 5,
-    "completed": 0,
-    "current": "sprint-1",
+    "total": 7,
+    "completed": 7,
+    "current": null,
     "list": [
-      {"id": "sprint-1", "global_id": 73, "status": "pending", "cycles": 0, "files_changed": 0},
-      {"id": "sprint-2", "global_id": 74, "status": "pending", "cycles": 0, "files_changed": 0},
-      {"id": "sprint-3", "global_id": 75, "status": "pending", "cycles": 0, "files_changed": 0},
-      {"id": "sprint-4", "global_id": 76, "status": "pending", "cycles": 0, "files_changed": 0},
-      {"id": "sprint-5", "global_id": 77, "status": "pending", "cycles": 0, "files_changed": 0}
+      {"id": "sprint-1", "global_id": 94, "status": "completed", "cycles": 1, "files_changed": 8},
+      {"id": "sprint-2", "global_id": 95, "status": "completed", "cycles": 1, "files_changed": 6},
+      {"id": "sprint-3", "global_id": 96, "status": "completed", "cycles": 1, "files_changed": 8},
+      {"id": "sprint-4", "global_id": 97, "status": "completed", "cycles": 1, "files_changed": 6},
+      {"id": "sprint-5", "global_id": 98, "status": "completed", "cycles": 1, "files_changed": 8},
+      {"id": "sprint-6", "global_id": 99, "status": "completed", "cycles": 1, "files_changed": 12},
+      {"id": "sprint-7", "global_id": 100, "status": "completed", "cycles": 1, "files_changed": 10}
     ]
   },
   "options": {
     "from": 1,
-    "to": 5,
+    "to": 7,
     "max_cycles": 20,
     "timeout_hours": 8
   },
   "metrics": {
-    "total_cycles": 0,
-    "total_files_changed": 0,
-    "total_findings_fixed": 0
+    "total_cycles": 7,
+    "total_files_changed": 64,
+    "total_findings_fixed": 15
   }
 }
