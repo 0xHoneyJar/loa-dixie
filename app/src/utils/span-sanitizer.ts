@@ -11,6 +11,13 @@ import { trace, type Span, SpanStatusCode } from '@opentelemetry/api';
 
 const TRACER_NAME = 'dixie-bff';
 
+/** Module-scoped tracer instance — avoids per-span getTracer() lookup. */
+let _tracer: ReturnType<typeof trace.getTracer> | null = null;
+function getTracer() {
+  if (!_tracer) _tracer = trace.getTracer(TRACER_NAME);
+  return _tracer;
+}
+
 /**
  * SHA-256 hash truncated to 12 hex characters.
  * Provides collision-resistant pseudonymization without reversibility.
@@ -100,12 +107,19 @@ export function addSanitizedAttributes(
  * });
  * ```
  */
+/**
+ * Redact potential PII (wallet addresses, identity values) from error messages.
+ */
+function sanitizeErrorMessage(msg: string): string {
+  return msg.replace(/0x[a-fA-F0-9]{40}/g, '0x[REDACTED]');
+}
+
 export async function startSanitizedSpan<T>(
   spanName: string,
   attrs: Record<string, unknown>,
   fn: (span: Span) => Promise<T>,
 ): Promise<T> {
-  const tracer = trace.getTracer(TRACER_NAME);
+  const tracer = getTracer();
   const sanitized = sanitizeAttributes(spanName, attrs);
 
   return tracer.startActiveSpan(spanName, async (span) => {
@@ -115,11 +129,12 @@ export async function startSanitizedSpan<T>(
       span.setStatus({ code: SpanStatusCode.OK });
       return result;
     } catch (err) {
+      const rawMsg = err instanceof Error ? err.message : String(err);
       span.setStatus({
         code: SpanStatusCode.ERROR,
-        message: err instanceof Error ? err.message : String(err),
+        message: sanitizeErrorMessage(rawMsg),
       });
-      span.recordException(err instanceof Error ? err : new Error(String(err)));
+      span.recordException(new Error(sanitizeErrorMessage(rawMsg)));
       throw err;
     } finally {
       span.end();
