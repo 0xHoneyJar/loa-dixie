@@ -37,6 +37,7 @@ import { createAgentRoutes } from './routes/agent.js';
 import { CompoundLearningEngine } from './services/compound-learning.js';
 import { createLearningRoutes } from './routes/learning.js';
 import { createReputationRoutes } from './routes/reputation.js';
+import { ReputationCache } from './services/reputation-cache.js';
 import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
 import { protocolVersionMiddleware } from './services/protocol-version.js';
@@ -450,9 +451,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // GET /:nftId: full aggregate (builder+)
   // GET /:nftId/cohorts: per-model task cohorts (builder+)
   // GET /population: population stats (admin-gated)
+  const reputationCache = new ReputationCache(); // 5s TTL, 10K max entries
   app.route('/api/reputation', createReputationRoutes({
     reputationService,
     adminKey: config.adminKey,
+    cache: reputationCache,
   }));
 
   // --- Phase 2: Agent API with TBA authentication ---

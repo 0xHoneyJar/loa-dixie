@@ -12,9 +12,10 @@
 import { Hono } from 'hono';
 import type { ReputationService } from '../services/reputation-service.js';
 import { isValidPathParam } from '../validation.js';
-import { tierMeetsRequirement } from '../types/conviction.js';
+import { tierMeetsRequirement, TIER_ORDER } from '../types/conviction.js';
 import type { ConvictionTier } from '../types/conviction.js';
 import { safeEqual } from '../utils/crypto.js';
+import { ReputationCache } from '../services/reputation-cache.js';
 
 // ---------------------------------------------------------------------------
 // T2.1: ReputationRouteDeps interface
@@ -23,6 +24,7 @@ import { safeEqual } from '../utils/crypto.js';
 export interface ReputationRouteDeps {
   reputationService: ReputationService;
   adminKey?: string;
+  cache?: ReputationCache;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,12 +45,20 @@ function parseRoutingKey(routingKey: string): string | null {
 
 const REQUIRED_TIER: ConvictionTier = 'builder';
 
+/** Validate that a header value is a known conviction tier. */
+const VALID_TIERS = new Set<string>(TIER_ORDER);
+
+function parseConvictionTier(raw: string | undefined): ConvictionTier {
+  if (raw && VALID_TIERS.has(raw)) return raw as ConvictionTier;
+  return 'observer';
+}
+
 // ---------------------------------------------------------------------------
 // T2.2: createReputationRoutes factory
 // ---------------------------------------------------------------------------
 
 export function createReputationRoutes(deps: ReputationRouteDeps): Hono {
-  const { reputationService, adminKey } = deps;
+  const { reputationService, adminKey, cache } = deps;
   const app = new Hono();
 
   // -------------------------------------------------------------------------
@@ -66,16 +76,27 @@ export function createReputationRoutes(deps: ReputationRouteDeps): Hono {
       return c.json({ score: null });
     }
 
+    // Cache-aside: check cache first (includes negative caching for cold agents)
+    if (cache) {
+      const cached = cache.get(nftId);
+      if (cached !== undefined) {
+        return c.json({ score: cached });
+      }
+    }
+
     const aggregate = await reputationService.store.get(nftId);
     if (!aggregate) {
+      cache?.set(nftId, null); // Negative cache: prevent PG storms on cold keys
       return c.json({ score: null });
     }
 
     // Return null for cold agents (no observations yet)
     if (aggregate.blended_score === null || aggregate.blended_score === undefined) {
+      cache?.set(nftId, null);
       return c.json({ score: null });
     }
 
+    cache?.set(nftId, aggregate.blended_score);
     return c.json({ score: aggregate.blended_score });
   });
 
@@ -117,7 +138,7 @@ export function createReputationRoutes(deps: ReputationRouteDeps): Hono {
     }
 
     // Conviction tier gating: builder+
-    const tier = (c.req.header('x-conviction-tier') ?? 'observer') as ConvictionTier;
+    const tier = parseConvictionTier(c.req.header('x-conviction-tier'));
     if (!tierMeetsRequirement(tier, REQUIRED_TIER)) {
       return c.json({ error: 'forbidden', message: 'Requires builder+ conviction tier' }, 403);
     }
@@ -148,7 +169,7 @@ export function createReputationRoutes(deps: ReputationRouteDeps): Hono {
       return c.json({ error: 'invalid_request', message: 'Invalid NFT ID' }, 400);
     }
 
-    const tier = (c.req.header('x-conviction-tier') ?? 'observer') as ConvictionTier;
+    const tier = parseConvictionTier(c.req.header('x-conviction-tier'));
     if (!tierMeetsRequirement(tier, REQUIRED_TIER)) {
       return c.json({ error: 'forbidden', message: 'Requires builder+ conviction tier' }, 403);
     }

@@ -17,6 +17,7 @@ import {
   InMemoryReputationStore,
   CollectionScoreAggregator,
 } from '../../../src/services/reputation-service.js';
+import { ReputationCache } from '../../../src/services/reputation-cache.js';
 import type { ReputationAggregate } from '@0xhoneyjar/loa-hounfour/governance';
 
 function makeAggregate(overrides: Partial<ReputationAggregate> = {}): ReputationAggregate {
@@ -329,5 +330,119 @@ describe('GET /api/reputation/population', () => {
     expect(body.variance).toBe(0);
     expect(body.population_size).toBe(0);
     expect(body.store_count).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cache integration tests (Bridge iter-2: medium-1)
+// ---------------------------------------------------------------------------
+
+describe('GET /api/reputation/query — cache integration', () => {
+  let store: InMemoryReputationStore;
+  let cache: ReputationCache;
+
+  beforeEach(async () => {
+    store = new InMemoryReputationStore();
+    cache = new ReputationCache({ ttlMs: 5000 });
+    await store.put('nft-cached', makeAggregate({ blended_score: 0.85 }));
+  });
+
+  function buildCachedApp() {
+    const aggregator = new CollectionScoreAggregator();
+    const service = new ReputationService(store, aggregator);
+    const app = new Hono();
+    app.route('/api/reputation', createReputationRoutes({
+      reputationService: service,
+      cache,
+    }));
+    return app;
+  }
+
+  it('populates cache on first query and serves from cache on second', async () => {
+    const app = buildCachedApp();
+
+    // First query — cache miss, hits store
+    const res1 = await app.request('/api/reputation/query?routingKey=nft:nft-cached');
+    expect(res1.status).toBe(200);
+    const body1 = await res1.json();
+    expect(body1.score).toBe(0.85);
+    expect(cache.metrics.misses).toBe(1);
+    expect(cache.metrics.hits).toBe(0);
+
+    // Second query — cache hit, no store access
+    const res2 = await app.request('/api/reputation/query?routingKey=nft:nft-cached');
+    expect(res2.status).toBe(200);
+    const body2 = await res2.json();
+    expect(body2.score).toBe(0.85);
+    expect(cache.metrics.hits).toBe(1);
+  });
+
+  it('negative-caches null for unknown agents', async () => {
+    const app = buildCachedApp();
+
+    // First query — cache miss, store returns null
+    await app.request('/api/reputation/query?routingKey=nft:nft-ghost');
+    expect(cache.metrics.misses).toBe(1);
+
+    // Second query — cache hit (negative cache), returns null
+    const res = await app.request('/api/reputation/query?routingKey=nft:nft-ghost');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.score).toBeNull();
+    expect(cache.metrics.hits).toBe(1);
+  });
+
+  it('works without cache (cache=undefined)', async () => {
+    // Original behavior — no cache passed
+    const app = createTestApp(store);
+    const res = await app.request('/api/reputation/query?routingKey=nft:nft-cached');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.score).toBe(0.85);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Conviction tier validation tests (Bridge iter-2: medium-3)
+// ---------------------------------------------------------------------------
+
+describe('Conviction tier header validation', () => {
+  let store: InMemoryReputationStore;
+  let app: Hono;
+
+  beforeEach(async () => {
+    store = new InMemoryReputationStore();
+    await store.put('nft-1', makeAggregate());
+    app = createTestApp(store);
+  });
+
+  it('rejects invalid tier strings (defaults to observer → 403)', async () => {
+    const res = await app.request('/api/reputation/nft-1', {
+      headers: { 'x-conviction-tier': 'superadmin' },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects empty tier string (defaults to observer → 403)', async () => {
+    const res = await app.request('/api/reputation/nft-1', {
+      headers: { 'x-conviction-tier': '' },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('accepts all valid tier names', async () => {
+    for (const tier of ['builder', 'architect', 'sovereign']) {
+      const res = await app.request('/api/reputation/nft-1', {
+        headers: { 'x-conviction-tier': tier },
+      });
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it('rejects case-mismatched tier names', async () => {
+    const res = await app.request('/api/reputation/nft-1', {
+      headers: { 'x-conviction-tier': 'Builder' },
+    });
+    expect(res.status).toBe(403);
   });
 });
