@@ -32,6 +32,7 @@ export interface ReputationRouteDeps {
 const ROUTING_KEY_RE = /^nft:[a-zA-Z0-9_-]+$/;
 
 function parseRoutingKey(routingKey: string): string | null {
+  if (routingKey.length > 132) return null; // 4-char prefix + 128-char max nftId
   if (!ROUTING_KEY_RE.test(routingKey)) return null;
   return routingKey.slice(4); // strip 'nft:' prefix
 }

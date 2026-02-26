@@ -208,6 +208,9 @@ export class CollectionScoreAggregator {
    * @since cycle-011 — Sprint 82, Task T1.4
    */
   restore(data: { count: number; mean: number; m2: number }): void {
+    if (!Number.isFinite(data.count) || data.count < 0) return;
+    if (!Number.isFinite(data.mean)) return;
+    if (!Number.isFinite(data.m2) || data.m2 < 0) return;
     this._count = data.count;
     this._mean = data.mean;
     this._m2 = data.m2;
