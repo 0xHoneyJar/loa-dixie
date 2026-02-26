@@ -165,7 +165,7 @@ Directory structure:
 <!-- provenance: DERIVED -->
 | Module | Files | Purpose | Documentation |
 |--------|-------|---------|---------------|
-| `app/` | 60167 | Source code | \u2014 |
+| `app/` | 60185 | Source code | \u2014 |
 | `deploy/` | 6 | Infrastructure and deployment | \u2014 |
 | `docs/` | 9 | Documentation | \u2014 |
 | `evals/` | 122 | Benchmarking and regression framework for the Loa agent development system. Ensures framework changes don't degrade agent behavior through | [evals/README.md](evals/README.md) |
@@ -191,15 +191,15 @@ The project defines 1 specialized agent persona.
 |-------|----------|-------|
 | Bridgebuilder | You are the Bridgebuilder — a senior engineering mentor who has spent decades building systems at scale. | Your voice is warm, precise, and rich with analogy. |
 <!-- ground-truth-meta
-head_sha: 494c6fdb6eaa5fc4ec7c54ef3982a673fd674ab4
-generated_at: 2026-02-26T04:35:42Z
+head_sha: 65e84dd60026114aa0c92bfe69b9ce992f9cd22a
+generated_at: 2026-02-26T05:03:20Z
 generator: butterfreezone-gen v1.0.0
 sections:
   agent_context: 2ce7bcd812342baabd13ae33d3cff76b551975309ad212a804f31d47df41a07d
   capabilities: ab2576b1f2e7e8141f0e93e807d26ed2b7b155e21c96d787507a3ba933bb9795
   architecture: 2291b5acc8f95089347fe0146b2603bb4d33b937eb60b3277a129931a3cd7452
   interfaces: 20a2cc65006984c05aaeb9e858ecf7fce9eae4f32ef6e8076eebd450a539eb6c
-  module_map: 97d362eb39ca5aa568ab79c400a24b5b6843719101a014f2e9e7a32693a3f3eb
+  module_map: 6d693789078f8291b82b4b8d997fe71e6333df4393abddb633c6f830dd1adde0
   verification: 0e7f3bae9b45bb26c5aee59e23dabef235774a97136fb724f3fcdca621491b5b
   agents: ca263d1e05fd123434a21ef574fc8d76b559d22060719640a1f060527ef6a0b6
 -->
