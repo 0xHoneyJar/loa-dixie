@@ -329,9 +329,8 @@ describe('FleetSaga', () => {
     });
 
     it('proceeds with saga when no dedup match found', async () => {
-      registry.query.mockResolvedValue([
-        makeTask({ contextHash: 'different-token' }),
-      ]);
+      // Indexed query by contextHash returns empty — no match (BF-007)
+      registry.query.mockResolvedValue([]);
 
       const proposed = makeTask({ status: 'proposed', version: 0 });
       const spawning = makeTask({ status: 'spawning', version: 1 });

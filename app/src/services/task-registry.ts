@@ -225,6 +225,11 @@ export class TaskRegistry {
       params.push(filters.taskType);
     }
 
+    if (filters.contextHash) {
+      conditions.push(`context_hash = $${paramIdx++}`);
+      params.push(filters.contextHash);
+    }
+
     if (filters.since) {
       conditions.push(`created_at >= $${paramIdx++}`);
       params.push(filters.since);

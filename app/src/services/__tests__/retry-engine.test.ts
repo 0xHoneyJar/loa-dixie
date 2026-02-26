@@ -98,6 +98,9 @@ function createMockEventBus() {
 // Tests
 // ---------------------------------------------------------------------------
 
+/** Instant-resolve sleep for testing (BF-003). */
+const instantSleep = vi.fn().mockResolvedValue(undefined);
+
 describe('RetryEngine', () => {
   let registry: ReturnType<typeof createMockRegistry>;
   let spawner: ReturnType<typeof createMockSpawner>;
@@ -106,7 +109,7 @@ describe('RetryEngine', () => {
   let engine: RetryEngine;
 
   beforeEach(() => {
-    vi.useFakeTimers();
+    instantSleep.mockClear();
     registry = createMockRegistry();
     spawner = createMockSpawner();
     enrichment = createMockEnrichmentEngine();
@@ -116,7 +119,7 @@ describe('RetryEngine', () => {
       spawner as any,
       enrichment as any,
       eventBus as any,
-      { retryDelayMs: 100, maxRetries: 3, maxPromptTokens: 8000 },
+      { retryDelayMs: 100, maxRetries: 3, maxPromptTokens: 8000, sleep: instantSleep },
     );
   });
 
@@ -133,11 +136,7 @@ describe('RetryEngine', () => {
         .mockResolvedValueOnce({ ...task, status: 'retrying', version: 3 })  // failed -> retrying
         .mockResolvedValueOnce({ ...task, status: 'spawning', version: 4 }); // retrying -> spawning
 
-      const promise = engine.attemptRetry('task-1');
-      // Advance timers to resolve the backoff delay
-      await vi.advanceTimersByTimeAsync(MAX_POSSIBLE_DELAY);
-
-      const result = await promise;
+      const result = await engine.attemptRetry('task-1');
 
       expect(result.retried).toBe(true);
       expect(result.reason).toContain('Retry 2/3');
@@ -148,6 +147,9 @@ describe('RetryEngine', () => {
         'claude_code',
         'enriched retry prompt',
       );
+      // Verify sleep was called with computed backoff delay
+      expect(instantSleep).toHaveBeenCalledOnce();
+      expect(instantSleep.mock.calls[0][0]).toBeGreaterThan(0);
     });
 
     it('transitions to abandoned when retry budget exhausted', async () => {
@@ -204,9 +206,7 @@ describe('RetryEngine', () => {
         .mockResolvedValueOnce({ ...task, status: 'retrying', version: 3 })
         .mockResolvedValueOnce({ ...task, status: 'spawning', version: 4 });
 
-      const promise = engine.attemptRetry('task-1');
-      await vi.advanceTimersByTimeAsync(MAX_POSSIBLE_DELAY);
-      await promise;
+      await engine.attemptRetry('task-1');
 
       expect(eventBus.emit).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -233,9 +233,7 @@ describe('RetryEngine', () => {
         .mockResolvedValueOnce({ ...task, status: 'retrying', version: 3 })
         .mockResolvedValueOnce({ ...task, status: 'spawning', version: 4 });
 
-      const promise = engine.attemptRetry('task-1');
-      await vi.advanceTimersByTimeAsync(MAX_POSSIBLE_DELAY);
-      await promise;
+      await engine.attemptRetry('task-1');
 
       // buildPrompt should be called with reduced token budget (8000 * 0.75 = 6000)
       expect(enrichment.buildPrompt).toHaveBeenCalledWith(
@@ -257,9 +255,7 @@ describe('RetryEngine', () => {
         .mockResolvedValueOnce({ ...task, status: 'retrying', version: 3 })
         .mockResolvedValueOnce({ ...task, status: 'spawning', version: 4 });
 
-      const promise = engine.attemptRetry('task-1');
-      await vi.advanceTimersByTimeAsync(MAX_POSSIBLE_DELAY);
-      await promise;
+      await engine.attemptRetry('task-1');
 
       expect(enrichment.buildPrompt).toHaveBeenCalledWith(
         expect.anything(),
@@ -280,9 +276,7 @@ describe('RetryEngine', () => {
         .mockResolvedValueOnce({ ...task, status: 'retrying', version: 3 })
         .mockResolvedValueOnce({ ...task, status: 'spawning', version: 4 });
 
-      const promise = engine.attemptRetry('task-1');
-      await vi.advanceTimersByTimeAsync(MAX_POSSIBLE_DELAY);
-      await promise;
+      await engine.attemptRetry('task-1');
 
       expect(enrichment.buildPrompt).toHaveBeenCalledWith(
         expect.anything(),
@@ -359,5 +353,3 @@ describe('computeBackoffDelay()', () => {
   });
 });
 
-// Helper: max possible delay for test timer advancement
-const MAX_POSSIBLE_DELAY = 120_001;

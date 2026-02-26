@@ -32,6 +32,8 @@ export interface RetryEngineConfig {
   readonly reduceContextOnOom: boolean;
   /** Maximum prompt tokens for enriched retry prompts. */
   readonly maxPromptTokens: number;
+  /** Injectable sleep function for testability (BF-003). Defaults to real setTimeout. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }
 
 /** Result of an attemptRetry() call. */
@@ -100,8 +102,13 @@ export function computeBackoffDelay(baseDelayMs: number, attempt: number): numbe
  *
  * @since cycle-012 — Sprint 90
  */
+/** Default sleep using real setTimeout. */
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 export class RetryEngine {
   private readonly config: RetryEngineConfig;
+  private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(
     private readonly registry: TaskRegistry,
@@ -111,6 +118,7 @@ export class RetryEngine {
     config?: Partial<RetryEngineConfig>,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.sleep = config?.sleep ?? defaultSleep;
   }
 
   /**
@@ -199,9 +207,9 @@ export class RetryEngine {
       'retrying',
     );
 
-    // Step 7: Wait with exponential backoff + jitter
+    // Step 7: Wait with exponential backoff + jitter (uses injectable sleep — BF-003)
     const delay = computeBackoffDelay(this.config.retryDelayMs, task.retryCount);
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    await this.sleep(delay);
 
     // Step 8: Transition retrying -> spawning
     const spawning = await this.registry.transition(

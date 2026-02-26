@@ -97,20 +97,17 @@ export class FleetSaga {
     prompt: string,
     idempotencyToken: string,
   ): Promise<SagaResult> {
-    // Idempotency check: look for existing task with matching context hash
+    // Idempotency check: indexed query by contextHash (BF-007)
     const existing = await this.registry.query({
+      contextHash: idempotencyToken,
       operatorId: input.operatorId,
       limit: 1,
     });
 
-    const deduped = existing.find(
-      (t) => t.contextHash === idempotencyToken,
-    );
-
-    if (deduped) {
+    if (existing.length > 0) {
       return {
         success: true,
-        taskId: deduped.id,
+        taskId: existing[0].id,
       };
     }
 

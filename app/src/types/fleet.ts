@@ -158,6 +158,7 @@ export interface TaskQueryFilters {
   readonly status?: FleetTaskStatus | FleetTaskStatus[];
   readonly agentType?: AgentType;
   readonly taskType?: TaskType;
+  readonly contextHash?: string;
   readonly since?: string;
   readonly limit?: number;
 }

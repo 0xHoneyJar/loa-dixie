@@ -167,16 +167,9 @@ function createMockNotifications() {
 
 function createMockSaga() {
   return {
-    execute: vi.fn().mockResolvedValue({
-      taskRecord: makeTaskRecord({ status: 'spawning' }),
-      handle: {
-        taskId: 'task-001',
-        branch: 'fleet/task-001',
-        worktreePath: '/tmp/fleet/task-001',
-        processRef: 'fleet-task-001',
-        mode: 'local' as const,
-        spawnedAt: '2026-02-26T00:00:00Z',
-      },
+    executeSpawn: vi.fn().mockResolvedValue({
+      success: true,
+      taskId: 'task-001',
     }),
   };
 }
@@ -228,7 +221,12 @@ describe('ConductorEngine', () => {
   // -------------------------------------------------------------------------
 
   describe('spawn', () => {
+    const runningTask = makeTaskRecord({ status: 'running', worktreePath: '/tmp/fleet/task-001' });
+
     it('happy path: governor allows, model selected, saga executed, result returned', async () => {
+      // After saga succeeds, conductor fetches the task from registry
+      registry.get.mockResolvedValue(runningTask);
+
       const request = makeSpawnRequest();
       const result = await conductor.spawn(request, 'architect');
 
@@ -243,25 +241,25 @@ describe('ConductorEngine', () => {
       // Enrichment
       expect(enrichment.buildPrompt).toHaveBeenCalledOnce();
 
-      // Saga execution
-      expect(saga.execute).toHaveBeenCalledOnce();
-      const sagaArgs = saga.execute.mock.calls[0][0];
-      expect(sagaArgs.request).toBe(request);
-      expect(sagaArgs.operatorTier).toBe('architect');
-      expect(sagaArgs.model).toBe('claude-opus-4-6');
-      expect(sagaArgs.agentType).toBe('claude_code');
-      expect(sagaArgs.prompt).toBe('enriched prompt text');
-      expect(sagaArgs.contextHash).toBe('abc123hash');
-      expect(sagaArgs.idempotencyToken).toBeDefined();
+      // Saga execution — now calls executeSpawn with positional args (BF-001)
+      expect(saga.executeSpawn).toHaveBeenCalledOnce();
+      const [sagaInput, tier, prompt, token] = saga.executeSpawn.mock.calls[0];
+      expect(sagaInput.operatorId).toBe('operator-1');
+      expect(sagaInput.taskType).toBe('feature');
+      expect(sagaInput.description).toBe('Build the thing');
+      expect(sagaInput.model).toBe('claude-opus-4-6');
+      expect(sagaInput.agentType).toBe('claude_code');
+      expect(tier).toBe('architect');
+      expect(prompt).toBe('enriched prompt text');
+      expect(token).toBeDefined();
+      expect(typeof token).toBe('string');
+      expect(token.length).toBe(64); // SHA-256 hex = 64 chars
 
-      // Event emission
-      expect(eventBus.emit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'AGENT_SPAWNED',
-          taskId: 'task-001',
-          operatorId: 'operator-1',
-        }),
-      );
+      // Event NOT emitted by conductor (BF-006 — saga owns this)
+      expect(eventBus.emit).not.toHaveBeenCalled();
+
+      // Registry.get called to fetch task after saga
+      expect(registry.get).toHaveBeenCalledWith('task-001');
 
       // Result shape
       expect(result).toEqual({
@@ -270,11 +268,12 @@ describe('ConductorEngine', () => {
         worktreePath: '/tmp/fleet/task-001',
         agentType: 'claude_code',
         model: 'claude-opus-4-6',
-        status: 'spawning',
+        status: 'running',
       });
     });
 
     it('passes explicit model override to router', async () => {
+      registry.get.mockResolvedValue(runningTask);
       const request = makeSpawnRequest({ model: 'codex-mini-latest' });
       await conductor.spawn(request, 'architect');
 
@@ -292,18 +291,48 @@ describe('ConductorEngine', () => {
       ).rejects.toThrow(SpawnDeniedError);
 
       // Saga should never be called
-      expect(saga.execute).not.toHaveBeenCalled();
+      expect(saga.executeSpawn).not.toHaveBeenCalled();
     });
 
-    it('saga failure propagates to caller', async () => {
-      saga.execute.mockRejectedValue(new Error('Worktree creation failed'));
+    it('saga failure (rejected promise) propagates to caller', async () => {
+      saga.executeSpawn.mockRejectedValue(new Error('Worktree creation failed'));
 
       await expect(
         conductor.spawn(makeSpawnRequest(), 'architect'),
       ).rejects.toThrow('Worktree creation failed');
     });
 
+    it('saga failure (success: false) throws descriptive error', async () => {
+      saga.executeSpawn.mockResolvedValue({
+        success: false,
+        taskId: 'task-001',
+        failedStep: 'spawnAgent',
+        error: 'Docker daemon not running',
+      });
+
+      await expect(
+        conductor.spawn(makeSpawnRequest(), 'architect'),
+      ).rejects.toThrow("Saga failed at step 'spawnAgent': Docker daemon not running");
+    });
+
+    it('uses deterministic idempotency token (BF-002)', async () => {
+      registry.get.mockResolvedValue(runningTask);
+      const request = makeSpawnRequest();
+
+      await conductor.spawn(request, 'architect');
+      const token1 = saga.executeSpawn.mock.calls[0][3];
+
+      // Same request should produce same token (deterministic)
+      saga.executeSpawn.mockClear();
+      saga.executeSpawn.mockResolvedValue({ success: true, taskId: 'task-001' });
+      await conductor.spawn(request, 'architect');
+      const token2 = saga.executeSpawn.mock.calls[0][3];
+
+      expect(token1).toBe(token2);
+    });
+
     it('includes contextOverrides as BACKGROUND sections in enrichment', async () => {
+      registry.get.mockResolvedValue(runningTask);
       const request = makeSpawnRequest({
         contextOverrides: { 'Style Guide': 'Use functional patterns' },
       });

@@ -13,8 +13,6 @@
  * See: SDD §6.1 (Conductor Engine), §6.2 (spawn flow)
  * @since cycle-012 — Sprint 91, Task T-6.1
  */
-import * as crypto from 'node:crypto';
-
 import type { TaskRegistry } from './task-registry.js';
 import { TERMINAL_STATUSES, TaskNotFoundError, ActiveTaskDeletionError } from './task-registry.js';
 import type { FleetGovernor } from './fleet-governor.js';
@@ -26,8 +24,10 @@ import type { ContextEnrichmentEngine } from './context-enrichment-engine.js';
 import { createSection } from './context-enrichment-engine.js';
 import type { CrossGovernorEventBus } from './cross-governor-event-bus.js';
 import type { NotificationService } from './notification-service.js';
+import { FleetSaga } from './fleet-saga.js';
 import type { ConvictionTier } from '../types/conviction.js';
 import type {
+  CreateFleetTaskInput,
   SpawnRequest,
   SpawnResult,
   FleetStatusSummary,
@@ -35,38 +35,6 @@ import type {
   FleetTaskRecord,
   FleetTaskStatus,
 } from '../types/fleet.js';
-
-// ---------------------------------------------------------------------------
-// FleetSaga Interface (minimal — saga service may not exist yet)
-// ---------------------------------------------------------------------------
-
-/**
- * FleetSaga provides compensating transactions for the spawn flow.
- * If any step fails after the task is inserted, the saga rolls back
- * prior steps (e.g., cancel the DB record, remove worktree).
- */
-export interface FleetSaga {
-  /**
-   * Execute the spawn saga:
-   * 1. admitAndInsert via governor (creates DB record)
-   * 2. Spawn agent via spawner
-   * 3. Transition task through status lifecycle
-   *
-   * On failure at any step, compensating actions undo prior steps.
-   */
-  execute(params: {
-    request: SpawnRequest;
-    operatorTier: ConvictionTier;
-    model: string;
-    agentType: SpawnResult['agentType'];
-    prompt: string;
-    contextHash: string;
-    idempotencyToken: string;
-  }): Promise<{
-    taskRecord: FleetTaskRecord;
-    handle: AgentHandle;
-  }>;
-}
 
 // ---------------------------------------------------------------------------
 // Config
@@ -115,10 +83,12 @@ export class ConductorEngine {
    * 1. Fast pre-check via governor.canSpawn (cache-only, no DB)
    * 2. Select model via router (explicit override or task-type default)
    * 3. Build enriched prompt via context enrichment engine
-   * 4. Generate idempotency token
+   * 4. Generate deterministic idempotency token
    * 5. Execute saga (admitAndInsert -> spawn -> transitions)
-   * 6. Emit AGENT_SPAWNED event
-   * 7. Return SpawnResult
+   * 6. Return SpawnResult
+   *
+   * Note: AGENT_SPAWNED event is emitted by the saga itself (single
+   * source of truth for spawn lifecycle events — BF-006).
    *
    * @throws SpawnDeniedError if admission is denied (pre-check or DB)
    */
@@ -161,39 +131,50 @@ export class ConductorEngine {
 
     const enriched = this.enrichment.buildPrompt(sections);
 
-    // Step 4: Generate idempotency token
-    const idempotencyToken = crypto.randomUUID();
+    // Step 4: Generate deterministic idempotency token (BF-002)
+    const idempotencyToken = FleetSaga.generateIdempotencyToken(
+      request.description,
+      request.operatorId,
+    );
 
-    // Step 5: Execute saga
-    const { taskRecord, handle } = await this.saga.execute({
-      request,
-      operatorTier,
-      model: routing.model,
-      agentType: routing.agentType,
-      prompt: enriched.prompt,
-      contextHash: enriched.contextHash,
-      idempotencyToken,
-    });
-
-    // Step 6: Emit event
-    await this.eventBus.emit({
-      type: 'AGENT_SPAWNED',
-      taskId: taskRecord.id,
+    // Step 5: Build CreateFleetTaskInput for the saga (BF-001)
+    const branch = `fleet/${request.operatorId}-${Date.now()}`;
+    const sagaInput: CreateFleetTaskInput = {
       operatorId: request.operatorId,
-      timestamp: new Date().toISOString(),
-      metadata: {
-        model: routing.model,
-        agentType: routing.agentType,
-        routingReason: routing.reason,
-        branch: taskRecord.branch,
-      },
-    });
+      agentType: routing.agentType,
+      model: routing.model,
+      taskType: request.taskType,
+      description: request.description,
+      branch,
+      maxRetries: request.maxRetries,
+      contextHash: undefined, // saga injects idempotencyToken as contextHash
+    };
 
-    // Step 7: Return result
+    // Step 6: Execute saga with correct positional args (BF-001)
+    const sagaResult = await this.saga.executeSpawn(
+      sagaInput,
+      operatorTier,
+      enriched.prompt,
+      idempotencyToken,
+    );
+
+    if (!sagaResult.success || !sagaResult.taskId) {
+      throw new Error(
+        `Saga failed at step '${sagaResult.failedStep}': ${sagaResult.error}`,
+      );
+    }
+
+    // Step 7: Retrieve the completed task record from registry
+    const taskRecord = await this.registry.get(sagaResult.taskId);
+    if (!taskRecord) {
+      throw new Error(`Task ${sagaResult.taskId} not found after saga completion`);
+    }
+
+    // Step 8: Return result
     return {
       taskId: taskRecord.id,
       branch: taskRecord.branch,
-      worktreePath: handle.worktreePath,
+      worktreePath: taskRecord.worktreePath ?? '',
       agentType: routing.agentType,
       model: routing.model,
       status: taskRecord.status,
