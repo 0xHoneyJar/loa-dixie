@@ -196,10 +196,9 @@ export class GovernorRegistry {
     log?: (level: 'info' | 'warn', data: Record<string, unknown>) => void,
   ): CoordinationResult {
     if (event.target === '*') {
-      // Broadcast: log for all registered governors
+      // Broadcast: log for all registered governors (deduplicated across both maps)
       const allTypes = [
-        ...this.governors.keys(),
-        ...this.governedResources.keys(),
+        ...new Set([...this.governors.keys(), ...this.governedResources.keys()]),
       ];
       log?.('info', {
         event: 'governor_coordination_broadcast',

@@ -1,34 +1,32 @@
 {
-  "plan_id": "plan-20260226-dixie-mvp",
+  "plan_id": "plan-20260226-deep-review",
   "branch": "feature/dixie-mvp",
-  "state": "JACKED_OUT",
+  "state": "RUNNING",
   "timestamps": {
-    "started": "2026-02-25T07:50:00Z",
-    "last_activity": "2026-02-26T18:10:00Z"
+    "started": "2026-02-26T22:00:00Z",
+    "last_activity": "2026-02-26T22:00:00Z"
   },
   "sprints": {
-    "total": 7,
-    "completed": 7,
-    "current": null,
+    "total": 5,
+    "completed": 4,
+    "current": "sprint-5",
     "list": [
-      {"id": "sprint-1", "global_id": 94, "status": "completed", "cycles": 1, "files_changed": 8},
-      {"id": "sprint-2", "global_id": 95, "status": "completed", "cycles": 1, "files_changed": 6},
-      {"id": "sprint-3", "global_id": 96, "status": "completed", "cycles": 1, "files_changed": 8},
-      {"id": "sprint-4", "global_id": 97, "status": "completed", "cycles": 1, "files_changed": 6},
-      {"id": "sprint-5", "global_id": 98, "status": "completed", "cycles": 1, "files_changed": 8},
-      {"id": "sprint-6", "global_id": 99, "status": "completed", "cycles": 1, "files_changed": 12},
-      {"id": "sprint-7", "global_id": 100, "status": "completed", "cycles": 1, "files_changed": 10}
+      {"id": "sprint-1", "status": "completed", "cycles": 1, "files_changed": 13, "label": "Foundation & Infrastructure"},
+      {"id": "sprint-2", "status": "completed", "cycles": 1, "files_changed": 10, "label": "OTEL Instrumentation & PII Sanitization"},
+      {"id": "sprint-3", "status": "completed", "cycles": 1, "files_changed": 10, "label": "E2E Smoke Tests & Deployment Documentation"},
+      {"id": "sprint-4", "status": "completed", "cycles": 1, "files_changed": 7, "label": "Bridgebuilder Excellence — Observability Correctness & Staging Hardening"},
+      {"id": "sprint-5", "status": "pending", "cycles": 0, "files_changed": 0, "label": "Bridgebuilder Deep Review — Governance Excellence & Architectural Extraction"}
     ]
   },
   "options": {
-    "from": 1,
-    "to": 7,
+    "from": 5,
+    "to": 5,
     "max_cycles": 20,
     "timeout_hours": 8
   },
   "metrics": {
-    "total_cycles": 7,
-    "total_files_changed": 64,
-    "total_findings_fixed": 15
+    "total_cycles": 4,
+    "total_files_changed": 40,
+    "total_findings_fixed": 0
   }
 }

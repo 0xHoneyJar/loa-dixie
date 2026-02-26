@@ -9,11 +9,16 @@ describe('tracing middleware', () => {
 
   // Shared app setup — extracted per BB-S4-008
   let app: InstanceType<typeof Hono>;
+  let capturedTraceId: string | undefined;
 
   beforeEach(() => {
+    capturedTraceId = undefined;
     app = new Hono();
     app.use('*', createTracing('dixie-bff'));
-    app.get('/', (c) => c.text('ok'));
+    app.get('/', (c) => {
+      capturedTraceId = c.get('traceId');
+      return c.text('ok');
+    });
   });
 
   it('adds traceparent header to response', async () => {
@@ -42,5 +47,15 @@ describe('tracing middleware', () => {
     });
     const traceparent = res.headers.get('traceparent');
     expect(traceparent).toMatch(W3C_TRACEPARENT);
+  });
+
+  it('sets traceId on Hono context for log-trace correlation (S6-T7)', async () => {
+    await app.request('/');
+    // In no-op mode (no OTEL SDK), span context returns all-zero traceId.
+    // With a real SDK, it would be a real 32-hex trace ID.
+    // Either way, the traceId should be set on the Hono context.
+    expect(capturedTraceId).toBeDefined();
+    expect(typeof capturedTraceId).toBe('string');
+    expect(capturedTraceId!.length).toBe(32); // 32 hex chars
   });
 });

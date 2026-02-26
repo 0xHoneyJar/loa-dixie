@@ -875,13 +875,21 @@
           "label": "Bridgebuilder Deep Review — Governance Excellence & Architectural Extraction",
           "tasks": 11,
           "status": "pending"
+        },
+        {
+          "id": "sprint-6",
+          "global_id": 106,
+          "local_label": "sprint-6",
+          "label": "Final Convergence — Deferred LOWs, Flatline Remainders & Excellence Polish",
+          "tasks": 9,
+          "status": "pending"
         }
       ]
     }
   ],
   "active_cycle": "cycle-014",
   "active_bugfix": null,
-  "global_sprint_counter": 105,
+  "global_sprint_counter": 106,
   "bugfix_cycles": [],
   "release_cycles": [
     {

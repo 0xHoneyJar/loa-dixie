@@ -305,7 +305,61 @@ curl -s "http://localhost:3200/api/traces/$TRACE_ID" | jq '.batches[].scopeSpans
 - OTEL collector in staging is Tempo direct; production may need an OTEL Collector sidecar
 - NATS monitoring (port 8222) available in staging for debugging — production uses dedicated monitoring
 
-## 11. Teardown
+## 11. Connection Pool Sizing
+
+The PostgreSQL connection pool (`pg.Pool`) defaults to 10 connections. For staging
+this is typically sufficient, but awareness of the pool is important for diagnosing
+connection exhaustion under load.
+
+### Configuration
+
+Set `DATABASE_POOL_SIZE` in `.env.staging` to override the default:
+
+```env
+DATABASE_POOL_SIZE=20  # Default: 10
+```
+
+### Monitoring Pool Health
+
+```bash
+# Check active connections in PostgreSQL
+docker compose -f deploy/docker-compose.staging.yml exec postgres \
+  psql -U dixie -d dixie -c "SELECT count(*), state FROM pg_stat_activity WHERE datname='dixie' GROUP BY state;"
+```
+
+**Symptoms of pool exhaustion**:
+- Requests hang or time out after ~30s
+- `pg_stat_activity` shows many `idle in transaction` connections
+- Health endpoint returns `unhealthy` for postgresql dependency
+
+**Resolution**: Increase `DATABASE_POOL_SIZE`, investigate long-running transactions,
+or check for connection leaks (client not released in `finally` block).
+
+## 12. Boot-Time Expectations
+
+The staging stack boots to healthy in under 60 seconds. The CI workflow should
+use a 60-second timeout when polling the health endpoint.
+
+### Per-Service Boot Order
+
+| Order | Service | Expected Time | Dependency |
+|-------|---------|--------------|------------|
+| 1 | postgres | ~5s | None |
+| 2 | redis | ~2s | None |
+| 3 | nats | ~2s | None |
+| 4 | loa-finn | ~10-15s | None |
+| 5 | dixie-bff | ~5-10s | postgres, redis, nats, loa-finn (healthchecks) |
+| — | Tempo | ~5s | None (optional profile) |
+
+**Total cold-start time**: ~25-35s (services boot in parallel where possible).
+
+The `depends_on` health conditions ensure dixie-bff only starts once all
+infrastructure is ready. If boot exceeds 60s, check:
+- Docker image pull time (first run only — images are cached after)
+- PostgreSQL initialization on first-ever start (creates databases)
+- loa-finn model loading (depends on configured providers)
+
+## 13. Teardown
 
 ```bash
 # Stop all services and remove volumes (clean state)

@@ -174,8 +174,6 @@ export async function migrate(pool: DbPool): Promise<MigrationResult> {
           'Another instance may be migrating. Check and retry.',
       );
     }
-    // Reset lock_timeout to avoid leaking into connection pool
-    await lockClient.query("SET lock_timeout = '0'");
   } catch (err) {
     // S5-F17: Single release point — avoid double-release on lock failure
     if (!lockAcquired) {
@@ -185,6 +183,11 @@ export async function migrate(pool: DbPool): Promise<MigrationResult> {
   }
 
   try {
+    // S6-T2: Reset lock_timeout INSIDE the outer try block so that if this
+    // fails, the finally block still releases the advisory lock and client.
+    // Previously at line 178 in the inner try — a failure there would skip
+    // the outer try/finally entirely, leaking the lock client.
+    await lockClient.query("SET lock_timeout = '0'");
     // 1. Ensure tracking table exists
     await ensureMigrationsTable(pool);
 

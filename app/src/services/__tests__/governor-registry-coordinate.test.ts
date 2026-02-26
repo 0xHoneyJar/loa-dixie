@@ -132,4 +132,28 @@ describe('GovernorRegistry.coordinate()', () => {
     expect(logEntries[0].data.source).toBe('reputation');
     expect(logEntries[0].data.eventType).toBe('resource_frozen');
   });
+
+  it('deduplicates broadcast targets registered in both maps (S6-T1)', () => {
+    // Register same resource type in BOTH the governor map and governed resource map
+    const sharedType = 'shared-governor';
+    registry.register(stubGovernor(sharedType) as never);
+    registry.registerResource(stubResource(sharedType) as never);
+
+    // Also register a unique type in each map
+    registry.register(stubGovernor('governor-only') as never);
+    registry.registerResource(stubResource('resource-only') as never);
+
+    const event = makeEvent({ target: '*' });
+    const result = registry.coordinate(event, log);
+
+    expect(result.dispatched).toBe(true);
+    const targets = logEntries[0].data.targets as string[];
+    // Should have exactly 3, not 4 (sharedType appears only once)
+    expect(targets).toHaveLength(3);
+    expect(targets).toContain('shared-governor');
+    expect(targets).toContain('governor-only');
+    expect(targets).toContain('resource-only');
+    // Verify no duplicates
+    expect(new Set(targets).size).toBe(targets.length);
+  });
 });

@@ -5,8 +5,8 @@
 **Cycle**: cycle-014
 **PRD**: v14.1.0
 **SDD**: v14.1.0
-**Total Sprints**: 5
-**Global Sprint Range**: 101-105
+**Total Sprints**: 6
+**Global Sprint Range**: 101-106
 
 ---
 
@@ -285,6 +285,88 @@ Sprint 1-3 (Complete — PR #50)
 | Advisory lock ID change breaks running staging | New lock ID is a different number; no conflict with existing locks. Old lock auto-releases on disconnect |
 | GovernorRegistry coordinate() introduces coupling | Initial implementation is logging-only with no side effects — foundation for future cross-governor governance |
 | ADR documents become stale | RTFM-validatable format; middleware ordering comment references ADR for bidirectional link |
+
+---
+
+## Sprint 6: Final Convergence — Deferred LOWs, Flatline Remainders & Excellence Polish
+
+**Goal**: Address all remaining observations across bridge iterations, deferred Flatline findings, and Bridgebuilder Meditation actionable items. Zero known technical debt remaining in cycle-014.
+
+**Sources**:
+- Sprint 105 Bridge Iteration 3 (3 LOWs — flatlined, unaddressed)
+- Cycle-012/013 Bridge (2 LOWs — BF-008, BF-009)
+- Deferred Flatline PRD Findings (IMP-004, IMP-007, IMP-014)
+- Deferred Flatline Sprint Findings (IMP-012)
+- Bridgebuilder Meditation Horizons ([Part I](https://github.com/0xHoneyJar/loa-dixie/pull/50#issuecomment-3966426082) | [Part III](https://github.com/0xHoneyJar/loa-dixie/pull/50#issuecomment-3966560508))
+
+**Acceptance Criteria**:
+- GovernorRegistry broadcast produces deduplicated target list
+- Lock client released on all error paths in migrate.ts (no pool leaks)
+- Branch names deterministic for identical spawn requests
+- AGENT_SPAWNED events carry model and routing metadata
+- Barrel re-exports have @deprecated JSDoc with removal timeline
+- E2E health test validates OTEL trace export when Tempo is up
+- Structured log output includes trace_id for correlation
+- STAGING.md documents pool sizing guidance and boot-time expectations
+- Governance ADR documents evaluationGap growth trajectory pattern
+
+### Task Ordering
+
+Execute in this order to manage shared file dependencies:
+
+1. **T1** (governor-registry dedup) — modifies coordinate(), independent
+2. **T2** (migrate.ts lock leak) — modifies migrate.ts, independent
+3. **T3** (branch determinism) — modifies conductor-engine.ts, independent
+4. **T4** (saga routing metadata) — modifies fleet-saga.ts, depends on T3 for context
+5. **T5** (barrel deprecation) — modifies reputation-service.ts, independent
+6. **T6** (OTEL E2E validation) — modifies smoke-health.test.ts, independent
+7. **T7** (log-trace correlation) — modifies middleware/tracing.ts, independent
+8. **T8** (STAGING.md pool sizing + boot time) — modifies STAGING.md, independent
+9. **T9** (governance ADR update) — modifies existing ADR, independent
+
+### Tasks
+
+| # | Task | File(s) | AC | Source |
+|---|------|---------|-----|--------|
+| 1 | Deduplicate broadcast targets in `coordinate()` — use `Set` to merge governor and governedResource keys | `app/src/services/governor-registry.ts` | `allTypes` built via `new Set([...this.governors.keys(), ...this.governedResources.keys()])`. No duplicate entries when same resource type appears in both maps. Existing coordinate tests pass. New test verifies dedup when type registered in both maps. | Sprint-105 Bridge Iter 3 LOW |
+| 2 | Fix lock client leak on `SET lock_timeout` reset failure — move reset inside outer try block | `app/src/db/migrate.ts` | Move `SET lock_timeout = '0'` (line 178) from the inner try into the outer try block (after lock acquisition, before migration work). If the reset fails, the outer finally still releases the advisory lock and the client. All migration tests pass. Test verifies client release on lock_timeout reset failure. | Sprint-105 Bridge Iter 3 LOW |
+| 3 | Derive branch name from idempotency token instead of `Date.now()` | `app/src/services/conductor-engine.ts` | Branch name: `fleet/${operatorId}-${idempotencyToken.slice(0, 8)}` instead of `fleet/${operatorId}-${Date.now()}`. Two identical spawn requests produce the same branch name. Existing conductor tests pass. New test verifies deterministic branch for identical requests. | BF-008 (cycle-012/013 bridge) |
+| 4 | Include routing metadata (`model`, `routingReason`) in saga `AGENT_SPAWNED` event | `app/src/services/fleet-saga.ts`, `app/src/types/fleet.ts` | AGENT_SPAWNED event metadata includes `model` (from `input.model`) and `routingReason` (new optional field on `CreateFleetTaskInput`). Downstream consumers can reconstruct which model was selected and why. Existing saga tests updated. | BF-009 (cycle-012/013 bridge) |
+| 5 | Add `@deprecated` JSDoc + removal timeline to barrel re-exports | `app/src/services/reputation-service.ts` | All re-export blocks at lines 49-64 have `@deprecated` JSDoc with message: "Import directly from reputation-scoring-engine.ts / reputation-event-store.ts. Re-exports will be removed in cycle-016." Existing import tests pass. | Sprint-105 Bridge Iter 3 LOW |
+| 6 | Add OTEL trace validation to E2E health smoke test | `tests/e2e/staging/smoke-health.test.ts` | When `OTEL_EXPORTER_OTLP_ENDPOINT` is set and Tempo is running (observability profile), E2E health test queries Tempo API (`/api/search?tags=service.name%3Ddixie-bff`) and asserts at least 1 trace exists. Skipped gracefully when Tempo is not available. | Flatline PRD IMP-004 |
+| 7 | Add log-trace correlation — inject `trace_id` into structured log output | `app/src/middleware/tracing.ts`, `app/src/utils/logger.ts` (if exists, else tracing.ts only) | When OTEL span is active, the tracing middleware sets `c.set('traceId', span.spanContext().traceId)`. Structured log entries in downstream handlers can include `traceId` from context. Unit test verifies traceId is set on Hono context when span active, and absent when no SDK. | Flatline SDD IMP-014 |
+| 8 | Document connection pool sizing + boot-time expectations in STAGING.md | `STAGING.md` | New subsection in Troubleshooting: **Connection Pool Sizing** — documents default pool size (from pg defaults), how to tune via `DATABASE_POOL_SIZE` env var, symptoms of pool exhaustion, and monitoring query (`SELECT * FROM pg_stat_activity`). New subsection: **Boot-Time Expectations** — staging stack boots healthy in <60s; document per-service boot order and expected timing. CI workflow should use 60s health timeout. | Flatline PRD IMP-007, Sprint IMP-012 |
+| 9 | Update governance ADR with evaluationGap growth trajectory pattern | `docs/adr/004-governance-denial-response.md` (new) | New ADR documenting the pattern: when admission is denied, the response includes structured hints about what the agent would need to be approved (evaluationGap as Vygotsky's Zone of Proximal Development). References Bridgebuilder Meditation Part II §2.2 and Hounfour #32. Status: Proposed (roadmap for future implementation). Links to existing ADR-001 (middleware pipeline) for governance context. | Bridgebuilder Meditation Part II |
+
+---
+
+## Dependency Graph (Updated with Sprint 6)
+
+```
+Sprint 1-3 (Complete — PR #50)
+  └──→ Sprint 4 (Complete — Bridgebuilder Excellence)
+         └──→ Sprint 5 (Complete — Deep Review — Governance Excellence)
+                └──→ Sprint 6 (Final Convergence — All LOWs + Deferred)
+                       ├── T1: GovernorRegistry broadcast dedup (independent)
+                       ├── T2: migrate.ts lock client leak fix (independent)
+                       ├── T3: Conductor branch determinism (independent)
+                       │    └──→ T4: Saga routing metadata (context from T3)
+                       ├── T5: Barrel deprecation timeline (independent)
+                       ├── T6: OTEL E2E validation (independent)
+                       ├── T7: Log-trace correlation (independent)
+                       ├── T8: STAGING.md pool sizing + boot time (independent)
+                       └── T9: Governance ADR — evaluationGap (independent)
+```
+
+## Risk Mitigation (Sprint 6)
+
+| Risk | Mitigation |
+|------|------------|
+| CreateFleetTaskInput type change breaks consumers | `routingReason` is optional field — additive, non-breaking |
+| @deprecated annotations confuse IDE users | Clear message with timeline and alternative import paths |
+| OTEL E2E validation flaky without Tempo | Gated on Tempo availability — skips cleanly when not running |
+| Lock client leak fix changes error behavior | Only changes cleanup path, not happy path — existing tests validate both |
+| Governance ADR is speculative | Marked as "Proposed" status, not "Accepted" — signals roadmap intent |
 
 ---
 

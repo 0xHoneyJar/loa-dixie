@@ -288,6 +288,8 @@ export class FleetSaga {
     }
 
     // All steps succeeded — emit event
+    // S6-T4 / BF-009: Include model and routingReason so downstream consumers
+    // can reconstruct which model was selected and why.
     await this.eventBus.emit({
       type: 'AGENT_SPAWNED',
       taskId: taskRecord!.id,
@@ -297,6 +299,8 @@ export class FleetSaga {
         agentType: input.agentType,
         branch: input.branch,
         tier,
+        model: input.model,
+        routingReason: input.routingReason,
       },
     });
 

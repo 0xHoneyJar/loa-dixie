@@ -46,10 +46,12 @@ import type {
 import { MutationLog, createMutation } from './governance-mutation.js';
 import { startSanitizedSpan, addSanitizedAttributes } from '../utils/span-sanitizer.js';
 
-// Re-export from extracted modules for backward compatibility (BB-DEEP-03 T6).
-// MIGRATION: Prefer importing directly from the canonical modules:
-//   - reputation-scoring-engine.ts for scoring functions/constants
-//   - reputation-event-store.ts for event sourcing operations
+/**
+ * @deprecated Import directly from `reputation-scoring-engine.ts` instead.
+ * These re-exports exist for backward compatibility only and will be
+ * removed in cycle-016. See BB-DEEP-03 T6 for extraction rationale.
+ * @since cycle-014 Sprint 105 (extraction), Sprint 106 T5 (deprecation notice)
+ */
 export {
   computeDampenedScore,
   computeDimensionalBlended,
@@ -62,8 +64,14 @@ export {
   DEFAULT_COLLECTION_SCORE,
   TASK_MATCH_WEIGHT_MULTIPLIER,
 } from './reputation-scoring-engine.js';
+/** @deprecated Import directly from `reputation-scoring-engine.ts`. Removal: cycle-016. */
 export type { ReliabilityResult, BlendedScoreInput } from './reputation-scoring-engine.js';
 
+/**
+ * @deprecated Import directly from `reputation-event-store.ts` instead.
+ * These re-exports exist for backward compatibility only and will be
+ * removed in cycle-016. See BB-DEEP-03 T6 for extraction rationale.
+ */
 export {
   reconstructAggregateFromEvents,
   seedCollectionAggregator,

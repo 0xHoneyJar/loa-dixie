@@ -42,6 +42,12 @@ export function createTracing(serviceName: string) {
           c.header('x-trace-id', ctx.traceId);
           c.header('x-span-id', ctx.spanId);
 
+          // S6-T7 / Flatline IMP-014: Inject trace_id into Hono context so
+          // downstream handlers can include it in structured log output.
+          // Enables log-trace correlation: grep for traceId in logs, find
+          // matching trace in Tempo/Jaeger.
+          c.set('traceId', ctx.traceId);
+
           await next();
 
           addSanitizedAttributes(span, 'dixie.request', {

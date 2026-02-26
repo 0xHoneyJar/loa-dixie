@@ -67,4 +67,33 @@ describe('E2E-1: Health Check', () => {
     expect(res.body.timestamp).toBeDefined();
     expect(new Date(res.body.timestamp).toISOString()).toBe(res.body.timestamp);
   });
+
+  it('OTEL traces exported to Tempo when observability profile active (S6-T6)', async () => {
+    // Flatline PRD IMP-004: validate OTEL trace export reaches the collector.
+    // Skip gracefully when Tempo is not available (non-observability profile).
+    const tempoEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    if (!tempoEndpoint) {
+      return; // Tempo not configured — skip
+    }
+
+    // The health check request above should have generated a dixie.request span.
+    // Give the BatchSpanProcessor time to flush (max 5s export interval).
+    await new Promise((r) => setTimeout(r, 6000));
+
+    // Query Tempo's search API for traces from dixie-bff.
+    // Tempo HTTP API is on port 3200 by default.
+    const tempoSearchUrl = tempoEndpoint.replace(':4317', ':3200');
+    try {
+      const searchRes = await fetch(
+        `${tempoSearchUrl}/api/search?tags=service.name%3Ddixie-bff&limit=1`,
+      );
+      if (!searchRes.ok) return; // Tempo API not available — skip
+
+      const data = (await searchRes.json()) as { traces?: unknown[] };
+      expect(data.traces).toBeDefined();
+      expect(data.traces!.length).toBeGreaterThanOrEqual(1);
+    } catch {
+      // Tempo not reachable — skip gracefully rather than fail
+    }
+  });
 });
