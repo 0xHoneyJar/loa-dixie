@@ -226,14 +226,14 @@ NATS handles cross-service signal events (fleet lifecycle, governance decisions,
 
 **Internal URL** (within compose network): `nats://nats:4222`
 
-To debug from outside the compose network, temporarily expose the port:
+To enable NATS debug logging inside the container:
 
 ```bash
-# One-off debugging session
+# Toggle debug log output on the running NATS server
 docker compose -f deploy/docker-compose.staging.yml exec nats nats-server --signal ldm
 ```
 
-Or add a port mapping to the compose file for development:
+To connect from outside the compose network, temporarily expose the port:
 
 ```yaml
 # WARNING: Do NOT expose in production

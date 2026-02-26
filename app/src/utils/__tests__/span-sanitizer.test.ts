@@ -157,6 +157,7 @@ describe('sanitizeAttributes', () => {
       model: 'gpt-4',
       tokens: 1500,
       latency_ms: 230,
+      circuit_state: 'open',
       api_key: 'sk-secret',
     });
 
@@ -164,6 +165,7 @@ describe('sanitizeAttributes', () => {
       model: 'gpt-4',
       tokens: 1500,
       latency_ms: 230,
+      circuit_state: 'open',
     });
     expect(result).not.toHaveProperty('api_key');
   });
@@ -186,15 +188,17 @@ describe('sanitizeAttributes', () => {
   it('dixie.governance.check allowlist', () => {
     const result = sanitizeAttributes('dixie.governance.check', {
       resource_type: 'fleet_task',
-      decision: 'admit',
+      decision: 'denied',
       witness_count: 3,
+      denial_reason: 'tier_limit_exceeded',
       operator_wallet: '0xShouldStrip',
     });
 
     expect(result).toEqual({
       resource_type: 'fleet_task',
-      decision: 'admit',
+      decision: 'denied',
       witness_count: 3,
+      denial_reason: 'tier_limit_exceeded',
     });
   });
 });

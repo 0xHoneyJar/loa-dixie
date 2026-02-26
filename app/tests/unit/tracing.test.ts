@@ -3,6 +3,10 @@ import { Hono } from 'hono';
 import { createTracing } from '../../src/middleware/tracing.js';
 
 describe('tracing middleware', () => {
+  // W3C traceparent format: 00-{traceId 32hex}-{spanId 16hex}-{flags 2hex}
+  // In no-op mode (no OTEL SDK), traceFlags is 00; with SDK, reflects sampling.
+  const W3C_TRACEPARENT = /^00-[a-f0-9]{32}-[a-f0-9]{16}-[a-f0-9]{2}$/;
+
   it('adds traceparent header to response', async () => {
     const app = new Hono();
     app.use('*', createTracing('dixie-bff'));
@@ -11,7 +15,7 @@ describe('tracing middleware', () => {
     const res = await app.request('/');
     const traceparent = res.headers.get('traceparent');
     expect(traceparent).toBeTruthy();
-    expect(traceparent).toMatch(/^00-[a-f0-9]{32}-[a-f0-9]{16}-01$/);
+    expect(traceparent).toMatch(W3C_TRACEPARENT);
   });
 
   it('response traceparent uses OTEL span context IDs', async () => {
@@ -28,8 +32,7 @@ describe('tracing middleware', () => {
       },
     });
     const traceparent = res.headers.get('traceparent');
-    // Valid W3C format — the trace ID comes from OTEL span context
-    expect(traceparent).toMatch(/^00-[a-f0-9]{32}-[a-f0-9]{16}-01$/);
+    expect(traceparent).toMatch(W3C_TRACEPARENT);
   });
 
   it('generates new trace ID for malformed traceparent', async () => {
@@ -41,6 +44,6 @@ describe('tracing middleware', () => {
       headers: { traceparent: 'invalid' },
     });
     const traceparent = res.headers.get('traceparent');
-    expect(traceparent).toMatch(/^00-[a-f0-9]{32}-[a-f0-9]{16}-01$/);
+    expect(traceparent).toMatch(W3C_TRACEPARENT);
   });
 });

@@ -25,6 +25,7 @@ describe('span nesting', () => {
 
   afterAll(async () => {
     await provider.shutdown();
+    trace.disable();
   });
 
   beforeEach(() => {

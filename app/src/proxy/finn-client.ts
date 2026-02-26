@@ -108,11 +108,14 @@ export class FinnClient {
         // Forward traceparent to loa-finn for cross-service trace correlation.
         // Reads the active OTEL span context so Finn's spans share the same trace ID.
         // (Bridgebuilder Finding BB-PR50-F6)
+        // Forward traceparent to loa-finn using actual OTEL context IDs and flags.
+        // traceFlags reflects real sampling decision (BB-S4-001), not hardcoded 01.
         const traceHeaders: Record<string, string> = {};
         const activeSpan = trace.getActiveSpan();
         if (activeSpan) {
           const ctx = activeSpan.spanContext();
-          traceHeaders['traceparent'] = `00-${ctx.traceId}-${ctx.spanId}-01`;
+          const flags = ctx.traceFlags.toString(16).padStart(2, '0');
+          traceHeaders['traceparent'] = `00-${ctx.traceId}-${ctx.spanId}-${flags}`;
         }
 
         try {

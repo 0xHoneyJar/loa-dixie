@@ -10,9 +10,6 @@ import { describe, it, expect } from 'vitest';
 import { post, get } from './helpers/http.js';
 import { TEST_WALLET } from './helpers/siwe-wallet.js';
 
-// Unique per test run to avoid stale state collisions (Bridgebuilder Finding BB-PR50-F5)
-const RUN_ID = `e2e-${Date.now().toString(36)}`;
-
 // Fleet endpoints require TBA auth headers
 const TBA_HEADERS = {
   'x-agent-tba': '0x' + 'ab'.repeat(20),
