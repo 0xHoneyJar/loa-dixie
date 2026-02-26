@@ -89,7 +89,8 @@ conservative; mature agents (alpha = 0.5) are responsive. Verified by
 `reconstructAggregateFromEvents()` can rebuild any agent's aggregate by replaying the event
 log. This ensures the blended score is a deterministic function of the event history — no
 hidden state, full auditability. The event log is append-only; `credential_update` events are
-recorded for audit but do not alter scores.
+recorded for audit but do not alter scores. Verified by:
+`app/tests/unit/reputation-conservation.test.ts` (5 tests proving stepwise derivability).
 
 ## Consequences
 
