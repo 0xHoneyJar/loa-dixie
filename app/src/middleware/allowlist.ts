@@ -355,7 +355,7 @@ export function createAllowlistMiddleware(store: AllowlistStore) {
     }
 
     // Check JWT wallet auth
-    const wallet = c.get('wallet') as string | undefined;
+    const wallet = c.get('wallet');
     if (wallet) {
       if (store.hasWallet(wallet)) {
         store.audit({

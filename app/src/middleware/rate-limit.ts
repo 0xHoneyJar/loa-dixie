@@ -59,7 +59,7 @@ function createMemoryRateLimit(maxRpm: number, maxTracked?: number) {
   }
 
   return createMiddleware(async (c, next) => {
-    const wallet = c.get('wallet') as string | undefined;
+    const wallet = c.get('wallet');
     const ip = c.req.header('x-forwarded-for') ?? 'unknown';
     const key = wallet ?? ip;
 
@@ -123,7 +123,7 @@ function createRedisRateLimit(maxRpm: number, redis: RedisClient) {
   `;
 
   return createMiddleware(async (c, next) => {
-    const wallet = c.get('wallet') as string | undefined;
+    const wallet = c.get('wallet');
     const ip = c.req.header('x-forwarded-for') ?? 'unknown';
     const identity = wallet ?? ip;
 

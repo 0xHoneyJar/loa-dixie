@@ -7,12 +7,10 @@
  *
  * @since cycle-014 Sprint 106 — BF-001 (Bridgebuilder iteration 1)
  */
-import type { ConvictionTier } from './conviction.js';
-
 declare module 'hono' {
   interface ContextVariableMap {
-    /** Authenticated wallet address (set by JWT middleware). */
-    wallet: string;
+    /** Authenticated wallet address (set by JWT middleware). Undefined on unauthenticated routes. */
+    wallet: string | undefined;
     /** Unique request identifier (set by request-id middleware). */
     requestId: string;
     /** OTEL trace ID for log-trace correlation (set by tracing middleware). */

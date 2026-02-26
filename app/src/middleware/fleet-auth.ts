@@ -20,7 +20,7 @@ import type { DbPool } from '../db/client.js';
  */
 export function createFleetAuthMiddleware(pool: DbPool) {
   return createMiddleware(async (c, next) => {
-    const wallet = c.get('wallet') as string | undefined;
+    const wallet = c.get('wallet');
 
     if (!wallet) {
       return c.json({ error: 'unauthorized', message: 'Fleet operations require authentication' }, 401);
