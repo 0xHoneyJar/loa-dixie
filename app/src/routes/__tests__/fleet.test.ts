@@ -79,6 +79,11 @@ function createMockConductor() {
 
 function buildApp(conductor: ReturnType<typeof createMockConductor>) {
   const app = new Hono();
+  // Simulate fleet-auth middleware: populate isFleetAdmin from header
+  app.use('/fleet/*', async (c, next) => {
+    c.set('isFleetAdmin', c.req.header('x-fleet-admin') === 'true');
+    await next();
+  });
   const fleetRoutes = createFleetRoutes({ conductor: conductor as any });
   app.route('/fleet', fleetRoutes);
   return app;

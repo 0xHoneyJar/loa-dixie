@@ -12,7 +12,7 @@ import { Hono } from 'hono';
 
 import type { ConductorEngine } from '../services/conductor-engine.js';
 import { SpawnDeniedError, TaskNotFoundError, ActiveTaskDeletionError } from '../services/conductor-engine.js';
-import { parseConvictionTier } from '../types/conviction.js';
+import { parseConvictionTierStrict } from '../types/conviction.js';
 import type { ConvictionTier } from '../types/conviction.js';
 import type { TaskType, AgentType } from '../types/fleet.js';
 
@@ -73,10 +73,7 @@ export function createFleetRoutes(deps: FleetRouteDeps): Hono {
 
   fleet.post('/spawn', async (c) => {
     const operatorId = c.req.header('x-operator-id');
-    const operatorTierRaw = c.req.header('x-operator-tier');
-    const operatorTier: ConvictionTier | undefined = operatorTierRaw
-      ? parseConvictionTier(operatorTierRaw)
-      : undefined;
+    const operatorTier = parseConvictionTierStrict(c.req.header('x-operator-tier'));
 
     if (!operatorId) {
       return c.json({ error: 'unauthorized', message: 'Operator ID required' }, 401);
