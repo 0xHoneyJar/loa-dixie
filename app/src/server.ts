@@ -36,6 +36,7 @@ import { createTBAAuthMiddleware } from './middleware/tba-auth.js';
 import { createAgentRoutes } from './routes/agent.js';
 import { CompoundLearningEngine } from './services/compound-learning.js';
 import { createLearningRoutes } from './routes/learning.js';
+import { createReputationRoutes } from './routes/reputation.js';
 import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
 import { protocolVersionMiddleware } from './services/protocol-version.js';
@@ -442,6 +443,17 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Assembles governance context for review prompt enrichment.
   // Conviction-gated: builder+ tier required. 50ms latency budget enforced.
   app.route('/api/enrich', createEnrichmentRoutes({ enrichmentService }));
+
+  // --- cycle-011: Reputation query surface — autopoietic loop closure ---
+  // Closes the feedback loop: finn can query dixie for agent reputation scores.
+  // GET /query: lightweight score query (finn bridge)
+  // GET /:nftId: full aggregate (builder+)
+  // GET /:nftId/cohorts: per-model task cohorts (builder+)
+  // GET /population: population stats (admin-gated)
+  app.route('/api/reputation', createReputationRoutes({
+    reputationService,
+    adminKey: config.adminKey,
+  }));
 
   // --- Phase 2: Agent API with TBA authentication ---
   // TBA auth middleware applies only to /api/agent/* routes
