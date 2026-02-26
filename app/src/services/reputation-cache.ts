@@ -5,7 +5,11 @@
  * caching blended_score lookups to reduce PG pressure from finn polling.
  *
  * Config: 5s TTL, 10K max entries, LRU eviction.
- * Invalidation: call invalidate(nftId) on processEvent() for affected agent.
+ * Consistency model: eventual (5s max staleness). The 5s TTL provides a
+ * natural consistency window — processEvent writes land in PG immediately
+ * but the cache serves the prior value until TTL expires. This is acceptable
+ * for finn's polling cadence where sub-second freshness is not required.
+ * For tighter consistency, call invalidate(nftId) after processEvent().
  * Negative caching: caches null for cold/missing agents to prevent PG storms.
  *
  * @since cycle-011 — Sprint 83, Task T2.4c
