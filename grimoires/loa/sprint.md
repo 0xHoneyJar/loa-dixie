@@ -68,43 +68,38 @@
 
 ---
 
-## Sprint 4: PG-Backed KnowledgeGovernor (Stretch)
+## Sprint 4: ADR Documentation, Merge Prep & Cross-Repo Communication
 
 **Global ID**: 85 | **Local ID**: sprint-4
-**Focus**: FR-9 (three-witness durability)
-**Estimated Tests**: 12–15
+**Focus**: Bridgebuilder-suggested ADR improvements, invariant documentation, merge readiness, finn #66 command deck update
+**Estimated Tests**: 3–5 (invariant verification)
+
+### Context
+
+The Bridgebuilder deep review (PR #46 comment) identified two documentation gaps:
+1. **INV-013 (Reputation Conservation)** — blended_score must be derivable from events. Already enforced by code but not declared as a system invariant.
+2. **ADR: Autopoietic Loop Closure** — document WHY the loop was closed this way, what invariants it establishes, and what it unblocks.
+
+Additionally, PR #46 is CLEAN/MERGEABLE with 1488 tests passing and bridge flatline at 0.03. The final step is cross-repo communication: update finn #66 with what this work unblocked and what the next priority is.
 
 ### Tasks
 
 | ID | Task | Acceptance Criteria | File(s) |
 |----|------|-------------------|---------|
-| T-4.1 | **Define `KnowledgeStore` interface** | Methods: `get(corpusId)`, `put(corpusId, item)`, `list()`, `appendEvent(event)`, `getEventHistory()`, `getVersion()`, `incrementVersion()`. Mirrors `ReputationStore` pattern. | `app/src/services/knowledge-governor.ts` |
-| T-4.2 | **Extract `InMemoryKnowledgeStore`** | Extract current Map-based state from `KnowledgeGovernor` into `InMemoryKnowledgeStore` implementing `KnowledgeStore`. Governor's constructor accepts optional `KnowledgeStore`. Backward compatible — default is in-memory. | `app/src/services/knowledge-governor.ts` |
-| T-4.3 | **Create migration 012: `knowledge_events` table** | Table: `id SERIAL, event_type TEXT, detail JSONB, author TEXT, version INTEGER, created_at TIMESTAMPTZ DEFAULT NOW()`. Indexes on `event_type` and `created_at`. | `app/src/db/migrations/012-knowledge-events.sql` |
-| T-4.4 | **Implement `PostgresKnowledgeStore`** | Uses `knowledge_freshness` table (migration 010) for corpus items. Uses `knowledge_events` table (migration 012) for events. Parameterized queries. Follows `pg-reputation-store` patterns. | `app/src/services/pg-knowledge-store.ts` |
-| T-4.5 | **Wire PG KnowledgeStore into server.ts** | When `dbPool` available, create `PostgresKnowledgeStore(dbPool)` and pass to `KnowledgeGovernor`. Otherwise fall back to `InMemoryKnowledgeStore`. | `app/src/server.ts` |
-| T-4.6 | **Unit tests: InMemoryKnowledgeStore** | Test: CRUD operations, event append/history, version increment. Verify extraction didn't break existing behavior. | `tests/unit/services/knowledge-store.test.ts` |
-| T-4.7 | **Unit tests: PostgresKnowledgeStore** | Use `createMockPool()` pattern. Test: get/put/list queries. Test: event append. Test: version management. | `tests/unit/services/pg-knowledge-store.test.ts` |
+| T-4.1 | **Add INV-013: Reputation Conservation invariant** | Add to `invariants.yaml`: "For any agent, blended_score at time T is derivable from collection_score, personal_score, sample_count, and pseudo_count at time T." Severity: critical. Category: conservation. Verified_in: `reconstructAggregateFromEvents()` at reputation-service.ts, `verifyAggregateConsistency()` from hounfour, plus test references. | `grimoires/loa/invariants.yaml` |
+| T-4.2 | **Add INV-013 verification test** | Test that `reconstructAggregateFromEvents()` for any agent produces a blended_score matching the live aggregate. Replays 3+ events and verifies derivation. | `app/tests/unit/reputation-conservation.test.ts` |
+| T-4.3 | **Create ADR: Autopoietic Loop Closure** | Document in `app/docs/adr/` (new directory): Decision to close the loop via HTTP query surface (not event streaming, not shared DB). Record context (4 lineages converging), decision drivers (finn's `ReputationQueryFn` contract, eventual consistency acceptable, ES256 directional trust), consequences (5s cache staleness, JWT deployment dependency), and invariants established (INV-006 dampening, INV-013 conservation). Cross-reference: finn #66 Round 10, Bridgebuilder deep review. | `app/docs/adr/001-autopoietic-loop-closure.md` |
+| T-4.4 | **Post finn #66 Command Deck Update** | Post a structured comment on [loa-finn #66](https://github.com/0xHoneyJar/loa-finn/issues/66) with: (1) PR #46 merged status and what it delivers, (2) updated Protocol Version Matrix showing all 4 repos on v8.2.0, (3) what this unblocks for finn (wire `ReputationQueryFn`, Goodhart protection, parallel scoring), (4) next priority items by repo, (5) updated dependency graph. | GitHub comment on finn #66 |
+| T-4.5 | **Merge PR #46** | Squash-merge PR #46 into main. Verify merge state CLEAN, all checks passing, 1488 tests green. Close issues #36, #38, #43 that are fixed by this PR. | GitHub PR #46 |
 
 ---
 
-## Sprint 5: Event Bus & Adaptive Retrieval (Stretch)
+## Deferred to Future Cycles
 
-**Global ID**: 86 | **Local ID**: sprint-5
-**Focus**: FR-10 (event bus), FR-11 (adaptive retrieval)
-**Estimated Tests**: 12–15
-
-### Tasks
-
-| ID | Task | Acceptance Criteria | File(s) |
-|----|------|-------------------|---------|
-| T-5.1 | **Define `GovernanceBusEvent` type and `GovernanceEventType` union** | Types: `KNOWLEDGE_DRIFT`, `REPUTATION_SHIFT`, `INVARIANT_VIOLATION`. Event shape: `{ type, source, detail, timestamp }`. | `app/src/services/governor-registry.ts` |
-| T-5.2 | **Add `on/off/emit` to GovernorRegistry** | `on(type, handler)` registers listener. `off(type, handler)` removes. `emit(event)` calls handlers via `queueMicrotask()`. Errors caught and logged. Cycle detection via `emitting` flag. | `app/src/services/governor-registry.ts` |
-| T-5.3 | **Event bus tests** | Test: register handler, emit event, handler called. Test: error in handler doesn't propagate. Test: cycle detection (handler that re-emits same type). Test: `off()` removes handler. Test: multiple handlers for same type. | `tests/unit/services/governor-event-bus.test.ts` |
-| T-5.4 | **Freshness-weighted confidence in enrichment** | In `enrichment-service.ts`, query `KnowledgeGovernor.getHealth()`. Compute weight: healthy=1.0, degraded=0.7, unhealthy=0.3. Add `freshness_weight` and optional `freshness_disclaimer` to response. | `app/src/services/enrichment-service.ts` |
-| T-5.5 | **Wire knowledge drift → reputation event** | When KnowledgeGovernor detects freshness state change (fresh→decaying, etc.), emit `KNOWLEDGE_DRIFT` event on registry bus. Optional: ReputationService listens and logs it. | `app/src/services/knowledge-governor.ts`, `app/src/server.ts` |
-| T-5.6 | **Adaptive retrieval tests** | Test: healthy knowledge → weight 1.0, no disclaimer. Test: degraded → weight 0.7, disclaimer present. Test: unhealthy → weight 0.3. | `tests/unit/services/adaptive-retrieval.test.ts` |
-| T-5.7 | **Integration: event bus with real governors** | Register both reputation and knowledge governors. Emit KNOWLEDGE_DRIFT from knowledge governor. Verify reputation governor's handler is invoked. | `tests/integration/governor-event-bus.test.ts` |
+The following stretch sprints from the original plan are deferred:
+- **PG-Backed KnowledgeGovernor** (#30) — improves durability but doesn't block loop closure
+- **Event Bus & Adaptive Retrieval** (#33) — improves coordination but doesn't block loop closure
+- **Meta-governor** (#34) — depends on event bus
 
 ---
 
@@ -115,22 +110,20 @@
 | 1 | 82 | 6 | 10–12 | Correctness + seeding |
 | 2 | 83 | 9 | 18–22 | Route scaffold + finn bridge (T2.4 split into 3) |
 | 3 | 84 | 6 | 12–14 | Cohort + population + contract tests |
-| 4 | 85 | 7 | 12–15 | PG KnowledgeGovernor (stretch) |
-| 5 | 86 | 7 | 12–15 | Event bus + adaptive retrieval (stretch) |
-| **Total** | 82–86 | **35** | **64–78** | |
+| 4 | 85 | 5 | 3–5 | ADR + invariant + merge + finn #66 update |
+| **Total** | 82–85 | **26** | **45–53** | |
 
 ## MVP Cutline [Flatline IMP-010]
 
-**Sprints 1–3 are MVP** (loop closure). If the cycle must ship early, sprints 4–5
-are cleanly deferrable without leaving an incomplete story:
+**Sprints 1–3 are MVP** (loop closure). Sprint 4 is the **merge-readiness and documentation sprint**
+that completes the cycle by documenting architectural decisions and communicating cross-repo.
 
 - **MVP complete** = finn can call dixie's reputation query endpoint and get scores.
   Bugs fixed, endpoints tested, contract validated. This closes the autopoietic loop.
-- **Stretch deferred** = KnowledgeGovernor stays in-memory, no event bus, no adaptive
-  retrieval. These improve durability and coordination but don't block loop closure.
-
-**Go/No-Go**: After Sprint 3, evaluate whether to proceed to Sprint 4 based on:
-velocity, remaining context budget, and whether the MVP is stable.
+- **Sprint 4** = ADR documentation, reputation conservation invariant, merge, and
+  cross-repo communication. This is the "close the loop on the loop closure" sprint.
+- **Deferred** = PG KnowledgeGovernor, event bus, adaptive retrieval — all deferrable
+  without leaving an incomplete story.
 
 ## Dependencies Between Sprints
 
@@ -138,14 +131,11 @@ velocity, remaining context budget, and whether the MVP is stable.
 Sprint 1 (correctness) ─────► Sprint 2 (route scaffold)
                                     │
                                     ▼
-                              Sprint 3 (cohort + population)
-                                    │
-Sprint 4 (PG Knowledge) ◄──────────┘ (independent, can run after S1)
+                              Sprint 3 (cohort + population + contract)
                                     │
                                     ▼
-                              Sprint 5 (event bus) requires S4
+                              Sprint 4 (ADR + merge + finn update)
 ```
 
-Sprint 4 only depends on Sprint 1 (needs stable reputation service).
-Sprint 5 depends on Sprint 4 (event bus connects governors including PG-backed KnowledgeGovernor).
-Sprints 2–3 are the critical path for loop closure.
+Sprint 4 depends on Sprints 1–3 (documents the architecture they built).
+All stretch work deferred to future cycles.
