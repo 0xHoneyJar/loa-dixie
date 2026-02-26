@@ -12,11 +12,9 @@ import { Hono } from 'hono';
 
 import type { ConductorEngine } from '../services/conductor-engine.js';
 import { SpawnDeniedError, TaskNotFoundError, ActiveTaskDeletionError } from '../services/conductor-engine.js';
-import { TIER_ORDER } from '../types/conviction.js';
+import { parseConvictionTier } from '../types/conviction.js';
 import type { ConvictionTier } from '../types/conviction.js';
 import type { TaskType, AgentType } from '../types/fleet.js';
-
-const VALID_TIERS: ReadonlySet<string> = new Set(TIER_ORDER);
 
 // ---------------------------------------------------------------------------
 // Dependencies
@@ -61,7 +59,9 @@ function isValidId(value: string): boolean {
  * Expects upstream middleware/proxy to set request headers:
  * - x-operator-id: string — the authenticated caller's operator ID
  * - x-operator-tier: ConvictionTier — the caller's conviction tier (validated at route level)
- * - c.get('isFleetAdmin'): boolean — admin flag set by fleet-auth middleware
+ *
+ * Expects fleet-auth middleware to set context values:
+ * - c.get('isFleetAdmin'): boolean — admin flag derived from admin-key middleware chain
  */
 export function createFleetRoutes(deps: FleetRouteDeps): Hono {
   const { conductor } = deps;
@@ -74,8 +74,8 @@ export function createFleetRoutes(deps: FleetRouteDeps): Hono {
   fleet.post('/spawn', async (c) => {
     const operatorId = c.req.header('x-operator-id');
     const operatorTierRaw = c.req.header('x-operator-tier');
-    const operatorTier: ConvictionTier | undefined = operatorTierRaw && VALID_TIERS.has(operatorTierRaw)
-      ? operatorTierRaw as ConvictionTier
+    const operatorTier: ConvictionTier | undefined = operatorTierRaw
+      ? parseConvictionTier(operatorTierRaw)
       : undefined;
 
     if (!operatorId) {
@@ -166,7 +166,7 @@ export function createFleetRoutes(deps: FleetRouteDeps): Hono {
       return c.json({ error: 'unauthorized', message: 'Operator ID required' }, 401);
     }
 
-    const isAdmin = c.req.header('x-fleet-admin') === 'true';
+    const isAdmin = c.get('isFleetAdmin') === true;
     const showAll = c.req.query('all') === 'true';
 
     // Non-admin can only see their own tasks
@@ -197,7 +197,7 @@ export function createFleetRoutes(deps: FleetRouteDeps): Hono {
     }
 
     // Tenant isolation: non-admin can only see their own tasks
-    const isAdmin = c.req.header('x-fleet-admin') === 'true';
+    const isAdmin = c.get('isFleetAdmin') === true;
     if (task.operatorId !== operatorId && !isAdmin) {
       return c.json({ error: 'not_found', message: `Task ${taskId} not found` }, 404);
     }
@@ -226,7 +226,7 @@ export function createFleetRoutes(deps: FleetRouteDeps): Hono {
       return c.json({ error: 'not_found', message: `Task ${taskId} not found` }, 404);
     }
 
-    const isAdmin = c.req.header('x-fleet-admin') === 'true';
+    const isAdmin = c.get('isFleetAdmin') === true;
     if (task.operatorId !== operatorId && !isAdmin) {
       return c.json({ error: 'not_found', message: `Task ${taskId} not found` }, 404);
     }
@@ -263,13 +263,16 @@ export function createFleetRoutes(deps: FleetRouteDeps): Hono {
       return c.json({ error: 'not_found', message: `Task ${taskId} not found` }, 404);
     }
 
-    const isAdmin = c.req.header('x-fleet-admin') === 'true';
+    const isAdmin = c.get('isFleetAdmin') === true;
     if (task.operatorId !== operatorId && !isAdmin) {
       return c.json({ error: 'not_found', message: `Task ${taskId} not found` }, 404);
     }
 
     const linesParam = c.req.query('lines');
-    const lines = linesParam ? parseInt(linesParam, 10) : undefined;
+    const parsedLines = linesParam ? parseInt(linesParam, 10) : undefined;
+    const lines = parsedLines !== undefined && !Number.isNaN(parsedLines) && parsedLines > 0
+      ? Math.min(parsedLines, 10_000)
+      : undefined;
 
     try {
       const logs = await conductor.getTaskLogs(taskId, lines);
@@ -303,7 +306,7 @@ export function createFleetRoutes(deps: FleetRouteDeps): Hono {
       return c.json({ error: 'not_found', message: `Task ${taskId} not found` }, 404);
     }
 
-    const isAdmin = c.req.header('x-fleet-admin') === 'true';
+    const isAdmin = c.get('isFleetAdmin') === true;
     if (task.operatorId !== operatorId && !isAdmin) {
       return c.json({ error: 'not_found', message: `Task ${taskId} not found` }, 404);
     }

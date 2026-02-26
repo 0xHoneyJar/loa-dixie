@@ -1,8 +1,9 @@
 /**
  * Parse an integer env var with bounds validation.
  * Returns defaultVal on NaN or negative. Clamps to max if provided.
+ * Note: 0 is a valid return value (not treated as falsy/default).
  */
-function safeParseInt(raw: string | undefined, defaultVal: number, max?: number): number {
+export function safeParseInt(raw: string | undefined, defaultVal: number, max?: number): number {
   const parsed = parseInt(raw ?? String(defaultVal), 10);
   if (Number.isNaN(parsed) || parsed < 0) return defaultVal;
   if (max !== undefined && parsed > max) return max;
