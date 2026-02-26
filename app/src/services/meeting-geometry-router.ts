@@ -14,6 +14,7 @@
 import type { DbPool } from '../db/client.js';
 import type { MeetingGeometry, GeometryGroup } from '../types/insight.js';
 import { MEETING_GEOMETRIES } from '../types/insight.js';
+import { extractKeywords } from '../utils/keyword-extract.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -37,17 +38,7 @@ const EXCLUDED_STATUSES = [
   'failed',
 ] as const;
 
-/** Common English stopwords filtered from keyword extraction. */
-const STOPWORDS = new Set([
-  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'to', 'in',
-  'for', 'on', 'with', 'at', 'by', 'from', 'and', 'or', 'but', 'not',
-  'this', 'that', 'it', 'be', 'has', 'have', 'had', 'do', 'does',
-  'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can',
-  'shall',
-]);
-
-/** Minimum character length for a keyword to be retained. */
-const MIN_KEYWORD_LENGTH = 3;
+// Keyword extraction is now shared — see ../utils/keyword-extract.ts
 
 // ---------------------------------------------------------------------------
 // Row Mapping
@@ -287,21 +278,8 @@ export function isValidGeometry(value: string): value is MeetingGeometry {
   return (MEETING_GEOMETRIES as readonly string[]).includes(value);
 }
 
-/**
- * Extract meaningful keywords from text.
- *
- * Splits on whitespace and common punctuation, lowercases, filters
- * stopwords and short words (< 3 chars), and deduplicates.
- */
-export function extractKeywords(text: string): string[] {
-  const tokens = text
-    .toLowerCase()
-    .split(/[\s,.:;!?()[\]{}"'`/\\|~@#$%^&*+=<>_-]+/)
-    .filter((token) => token.length >= MIN_KEYWORD_LENGTH)
-    .filter((token) => !STOPWORDS.has(token));
-
-  return [...new Set(tokens)];
-}
+/** Re-export shared extractKeywords for backward compatibility. */
+export { extractKeywords } from '../utils/keyword-extract.js';
 
 /**
  * Compute keyword overlap ratio: |intersection| / max(|current|, 1).

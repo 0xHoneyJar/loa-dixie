@@ -67,6 +67,7 @@ function createMockRegistry() {
     query: vi.fn(),
     delete: vi.fn(),
     transition: vi.fn(),
+    linkEcologyFields: vi.fn().mockResolvedValue(undefined),
     countActive: vi.fn(),
     countAllActive: vi.fn(),
     listLive: vi.fn(),
@@ -473,7 +474,6 @@ describe('ConductorEngine', () => {
       const geometrySvc = createMockGeometryRouter();
 
       registry.get.mockResolvedValue(runningTask);
-      registry.transition.mockResolvedValue(runningTask);
 
       const ecoConductor = new ConductorEngine(
         registry as any,
@@ -498,11 +498,9 @@ describe('ConductorEngine', () => {
       // Identity resolved
       expect(identitySvc.resolveIdentity).toHaveBeenCalledWith('operator-1', 'claude-opus-4-6');
 
-      // Identity linked to task via transition
-      expect(registry.transition).toHaveBeenCalledWith(
+      // Identity linked to task via linkEcologyFields (version-independent)
+      expect(registry.linkEcologyFields).toHaveBeenCalledWith(
         'task-001',
-        1,
-        'running',
         expect.objectContaining({ agentIdentityId: 'identity-001' }),
       );
 
@@ -584,7 +582,6 @@ describe('ConductorEngine', () => {
       const geometrySvc = createMockGeometryRouter();
 
       registry.get.mockResolvedValue(runningTask);
-      registry.transition.mockResolvedValue(runningTask);
 
       const ecoConductor = new ConductorEngine(
         registry as any, governor as any, spawner as any, monitor as any,
@@ -597,11 +594,9 @@ describe('ConductorEngine', () => {
 
       expect(geometrySvc.resolveGeometry).toHaveBeenCalled();
 
-      // groupId linked to task
-      expect(registry.transition).toHaveBeenCalledWith(
+      // groupId linked to task via linkEcologyFields (version-independent)
+      expect(registry.linkEcologyFields).toHaveBeenCalledWith(
         'task-001',
-        1,
-        'running',
         expect.objectContaining({ groupId: 'group-001' }),
       );
     });

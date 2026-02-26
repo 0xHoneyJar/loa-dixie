@@ -24,6 +24,7 @@ import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import type { DbPool } from '../db/client.js';
 import type { AgentInsight } from '../types/insight.js';
+import { extractKeywords } from '../utils/keyword-extract.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -46,13 +47,7 @@ const RELEVANCE_THRESHOLD = 0.2;
 /** Default insight TTL in milliseconds (4 hours). */
 const INSIGHT_TTL_MS = 4 * 60 * 60 * 1000;
 
-/** Stopwords filtered from keyword extraction. */
-const STOPWORDS = new Set([
-  'the', 'a', 'an', 'is', 'are', 'was', 'were',
-  'of', 'to', 'in', 'for', 'on', 'with', 'at',
-  'by', 'from', 'and', 'or', 'but', 'not',
-  'this', 'that', 'it',
-]);
+// Keyword extraction is now shared — see ../utils/keyword-extract.ts
 
 // ---------------------------------------------------------------------------
 // InsightPool — Bounded In-Memory Store
@@ -169,23 +164,10 @@ export interface PoolStats {
 }
 
 // ---------------------------------------------------------------------------
-// Keyword Extraction
+// Keyword Extraction (re-exported from shared utility)
 // ---------------------------------------------------------------------------
 
-/**
- * Extract keywords from text: lowercase, split on non-word characters,
- * filter stopwords, deduplicate.
- *
- * @since cycle-013 — Sprint 95
- */
-export function extractKeywords(text: string): string[] {
-  const words = text
-    .toLowerCase()
-    .split(/\W+/)
-    .filter((w) => w.length > 0 && !STOPWORDS.has(w));
-
-  return [...new Set(words)];
-}
+export { extractKeywords } from '../utils/keyword-extract.js';
 
 // ---------------------------------------------------------------------------
 // CollectiveInsightService

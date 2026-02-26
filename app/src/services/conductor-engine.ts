@@ -49,6 +49,7 @@ import type { AgentIdentityRecord } from '../types/agent-identity.js';
 
 export interface ConductorEngineConfig {
   readonly defaultTimeoutMinutes?: number;
+  readonly logger?: { warn(msg: string, meta?: Record<string, unknown>): void };
 }
 
 // ---------------------------------------------------------------------------
@@ -63,6 +64,7 @@ export { SpawnDeniedError, TaskNotFoundError, ActiveTaskDeletionError };
 
 export class ConductorEngine {
   private readonly defaultTimeoutMinutes: number;
+  private readonly logger: { warn(msg: string, meta?: Record<string, unknown>): void };
 
   // Ecology services (optional — graceful degradation when null/undefined)
   private readonly identityService: AgentIdentityService | null;
@@ -71,6 +73,23 @@ export class ConductorEngine {
   private readonly insightService: CollectiveInsightService | null;
   private readonly geometryRouter: MeetingGeometryRouter | null;
 
+  /**
+   * @param registry - Task persistence
+   * @param governor - Admission control
+   * @param spawner - Agent process management
+   * @param monitor - Health monitoring
+   * @param router - Model selection
+   * @param enrichment - Prompt building
+   * @param eventBus - Cross-governor events
+   * @param notifications - External notifications
+   * @param saga - Transactional spawn workflow
+   * @param config - Engine configuration
+   * @param identityService - Agent identity persistence (ecology, optional)
+   * @param sovereignty - Autonomy governance (ecology, optional)
+   * @param circulation - Dynamic admission cost (ecology, optional)
+   * @param insightService - Cross-agent insights (ecology, optional)
+   * @param geometryRouter - Meeting geometry resolution (ecology, optional)
+   */
   constructor(
     private readonly registry: TaskRegistry,
     private readonly governor: FleetGovernor,
@@ -90,6 +109,7 @@ export class ConductorEngine {
     geometryRouter?: MeetingGeometryRouter,
   ) {
     this.defaultTimeoutMinutes = config?.defaultTimeoutMinutes ?? 120;
+    this.logger = config?.logger ?? console;
     this.identityService = identityService ?? null;
     this.sovereignty = sovereignty ?? null;
     this.circulation = circulation ?? null;
@@ -145,8 +165,11 @@ export class ConductorEngine {
           request.operatorId,
           routing.model,
         );
-      } catch {
-        // Identity resolution failure is non-fatal — continue without identity
+      } catch (err) {
+        this.logger.warn('Identity resolution failed (non-fatal)', {
+          operatorId: request.operatorId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -158,8 +181,11 @@ export class ConductorEngine {
         autonomyLevel = identity.autonomyLevel;
         // Resources are informational at spawn time — applied at retry/monitor layers
         void resources;
-      } catch {
-        // Sovereignty failure is non-fatal
+      } catch (err) {
+        this.logger.warn('Sovereignty lookup failed (non-fatal)', {
+          operatorId: request.operatorId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -171,8 +197,11 @@ export class ConductorEngine {
           request.taskType,
           request.description.length,
         );
-      } catch {
-        // Cost computation failure is non-fatal
+      } catch (err) {
+        this.logger.warn('Cost computation failed (non-fatal)', {
+          operatorId: request.operatorId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -202,8 +231,11 @@ export class ConductorEngine {
         if (geometryResolution.groupId) {
           groupId = geometryResolution.groupId;
         }
-      } catch {
-        // Geometry resolution failure is non-fatal
+      } catch (err) {
+        this.logger.warn('Geometry resolution failed (non-fatal)', {
+          operatorId: request.operatorId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -219,8 +251,11 @@ export class ConductorEngine {
             createSection('CROSS_AGENT', `Insight: ${insight.sourceTaskId}`, insight.content),
           );
         }
-      } catch {
-        // Insight retrieval failure is non-fatal
+      } catch (err) {
+        this.logger.warn('Insight retrieval failed (non-fatal)', {
+          operatorId: request.operatorId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -268,12 +303,15 @@ export class ConductorEngine {
     // Step 7b: Link identity and group to task (T-6.5)
     if (identity || groupId) {
       try {
-        await this.registry.transition(taskRecord.id, taskRecord.version, taskRecord.status, {
+        await this.registry.linkEcologyFields(taskRecord.id, {
           ...(identity ? { agentIdentityId: identity.id } : {}),
           ...(groupId ? { groupId } : {}),
         });
-      } catch {
-        // Link failure is non-fatal — task is already spawned
+      } catch (err) {
+        this.logger.warn('Identity/group link failed (non-fatal)', {
+          taskId: taskRecord.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 

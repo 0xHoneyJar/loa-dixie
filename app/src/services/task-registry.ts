@@ -287,6 +287,40 @@ export class TaskRegistry {
   }
 
   // -------------------------------------------------------------------------
+  // Ecology Metadata (cycle-013)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Link ecology metadata to a task (identity, group).
+   * Does NOT check version — this is a metadata-only addition, not a state transition.
+   * @since cycle-013
+   */
+  async linkEcologyFields(
+    taskId: string,
+    fields: { agentIdentityId?: string; groupId?: string },
+  ): Promise<void> {
+    const setClauses: string[] = [];
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    if (fields.agentIdentityId) {
+      setClauses.push(`agent_identity_id = $${paramIndex++}`);
+      params.push(fields.agentIdentityId);
+    }
+    if (fields.groupId) {
+      setClauses.push(`group_id = $${paramIndex++}`);
+      params.push(fields.groupId);
+    }
+    if (setClauses.length === 0) return;
+
+    params.push(taskId);
+    await this.pool.query(
+      `UPDATE fleet_tasks SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
+      params,
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // T-1.4: State Machine Transitions
   // -------------------------------------------------------------------------
 
