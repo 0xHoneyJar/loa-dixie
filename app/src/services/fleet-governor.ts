@@ -117,6 +117,10 @@ interface FleetTaskRow {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  /** @since cycle-013 — persistent agent identity */
+  agent_identity_id: string | null;
+  /** @since cycle-013 — geometry group membership */
+  group_id: string | null;
 }
 
 function rowToRecord(row: FleetTaskRow): FleetTaskRecord {
@@ -144,6 +148,8 @@ function rowToRecord(row: FleetTaskRow): FleetTaskRecord {
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    agentIdentityId: row.agent_identity_id,
+    groupId: row.group_id,
   };
 }
 
@@ -175,6 +181,15 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
   readonly resourceId: string;
   readonly resourceType = 'fleet-governor';
 
+  /**
+   * Last-written operator state snapshot.
+   *
+   * LIMITATION (S5-F03): This is a per-request ephemeral snapshot, not a
+   * canonical resource state. `verify()` and `verifyAll()` check only the
+   * LAST operator's state. For per-operator invariant checking, query the
+   * DB directly via `admitAndInsert()`. Future: replace with a proper
+   * per-operator state map or remove from GovernedResource contract.
+   */
   private _current: FleetState;
   private _version = 0;
   private readonly _auditTrail: AuditTrail;
@@ -384,7 +399,7 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
   ): Promise<FleetTaskRecord> {
     return startSanitizedSpan(
       'dixie.governance.check',
-      { resource_type: 'fleet_task', decision: 'pending', witness_count: 0, operator_id: input.operatorId },
+      { resource_type: 'fleet_task', decision: 'pending', witness_count: 0 },
       async (span) => {
     const limit = this.tierLimits[tier];
     if (limit <= 0) {

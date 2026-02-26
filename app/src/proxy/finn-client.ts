@@ -256,9 +256,11 @@ function mapFinnError(
         message: 'Service temporarily unavailable',
       });
     default:
+      // S5-F15: Do not forward upstream error messages to client — they may
+      // contain PII, stack traces, or internal system details.
       return new BffError(status, {
         error: 'upstream_error',
-        message: (body.message as string) ?? `Upstream error (HTTP ${status})`,
+        message: `Upstream error (HTTP ${status})`,
       });
   }
 }

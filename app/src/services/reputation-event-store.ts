@@ -77,13 +77,18 @@ export function reconstructAggregateFromEvents(
         const score = event.quality_observation.score;
         personalScore = computeDampenedScore(personalScore, score, sampleCount);
         sampleCount++;
-        // Update task cohort
+        // Update task cohort — apply EMA dampening to match live path (S5-F12)
         const key = `${event.model_id}:${event.task_type}`;
         const existing = taskCohortMap.get(key);
         if (existing) {
+          const dampenedCohortScore = computeDampenedScore(
+            existing.personal_score,
+            score,
+            existing.sample_count,
+          );
           taskCohortMap.set(key, {
             ...existing,
-            personal_score: score,
+            personal_score: dampenedCohortScore,
             sample_count: existing.sample_count + 1,
             last_updated: event.timestamp,
           });

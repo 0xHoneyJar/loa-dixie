@@ -46,7 +46,10 @@ import type {
 import { MutationLog, createMutation } from './governance-mutation.js';
 import { startSanitizedSpan, addSanitizedAttributes } from '../utils/span-sanitizer.js';
 
-// Re-export from extracted modules for backward compatibility (BB-DEEP-03 T6)
+// Re-export from extracted modules for backward compatibility (BB-DEEP-03 T6).
+// MIGRATION: Prefer importing directly from the canonical modules:
+//   - reputation-scoring-engine.ts for scoring functions/constants
+//   - reputation-event-store.ts for event sourcing operations
 export {
   computeDampenedScore,
   computeDimensionalBlended,

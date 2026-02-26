@@ -162,12 +162,13 @@ export async function migrate(pool: DbPool): Promise<MigrationResult> {
   const MIGRATION_LOCK_ID = computeLockId('dixie-bff:migration');
   const LOCK_TIMEOUT_MS = 30_000;
   const lockClient = await pool.connect();
+  let lockAcquired = false;
   try {
     await lockClient.query(`SELECT set_config('lock_timeout', $1, false)`, [`${LOCK_TIMEOUT_MS}ms`]);
     try {
       await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
-    } catch (err) {
-      lockClient.release();
+      lockAcquired = true;
+    } catch {
       throw new Error(
         `Failed to acquire migration lock within ${LOCK_TIMEOUT_MS}ms. ` +
           'Another instance may be migrating. Check and retry.',
@@ -176,13 +177,10 @@ export async function migrate(pool: DbPool): Promise<MigrationResult> {
     // Reset lock_timeout to avoid leaking into connection pool
     await lockClient.query("SET lock_timeout = '0'");
   } catch (err) {
-    if (
-      err instanceof Error &&
-      err.message.includes('Failed to acquire migration lock')
-    ) {
-      throw err;
+    // S5-F17: Single release point — avoid double-release on lock failure
+    if (!lockAcquired) {
+      lockClient.release();
     }
-    lockClient.release();
     throw err;
   }
 
