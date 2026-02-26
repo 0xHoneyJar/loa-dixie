@@ -191,7 +191,7 @@ export class MeetingGeometryRouter {
       return null;
     }
     const taskResult = await this.pool.query<{ id: string }>(
-      'SELECT id FROM fleet_tasks WHERE group_id = $1',
+      'SELECT id FROM fleet_tasks WHERE group_id = $1 LIMIT 500',
       [groupId],
     );
     const taskIds = taskResult.rows.map((r) => r.id);
@@ -221,13 +221,14 @@ export class MeetingGeometryRouter {
     operatorId: string,
     taskDescription: string,
   ): Promise<GeometryResolution> {
-    const placeholders = EXCLUDED_STATUSES.map((_, i) => `$${i + 2}`).join(', ');
+    const windowParamIdx = 2;
+    const placeholders = EXCLUDED_STATUSES.map((_, i) => `$${i + windowParamIdx + 1}`).join(', ');
     const recentResult = await this.pool.query<RecentTaskRow>(
       `SELECT description FROM fleet_tasks
        WHERE operator_id = $1
-         AND created_at > NOW() - INTERVAL '${DETECTION_WINDOW_MINUTES} minutes'
+         AND created_at > NOW() - ($${windowParamIdx} * INTERVAL '1 minute')
          AND status NOT IN (${placeholders})`,
-      [operatorId, ...EXCLUDED_STATUSES],
+      [operatorId, DETECTION_WINDOW_MINUTES, ...EXCLUDED_STATUSES],
     );
 
     const recentTasks = recentResult.rows;

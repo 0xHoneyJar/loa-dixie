@@ -655,6 +655,26 @@ export class FleetMonitor {
   }
 
   // -------------------------------------------------------------------------
+  // Completion Outcome Recording (BF-016)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Record a successful completion outcome for an agent identity.
+   * Called externally when a task reaches merged/ready status
+   * (e.g., from a webhook handler or the API layer).
+   *
+   * The FleetMonitor only detects failure outcomes (dead agent, timeout).
+   * Success outcomes must be recorded by the external merge handler.
+   *
+   * @since cycle-013
+   */
+  async recordCompletionOutcome(taskId: string, outcome: 'merged' | 'ready' = 'merged'): Promise<void> {
+    const task = await this.registry.get(taskId);
+    if (!task?.agentIdentityId) return;
+    await this.recordIdentityOutcome(task.id, task.agentIdentityId, outcome);
+  }
+
+  // -------------------------------------------------------------------------
   // Private
   // -------------------------------------------------------------------------
 

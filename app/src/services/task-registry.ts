@@ -121,6 +121,8 @@ interface FleetTaskRow {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  agent_identity_id: string | null;
+  group_id: string | null;
 }
 
 function rowToRecord(row: FleetTaskRow): FleetTaskRecord {
@@ -148,6 +150,8 @@ function rowToRecord(row: FleetTaskRow): FleetTaskRecord {
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    agentIdentityId: row.agent_identity_id,
+    groupId: row.group_id,
   };
 }
 

@@ -53,6 +53,8 @@ function makeRow(overrides: Partial<Record<string, unknown>> = {}) {
     completed_at: null,
     created_at: '2026-02-26T00:00:00Z',
     updated_at: '2026-02-26T00:00:00Z',
+    agent_identity_id: null,
+    group_id: null,
     ...overrides,
   };
 }

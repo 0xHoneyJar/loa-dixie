@@ -271,7 +271,8 @@ describe('CollectiveInsightService', () => {
       expect(result!.content).toContain('feat');
       expect(result!.content).toContain('auth');
       expect(result!.keywords.length).toBeGreaterThan(0);
-      expect(result!.id).toMatch(/^[0-9a-f-]{36}$/);
+      // BF-023: Deterministic ID = taskId-hourBucket
+      expect(result!.id).toMatch(/^task-42-\d+$/);
       expect(service.poolRef.size).toBe(1);
     });
 
@@ -629,7 +630,7 @@ describe('CollectiveInsightService', () => {
             source_agent_id: 'agent-1',
             group_id: null,
             content: 'from database',
-            keywords: '["database", "content"]',
+            keywords: ['database', 'content'],
             relevance_context: 'test',
             captured_at: '2026-02-26T00:00:00Z',
             expires_at: '2026-02-26T04:00:00Z',

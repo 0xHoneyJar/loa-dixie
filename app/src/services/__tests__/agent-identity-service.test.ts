@@ -172,6 +172,10 @@ describe('AgentIdentityService', () => {
       expect(result.aggregateReputation).toBeCloseTo(0.575, 3);
       expect(result.taskCount).toBe(6);
       expect(result.version).toBe(3);
+
+      // BF-020: Verify autonomy_level is included in UPDATE
+      const updateCall = pool.query.mock.calls[1];
+      expect(updateCall[0]).toContain('autonomy_level');
     });
 
     it('decreases reputation on abandoned outcome (score=0.0)', async () => {
@@ -241,11 +245,16 @@ describe('AgentIdentityService', () => {
       expect(result.successCount).toBe(1);
     });
 
-    it('throws StaleIdentityVersionError on version mismatch', async () => {
+    it('throws StaleIdentityVersionError after exhausting retries (BF-017)', async () => {
       const identity = makeIdentityRow({ version: 5 });
+      // 3 retry attempts: each reads identity then gets version mismatch
       pool.query
         .mockResolvedValueOnce({ rows: [identity] })
-        .mockResolvedValueOnce({ rows: [] }); // Version mismatch → 0 rows
+        .mockResolvedValueOnce({ rows: [] }) // Attempt 1: version mismatch
+        .mockResolvedValueOnce({ rows: [identity] })
+        .mockResolvedValueOnce({ rows: [] }) // Attempt 2: version mismatch
+        .mockResolvedValueOnce({ rows: [identity] })
+        .mockResolvedValueOnce({ rows: [] }); // Attempt 3: version mismatch
 
       await expect(
         service.recordTaskOutcome('identity-1', 'task-5', 'merged'),

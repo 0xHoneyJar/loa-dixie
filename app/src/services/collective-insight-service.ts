@@ -20,7 +20,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+
 import { promisify } from 'node:util';
 import type { DbPool } from '../db/client.js';
 import type { AgentInsight } from '../types/insight.js';
@@ -233,7 +233,7 @@ export class CollectiveInsightService {
           insight.sourceAgentId,
           insight.groupId,
           insight.content,
-          JSON.stringify(insight.keywords),
+          insight.keywords,
           insight.relevanceContext,
           insight.capturedAt,
           insight.expiresAt,
@@ -262,7 +262,7 @@ export class CollectiveInsightService {
       source_agent_id: string;
       group_id: string | null;
       content: string;
-      keywords: string;
+      keywords: string[];
       relevance_context: string;
       captured_at: string;
       expires_at: string;
@@ -280,7 +280,7 @@ export class CollectiveInsightService {
       sourceAgentId: row.source_agent_id,
       groupId: row.group_id,
       content: row.content,
-      keywords: JSON.parse(row.keywords),
+      keywords: row.keywords,
       relevanceContext: row.relevance_context,
       capturedAt: row.captured_at,
       expiresAt: row.expires_at,
@@ -346,8 +346,12 @@ export class CollectiveInsightService {
       const now = new Date();
       const expiresAt = new Date(now.getTime() + INSIGHT_TTL_MS);
 
+      // BF-023: Deterministic ID prevents duplicate insights per task on every harvest cycle.
+      // Re-harvests within the same hour update the existing entry via ON CONFLICT instead
+      // of adding a new one.
+      const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
       const insight: AgentInsight = {
-        id: randomUUID(),
+        id: `${taskId}-${hourBucket}`,
         sourceTaskId: taskId,
         sourceAgentId: agentId,
         groupId,
@@ -462,6 +466,7 @@ export class CollectiveInsightService {
     const now = new Date().toISOString();
     let removed = 0;
 
+    // NOTE: getAll() returns a snapshot array (Array.from), safe to mutate pool during iteration
     for (const insight of this.insightPool.getAll()) {
       if (insight.expiresAt < now) {
         this.insightPool.remove(insight.id);

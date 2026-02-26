@@ -333,15 +333,17 @@ describe('MeetingGeometryRouter', () => {
       expect(params).toContain('failed');
     });
 
-    it('queries with operator_id and time window', async () => {
+    it('queries with operator_id and parameterized time window (BF-013)', async () => {
       pool.query.mockResolvedValueOnce({ rows: [] });
 
       await router.detectGeometry('op-42', 'some task');
 
       const [sql, params] = pool.query.mock.calls[0];
       expect(sql).toContain('operator_id = $1');
-      expect(sql).toContain("INTERVAL '5 minutes'");
+      expect(sql).toContain("INTERVAL '1 minute'");
+      expect(sql).toContain('$2');
       expect(params[0]).toBe('op-42');
+      expect(params[1]).toBe(5); // DETECTION_WINDOW_MINUTES bound parameter
     });
 
     it('handles overlap at exactly 30% threshold', async () => {

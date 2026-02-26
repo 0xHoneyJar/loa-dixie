@@ -121,7 +121,7 @@ export class AgentIdentityService {
   /** List all identities for an operator. */
   async getByOperator(operatorId: string): Promise<AgentIdentityRecord[]> {
     const result = await this.pool.query<IdentityRow>(
-      'SELECT * FROM agent_identities WHERE operator_id = $1 ORDER BY last_active_at DESC',
+      'SELECT * FROM agent_identities WHERE operator_id = $1 ORDER BY last_active_at DESC LIMIT 100',
       [operatorId],
     );
     return result.rows.map(rowToRecord);
@@ -147,45 +147,59 @@ export class AgentIdentityService {
     taskId: string,
     outcome: TaskOutcome,
   ): Promise<AgentIdentityRecord> {
-    const identity = await this.getOrNull(identityId);
-    if (!identity) {
-      throw new Error(`Agent identity not found: ${identityId}`);
+    const MAX_RETRIES = 3;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const identity = await this.getOrNull(identityId);
+      if (!identity) {
+        throw new Error(`Agent identity not found: ${identityId}`);
+      }
+
+      const taskScore = OUTCOME_SCORES[outcome];
+      const alpha = computeAlpha(identity.taskCount);
+      const newReputation =
+        alpha * taskScore + (1 - alpha) * identity.aggregateReputation;
+
+      const isSuccess = outcome === 'merged' || outcome === 'ready';
+      const successIncrement = isSuccess ? 1 : 0;
+      const failureIncrement = isSuccess ? 0 : 1;
+
+      // BF-020: Compute autonomy level from new reputation
+      const newTaskCount = identity.taskCount + 1;
+      const newAutonomyLevel =
+        (newReputation >= 0.8 && newTaskCount >= 10) ? 'autonomous' :
+        (newReputation >= 0.6 && newTaskCount >= 3) ? 'standard' :
+        'constrained';
+
+      const result = await this.pool.query<IdentityRow>(
+        `UPDATE agent_identities
+         SET aggregate_reputation = $1,
+             task_count = task_count + 1,
+             success_count = success_count + $2,
+             failure_count = failure_count + $3,
+             last_task_id = $4,
+             autonomy_level = $5,
+             version = version + 1
+         WHERE id = $6 AND version = $7
+         RETURNING *`,
+        [
+          newReputation,
+          successIncrement,
+          failureIncrement,
+          taskId,
+          newAutonomyLevel,
+          identityId,
+          identity.version,
+        ],
+      );
+
+      if (result.rows.length > 0) {
+        return rowToRecord(result.rows[0]);
+      }
+      // Version mismatch — retry (BF-017)
     }
 
-    const taskScore = OUTCOME_SCORES[outcome];
-    const alpha = computeAlpha(identity.taskCount);
-    const newReputation =
-      alpha * taskScore + (1 - alpha) * identity.aggregateReputation;
-
-    const isSuccess = outcome === 'merged' || outcome === 'ready';
-    const successIncrement = isSuccess ? 1 : 0;
-    const failureIncrement = isSuccess ? 0 : 1;
-
-    const result = await this.pool.query<IdentityRow>(
-      `UPDATE agent_identities
-       SET aggregate_reputation = $1,
-           task_count = task_count + 1,
-           success_count = success_count + $2,
-           failure_count = failure_count + $3,
-           last_task_id = $4,
-           version = version + 1
-       WHERE id = $5 AND version = $6
-       RETURNING *`,
-      [
-        newReputation,
-        successIncrement,
-        failureIncrement,
-        taskId,
-        identityId,
-        identity.version,
-      ],
-    );
-
-    if (result.rows.length === 0) {
-      throw new StaleIdentityVersionError(identityId, identity.version);
-    }
-
-    return rowToRecord(result.rows[0]);
+    throw new StaleIdentityVersionError(identityId, -1);
   }
 
   // -------------------------------------------------------------------------
