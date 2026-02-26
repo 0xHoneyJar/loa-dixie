@@ -55,8 +55,19 @@ export interface GovernorCoordinationEvent {
   readonly timestamp: string;
 }
 
-/** Result of a coordinate() dispatch. */
+/**
+ * Result of a coordinate() dispatch.
+ *
+ * Note: `dispatched: true` means the event was logged/acknowledged for the
+ * target governor(s), NOT that a side-effect handler was invoked. Current
+ * implementation is logging-only (BB-DEEP-08 foundation). Future iterations
+ * will add handler invocation, at which point `dispatched` will indicate
+ * that the handler was called.
+ *
+ * @since cycle-014 Sprint 105, Task T10 (BB-DEEP-08)
+ */
 export interface CoordinationResult {
+  /** Whether the event was acknowledged (logged). Does not imply handler invocation. */
   readonly dispatched: boolean;
   readonly target: string;
   readonly reason?: string;

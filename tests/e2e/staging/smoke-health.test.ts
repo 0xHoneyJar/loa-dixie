@@ -82,7 +82,11 @@ describe('E2E-1: Health Check', () => {
 
     // Query Tempo's search API for traces from dixie-bff.
     // Tempo HTTP API is on port 3200 by default.
-    const tempoSearchUrl = tempoEndpoint.replace(':4317', ':3200');
+    // BF-003: Use URL constructor instead of fragile string replace for port substitution.
+    const tempoUrl = new URL(tempoEndpoint);
+    tempoUrl.port = '3200';
+    tempoUrl.protocol = 'http:';
+    const tempoSearchUrl = tempoUrl.origin;
     try {
       const searchRes = await fetch(
         `${tempoSearchUrl}/api/search?tags=service.name%3Ddixie-bff&limit=1`,

@@ -36,6 +36,9 @@ export interface DixieConfig {
   autonomousPermissionTtlSec: number;
   autonomousBudgetDefaultMicroUsd: number;
 
+  // Phase 2: Connection pool sizing
+  databasePoolSize: number;
+
   // Phase 2: Rate limiting backend
   rateLimitBackend: 'memory' | 'redis';
 
@@ -68,6 +71,7 @@ export interface DixieConfig {
  * DIXIE_PERSONALITY_TTL       (optional) — BEAUVOIR personality cache TTL in seconds; default 1800
  * DIXIE_AUTONOMOUS_PERMISSION_TTL (optional) — autonomous permission cache TTL in seconds; default 300
  * DIXIE_AUTONOMOUS_BUDGET     (optional) — default autonomous budget in micro-USD; default 100000
+ * DATABASE_POOL_SIZE          (optional) — max connections in PostgreSQL pool; default 10
  * DIXIE_RATE_LIMIT_BACKEND    (optional) — 'memory' or 'redis'; default 'memory' (auto-upgrades to 'redis' when REDIS_URL set)
  * DIXIE_SCHEDULE_CALLBACK_SECRET (optional) — HMAC secret for schedule callback verification; default '' (rejects all callbacks in production)
  */
@@ -150,6 +154,9 @@ export function loadConfig(): DixieConfig {
     // Phase 2: Autonomous
     autonomousPermissionTtlSec: parseInt(process.env.DIXIE_AUTONOMOUS_PERMISSION_TTL ?? '300', 10),
     autonomousBudgetDefaultMicroUsd: parseInt(process.env.DIXIE_AUTONOMOUS_BUDGET ?? '100000', 10),
+
+    // Phase 2: Connection pool sizing (BF-011)
+    databasePoolSize: parseInt(process.env.DATABASE_POOL_SIZE ?? '10', 10),
 
     // Phase 2: Rate limiting
     rateLimitBackend,

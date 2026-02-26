@@ -122,6 +122,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   if (config.databaseUrl) {
     dbPool = createDbPool({
       connectionString: config.databaseUrl,
+      maxConnections: config.databasePoolSize,
       log,
     });
   }
