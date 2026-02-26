@@ -115,7 +115,7 @@ call_api_via_model_invoke() {
   case "$model" in
     gpt-5.2)       model_override="openai:gpt-5.2" ;;
     gpt-5.3-codex) model_override="openai:gpt-5.3-codex" ;;
-    gpt-5.3-codex) model_override="openai:gpt-5.3-codex" ;;
+    gpt-5.2-codex) model_override="openai:gpt-5.3-codex" ;;  # Backward compat
   esac
 
   local result exit_code=0

@@ -99,6 +99,7 @@ declare -A MODE_TO_AGENT=(
 declare -A MODEL_TO_ALIAS=(
     ["gpt-5.2"]="openai:gpt-5.2"
     ["gpt-5.3-codex"]="openai:gpt-5.3-codex"
+    ["gpt-5.2-codex"]="openai:gpt-5.3-codex"    # Backward compat alias
     ["opus"]="anthropic:claude-opus-4-6"
     ["claude-opus-4.6"]="anthropic:claude-opus-4-6"
     ["claude-opus-4.5"]="anthropic:claude-opus-4-6"
