@@ -12,8 +12,11 @@ import { Hono } from 'hono';
 
 import type { ConductorEngine } from '../services/conductor-engine.js';
 import { SpawnDeniedError, TaskNotFoundError, ActiveTaskDeletionError } from '../services/conductor-engine.js';
+import { TIER_ORDER } from '../types/conviction.js';
 import type { ConvictionTier } from '../types/conviction.js';
 import type { TaskType, AgentType } from '../types/fleet.js';
+
+const VALID_TIERS: ReadonlySet<string> = new Set(TIER_ORDER);
 
 // ---------------------------------------------------------------------------
 // Dependencies
@@ -55,10 +58,10 @@ function isValidId(value: string): boolean {
 /**
  * Create fleet API routes.
  *
- * Expects middleware to set context values:
- * - c.get('operatorId'): string — the authenticated caller's operator ID
- * - c.get('operatorTier'): ConvictionTier — the caller's conviction tier
- * - c.get('isFleetAdmin'): boolean — whether the caller has admin privileges
+ * Expects upstream middleware/proxy to set request headers:
+ * - x-operator-id: string — the authenticated caller's operator ID
+ * - x-operator-tier: ConvictionTier — the caller's conviction tier (validated at route level)
+ * - c.get('isFleetAdmin'): boolean — admin flag set by fleet-auth middleware
  */
 export function createFleetRoutes(deps: FleetRouteDeps): Hono {
   const { conductor } = deps;
@@ -70,7 +73,10 @@ export function createFleetRoutes(deps: FleetRouteDeps): Hono {
 
   fleet.post('/spawn', async (c) => {
     const operatorId = c.req.header('x-operator-id');
-    const operatorTier = c.req.header('x-operator-tier') as ConvictionTier | undefined;
+    const operatorTierRaw = c.req.header('x-operator-tier');
+    const operatorTier: ConvictionTier | undefined = operatorTierRaw && VALID_TIERS.has(operatorTierRaw)
+      ? operatorTierRaw as ConvictionTier
+      : undefined;
 
     if (!operatorId) {
       return c.json({ error: 'unauthorized', message: 'Operator ID required' }, 401);

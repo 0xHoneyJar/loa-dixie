@@ -5,8 +5,8 @@
 **Cycle**: cycle-014
 **PRD**: v14.1.0
 **SDD**: v14.1.0
-**Total Sprints**: 6
-**Global Sprint Range**: 101-106
+**Total Sprints**: 7
+**Global Sprint Range**: 101-107
 
 ---
 
@@ -340,22 +340,57 @@ Execute in this order to manage shared file dependencies:
 
 ---
 
-## Dependency Graph (Updated with Sprint 6)
+---
+
+## Sprint 7: Pre-Merge Polish — Type Safety, Config Hardening & Test Hygiene
+
+**Goal**: Final pass before merging PR #50 to main. Address all remaining MEDIUM findings from comprehensive pre-merge sweep. Zero regressions, zero new TS errors.
+
+**Source**: Pre-merge comprehensive sweep (bridge iteration 3 post-flatline)
+
+**Acceptance Criteria**:
+- fleet.ts JSDoc accurately reflects actual code (header reads, not c.get())
+- All parseInt config values validated: NaN → default, negative → default, clamped to sane ranges
+- ConvictionTier from request headers validated against known enum values before use
+- DATABASE_POOL_SIZE documented in .env.example
+- fleet-monitor.test.ts mock typing resolved — 0 TS errors in test file
+- Overall TypeScript error count remains at 0
+
+### Task Ordering
+
+All tasks are independent — no shared file dependencies:
+
+1. **T1** (fleet.ts JSDoc) — modifies fleet.ts only
+2. **T2** (config parseInt hardening) — modifies config.ts only
+3. **T3** (ConvictionTier validation) — modifies enrich.ts and fleet.ts
+4. **T4** (.env.example update) — modifies .env.example only
+5. **T5** (fleet-monitor.test.ts mock typing) — modifies test file only
+
+### Tasks
+
+| # | Task | File(s) | AC | Source |
+|---|------|---------|-----|--------|
+| 1 | Fix fleet.ts JSDoc — update middleware documentation to reflect actual header-based reads | `app/src/routes/fleet.ts` | JSDoc block at route definition accurately documents that `operatorId` and `operatorTier` are read from `c.req.header('x-operator-id')` and `c.req.header('x-operator-tier')` respectively, not from `c.get()`. Existing tests pass. | Pre-merge sweep M-2 |
+| 2 | Add parseInt bounds validation to all config env vars — clamp to safe defaults on NaN/negative | `app/src/config.ts` | Every `parseInt()` call wrapped in a helper that: (1) returns default on `NaN`, (2) returns default on negative values, (3) clamps to documented maximum where applicable (e.g., port ≤ 65535, pool size ≤ 100). Existing config tests pass. New unit tests verify NaN → default, negative → default, out-of-range → clamped. | Pre-merge sweep M-3 |
+| 3 | Validate ConvictionTier from request headers — reject invalid values with 400 | `app/src/routes/enrich.ts`, `app/src/routes/fleet.ts` | Header value validated against known ConvictionTier enum values (`observer`, `holder`, `staker`, `governor`, etc.) before cast. Invalid/unknown values: enrich.ts defaults to `'observer'`, fleet.ts uses `undefined`. No `as ConvictionTier` without prior validation. Existing tests pass. | Pre-merge sweep M-4 |
+| 4 | Add DATABASE_POOL_SIZE to .env.example | `.env.example` | `DATABASE_POOL_SIZE` documented in the Database section with type (integer), default (10), and description. Grouped with existing `DATABASE_URL`. | Pre-merge sweep M-5 |
+| 5 | Fix fleet-monitor.test.ts mock typing — use proper vitest mock types | `app/src/services/__tests__/fleet-monitor.test.ts` | Mock factory functions return properly typed mocks using `vi.fn()` with correct generic parameters or `as unknown as MockedType` pattern. All `mockResolvedValue`, `mockRejectedValue`, `mockImplementation` calls resolve without TS errors. File has 0 TypeScript errors. All existing tests pass. | Pre-merge sweep M-6 |
+
+---
+
+## Dependency Graph (Updated with Sprint 7)
 
 ```
 Sprint 1-3 (Complete — PR #50)
   └──→ Sprint 4 (Complete — Bridgebuilder Excellence)
          └──→ Sprint 5 (Complete — Deep Review — Governance Excellence)
-                └──→ Sprint 6 (Final Convergence — All LOWs + Deferred)
-                       ├── T1: GovernorRegistry broadcast dedup (independent)
-                       ├── T2: migrate.ts lock client leak fix (independent)
-                       ├── T3: Conductor branch determinism (independent)
-                       │    └──→ T4: Saga routing metadata (context from T3)
-                       ├── T5: Barrel deprecation timeline (independent)
-                       ├── T6: OTEL E2E validation (independent)
-                       ├── T7: Log-trace correlation (independent)
-                       ├── T8: STAGING.md pool sizing + boot time (independent)
-                       └── T9: Governance ADR — evaluationGap (independent)
+                └──→ Sprint 6 (Complete — Final Convergence — All LOWs + Deferred)
+                       └──→ Sprint 7 (Pre-Merge Polish — Type Safety & Config Hardening)
+                              ├── T1: fleet.ts JSDoc fix (independent)
+                              ├── T2: config parseInt hardening (independent)
+                              ├── T3: ConvictionTier validation (independent)
+                              ├── T4: .env.example DATABASE_POOL_SIZE (independent)
+                              └── T5: fleet-monitor.test.ts mock typing (independent)
 ```
 
 ## Risk Mitigation (Sprint 6)

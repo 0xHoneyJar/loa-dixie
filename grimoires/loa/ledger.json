@@ -883,13 +883,21 @@
           "label": "Final Convergence — Deferred LOWs, Flatline Remainders & Excellence Polish",
           "tasks": 9,
           "status": "pending"
+        },
+        {
+          "id": "sprint-7",
+          "global_id": 107,
+          "local_label": "sprint-7",
+          "label": "Pre-Merge Polish — Type Safety, Config Hardening & Test Hygiene",
+          "tasks": 5,
+          "status": "pending"
         }
       ]
     }
   ],
   "active_cycle": "cycle-014",
   "active_bugfix": null,
-  "global_sprint_counter": 106,
+  "global_sprint_counter": 107,
   "bugfix_cycles": [],
   "release_cycles": [
     {
