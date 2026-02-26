@@ -9,6 +9,9 @@
 import { describe, it, expect } from 'vitest';
 import { get } from './helpers/http.js';
 
+// Unique per test run to avoid stale state collisions (Bridgebuilder Finding BB-PR50-F5)
+const RUN_ID = `e2e-${Date.now().toString(36)}`;
+
 describe('E2E-6: Governance Admission', () => {
   it('governance health reports governor count', async () => {
     const adminKey = process.env.DIXIE_ADMIN_KEY ?? 'test-admin-key';

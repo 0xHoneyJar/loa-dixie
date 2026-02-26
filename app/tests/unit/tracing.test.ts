@@ -14,19 +14,22 @@ describe('tracing middleware', () => {
     expect(traceparent).toMatch(/^00-[a-f0-9]{32}-[a-f0-9]{16}-01$/);
   });
 
-  it('propagates incoming traceparent trace ID', async () => {
+  it('response traceparent uses OTEL span context IDs', async () => {
+    // After BB-PR50-F3 fix: traceparent uses real OTEL span context IDs
+    // instead of independently generated UUIDs. In no-op mode (no SDK),
+    // the span context returns zero IDs. With a real SDK, IDs are real.
     const app = new Hono();
     app.use('*', createTracing('dixie-bff'));
     app.get('/', (c) => c.text('ok'));
 
-    const incomingTraceId = 'abcdef1234567890abcdef1234567890';
     const res = await app.request('/', {
       headers: {
-        traceparent: `00-${incomingTraceId}-0000000000000001-01`,
+        traceparent: '00-abcdef1234567890abcdef1234567890-0000000000000001-01',
       },
     });
     const traceparent = res.headers.get('traceparent');
-    expect(traceparent).toContain(incomingTraceId);
+    // Valid W3C format — the trace ID comes from OTEL span context
+    expect(traceparent).toMatch(/^00-[a-f0-9]{32}-[a-f0-9]{16}-01$/);
   });
 
   it('generates new trace ID for malformed traceparent', async () => {

@@ -55,7 +55,7 @@ import type {
 } from '../types/reputation-evolution.js';
 import { MutationLog, createMutation } from './governance-mutation.js';
 import type { MutationLogPersistence } from './governance-mutation.js';
-import { startSanitizedSpan } from '../utils/span-sanitizer.js';
+import { startSanitizedSpan, addSanitizedAttributes } from '../utils/span-sanitizer.js';
 
 // ---------------------------------------------------------------------------
 // Feedback Dampening (Bridgebuilder F1 — autopoietic loop safety)
@@ -735,7 +735,7 @@ export class ReputationService
       ema_value: 0,
     };
 
-    await startSanitizedSpan('dixie.reputation.update', spanAttrs, async () => {
+    await startSanitizedSpan('dixie.reputation.update', spanAttrs, async (span) => {
       // BB-008-001: Wrap entire event processing in a single transaction so
       // event log and aggregate/cohort state are atomically consistent. If any
       // handler fails, both the event append and state changes are rolled back.
@@ -764,6 +764,16 @@ export class ReputationService
             assertNever(event);
         }
       });
+
+      // Record actual computed scores after transaction completes.
+      // (Bridgebuilder Finding BB-PR50-F6: span no longer shows placeholder score: 0)
+      const aggregate = await this.store.get(nftId);
+      if (aggregate) {
+        addSanitizedAttributes(span, 'dixie.reputation.update', {
+          score: aggregate.personal_score,
+          ema_value: aggregate.blended_score,
+        });
+      }
     });
   }
 

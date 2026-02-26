@@ -220,7 +220,86 @@ docker compose -f deploy/docker-compose.staging.yml exec dixie-bff \
 # Expected: http://tempo:4317
 ```
 
-## 8. Teardown
+## 8. NATS Connection & Debugging
+
+NATS handles cross-service signal events (fleet lifecycle, governance decisions, collective intelligence).
+
+**Internal URL** (within compose network): `nats://nats:4222`
+
+To debug from outside the compose network, temporarily expose the port:
+
+```bash
+# One-off debugging session
+docker compose -f deploy/docker-compose.staging.yml exec nats nats-server --signal ldm
+```
+
+Or add a port mapping to the compose file for development:
+
+```yaml
+# WARNING: Do NOT expose in production
+nats:
+  ports:
+    - "4222:4222"  # NATS client
+    - "8222:8222"  # NATS monitoring
+```
+
+Then use `nats-cli` to subscribe/publish:
+
+```bash
+nats sub "dixie.>" --server nats://localhost:4222
+```
+
+## 9. Cross-Service Trace Correlation
+
+Dixie forwards `traceparent` headers to loa-finn on every request. When the
+observability profile is active, a single request produces a trace spanning:
+
+```
+dixie.request → dixie.auth → dixie.finn.inference → [finn spans]
+```
+
+### Verifying End-to-End Traces
+
+```bash
+# 1. Make a request and capture the trace ID from the response header
+TRACE_ID=$(curl -sI http://localhost:3001/api/health | grep -i x-trace-id | awk '{print $2}' | tr -d '\r')
+echo "Trace ID: $TRACE_ID"
+
+# 2. Query Tempo for the trace (requires observability profile)
+curl -s "http://localhost:3200/api/traces/$TRACE_ID" | jq '.batches[].scopeSpans[].spans[] | {name, traceId: .traceId, spanId: .spanId, parentSpanId}'
+```
+
+### Span Types
+
+| Span Name | Source | Key Attributes |
+|-----------|--------|---------------|
+| `dixie.request` | tracing middleware | method, url, status_code, duration_ms |
+| `dixie.auth` | JWT middleware | auth_type, wallet_hash, tier |
+| `dixie.finn.inference` | FinnClient | model, latency_ms, circuit_state |
+| `dixie.reputation.update` | ReputationService | model_id, score, ema_value |
+| `dixie.fleet.spawn` | AgentSpawner | task_type, cost, identity_hash |
+| `dixie.governance.check` | FleetGovernor | resource_type, decision, witness_count, denial_reason |
+
+## 10. Staging vs Production Topology
+
+| Aspect | Staging (compose) | Production (ECS Fargate) |
+|--------|-------------------|--------------------------|
+| Networking | Single Docker network | VPC with private subnets |
+| Scaling | Single instance per service | Auto-scaling groups |
+| Secrets | `.env.staging` file | AWS SSM Parameter Store / Secrets Manager |
+| Database | Compose-managed PostgreSQL | RDS with multi-AZ |
+| Redis | Compose-managed Redis | ElastiCache cluster |
+| NATS | Compose-managed single node | NATS cluster (3-node) |
+| Load balancing | Direct port mapping | ALB with TLS termination |
+| Traces | Tempo (local) | AWS X-Ray or hosted Grafana Cloud |
+
+**Key differences to watch for**:
+- Staging runs on a single host — no network partitions possible
+- Staging uses persistent Docker volumes — production uses EBS/RDS snapshots
+- Staging health checks are local — production checks traverse ALB
+- OTEL collector in staging is Tempo direct; production may need an OTEL Collector sidecar
+
+## 11. Teardown
 
 ```bash
 # Stop all services and remove volumes (clean state)

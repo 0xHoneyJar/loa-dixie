@@ -34,10 +34,10 @@ export function hashForSpan(value: string): string {
 const SPAN_ALLOWLISTS: Record<string, ReadonlySet<string>> = {
   'dixie.request': new Set(['method', 'url', 'status_code', 'duration_ms']),
   'dixie.auth': new Set(['auth_type', 'wallet_hash', 'tier']),
-  'dixie.finn.inference': new Set(['model', 'tokens', 'latency_ms']),
+  'dixie.finn.inference': new Set(['model', 'tokens', 'latency_ms', 'circuit_state']),
   'dixie.reputation.update': new Set(['model_id', 'score', 'ema_value']),
   'dixie.fleet.spawn': new Set(['task_type', 'cost', 'identity_hash']),
-  'dixie.governance.check': new Set(['resource_type', 'decision', 'witness_count']),
+  'dixie.governance.check': new Set(['resource_type', 'decision', 'witness_count', 'denial_reason']),
 };
 
 /**

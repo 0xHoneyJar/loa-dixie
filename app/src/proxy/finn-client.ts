@@ -1,5 +1,6 @@
 import type { CircuitState, FinnHealthResponse } from '../types.js';
 import { computeReqHash, deriveIdempotencyKey } from '@0xhoneyjar/loa-hounfour/integrity';
+import { trace } from '@opentelemetry/api';
 import { BffError } from '../errors.js';
 import { startSanitizedSpan } from '../utils/span-sanitizer.js';
 
@@ -75,7 +76,7 @@ export class FinnClient {
   ): Promise<T> {
     return startSanitizedSpan(
       'dixie.finn.inference',
-      { model: path, latency_ms: 0 },
+      { model: path, latency_ms: 0, circuit_state: this.circuitState },
       async (span) => {
         this.checkCircuit();
 
@@ -104,11 +105,22 @@ export class FinnClient {
           integrityHeaders['X-Idempotency-Key'] = idempotencyKey;
         }
 
+        // Forward traceparent to loa-finn for cross-service trace correlation.
+        // Reads the active OTEL span context so Finn's spans share the same trace ID.
+        // (Bridgebuilder Finding BB-PR50-F6)
+        const traceHeaders: Record<string, string> = {};
+        const activeSpan = trace.getActiveSpan();
+        if (activeSpan) {
+          const ctx = activeSpan.spanContext();
+          traceHeaders['traceparent'] = `00-${ctx.traceId}-${ctx.spanId}-01`;
+        }
+
         try {
           const res = await fetch(url, {
             method,
             headers: {
               'Content-Type': 'application/json',
+              ...traceHeaders,
               ...integrityHeaders,
               ...opts?.headers,
             },

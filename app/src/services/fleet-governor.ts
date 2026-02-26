@@ -389,6 +389,7 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
     const limit = this.tierLimits[tier];
     if (limit <= 0) {
       span.setAttribute('decision', 'denied');
+      span.setAttribute('denial_reason', 'tier_not_permitted');
       throw new SpawnDeniedError(
         { operatorId: input.operatorId, tier, activeCount: 0, tierLimit: limit },
         `Tier '${tier}' is not permitted to spawn agents (limit=0)`,
@@ -411,6 +412,7 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
 
       if (activeCount >= limit) {
         await client.query('ROLLBACK');
+        span.setAttribute('denial_reason', 'tier_limit_exceeded');
         const state: FleetState = {
           operatorId: input.operatorId,
           tier,

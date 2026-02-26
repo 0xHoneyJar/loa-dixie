@@ -11,7 +11,9 @@ import { get } from './helpers/http.js';
 import { execSync } from 'node:child_process';
 import { waitForHealthy } from './helpers/wait.js';
 
-const TEST_NFT_ID = 'e2e-test-nft-001';
+// Unique per test run to avoid stale state collisions (Bridgebuilder Finding BB-PR50-F5)
+const RUN_ID = `e2e-${Date.now().toString(36)}`;
+const TEST_NFT_ID = `${RUN_ID}-nft-001`;
 // Resolve compose file relative to project root (test may run from app/ or project root)
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
