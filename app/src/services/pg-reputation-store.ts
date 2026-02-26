@@ -178,4 +178,10 @@ export class PostgreSQLReputationStore implements ReputationStore {
     );
     return result.rows.map((row) => row.data);
   }
+
+  async transact<T>(fn: (store: ReputationStore) => Promise<T>): Promise<T> {
+    return withTransaction(this.pool, async () => {
+      return fn(this);
+    });
+  }
 }

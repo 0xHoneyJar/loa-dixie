@@ -144,65 +144,105 @@ export async function migrate(pool: DbPool): Promise<MigrationResult> {
     warnings: [],
   };
 
-  // 1. Ensure tracking table exists
-  await ensureMigrationsTable(pool);
-
-  // 2. Get applied migrations
-  const applied = await getAppliedMigrations(pool);
-
-  // 3. Discover migration files
-  const migrationFiles = await discoverMigrations();
-  result.total = migrationFiles.length;
-
-  // 4. Seed pre-existing migrations (003, 004) if tables exist but aren't tracked
-  const seeded = await seedExistingMigrations(pool, applied, migrationFiles);
-  for (const filename of seeded) {
-    result.skipped.push(filename);
-  }
-
-  // 5. Apply pending migrations in order
-  for (const filename of migrationFiles) {
-    const content = await readFile(join(MIGRATIONS_DIR, filename), 'utf-8');
-    const checksum = computeChecksum(content);
-
-    const existingChecksum = applied.get(filename);
-    if (existingChecksum !== undefined) {
-      // Already applied — verify checksum
-      if (existingChecksum !== checksum) {
-        result.warnings.push(
-          `Checksum mismatch for ${filename}: expected ${existingChecksum}, got ${checksum}. Migration file has changed after application.`,
-        );
-      }
-      if (!seeded.includes(filename)) {
-        result.skipped.push(filename);
-      }
-      continue;
-    }
-
-    // Apply migration
-    const client = await pool.connect();
+  // 0. Acquire advisory lock (prevents concurrent migration across replicas)
+  const MIGRATION_LOCK_ID = 42_000_014; // Unique per-app (42_000_000 + cycle)
+  const LOCK_TIMEOUT_MS = 30_000;
+  const lockClient = await pool.connect();
+  try {
+    await lockClient.query(`SET lock_timeout = '${LOCK_TIMEOUT_MS}ms'`);
     try {
-      await client.query('BEGIN');
-      await client.query(content);
-      await client.query(
-        'INSERT INTO _migrations (filename, checksum) VALUES ($1, $2)',
-        [filename, checksum],
-      );
-      await client.query('COMMIT');
-      result.applied.push(filename);
+      await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
     } catch (err) {
-      try {
-        await client.query('ROLLBACK');
-      } catch {
-        // ROLLBACK failure must not mask the original migration error
-      }
+      lockClient.release();
       throw new Error(
-        `Migration ${filename} failed: ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to acquire migration lock within ${LOCK_TIMEOUT_MS}ms. ` +
+          'Another instance may be migrating. Check and retry.',
       );
-    } finally {
-      client.release();
     }
+    // Reset lock_timeout to avoid leaking into connection pool
+    await lockClient.query("SET lock_timeout = '0'");
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      err.message.includes('Failed to acquire migration lock')
+    ) {
+      throw err;
+    }
+    lockClient.release();
+    throw err;
   }
 
-  return result;
+  try {
+    // 1. Ensure tracking table exists
+    await ensureMigrationsTable(pool);
+
+    // 2. Get applied migrations
+    const applied = await getAppliedMigrations(pool);
+
+    // 3. Discover migration files
+    const migrationFiles = await discoverMigrations();
+    result.total = migrationFiles.length;
+
+    // 4. Seed pre-existing migrations (003, 004) if tables exist but aren't tracked
+    const seeded = await seedExistingMigrations(pool, applied, migrationFiles);
+    for (const filename of seeded) {
+      result.skipped.push(filename);
+    }
+
+    // 5. Apply pending migrations in order
+    for (const filename of migrationFiles) {
+      const content = await readFile(join(MIGRATIONS_DIR, filename), 'utf-8');
+      const checksum = computeChecksum(content);
+
+      const existingChecksum = applied.get(filename);
+      if (existingChecksum !== undefined) {
+        // Already applied — verify checksum
+        if (existingChecksum !== checksum) {
+          result.warnings.push(
+            `Checksum mismatch for ${filename}: expected ${existingChecksum}, got ${checksum}. Migration file has changed after application.`,
+          );
+        }
+        if (!seeded.includes(filename)) {
+          result.skipped.push(filename);
+        }
+        continue;
+      }
+
+      // Apply migration
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(content);
+        await client.query(
+          'INSERT INTO _migrations (filename, checksum) VALUES ($1, $2)',
+          [filename, checksum],
+        );
+        await client.query('COMMIT');
+        result.applied.push(filename);
+      } catch (err) {
+        try {
+          await client.query('ROLLBACK');
+        } catch {
+          // ROLLBACK failure must not mask the original migration error
+        }
+        throw new Error(
+          `Migration ${filename} failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      } finally {
+        client.release();
+      }
+    }
+
+    return result;
+  } finally {
+    // Release advisory lock
+    try {
+      await lockClient.query('SELECT pg_advisory_unlock($1)', [
+        MIGRATION_LOCK_ID,
+      ]);
+    } catch {
+      // Unlock failure must not mask migration result
+    }
+    lockClient.release();
+  }
 }

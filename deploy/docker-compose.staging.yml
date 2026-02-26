@@ -1,0 +1,119 @@
+# Staging Environment — Cycle-014 (Staging Launch Readiness)
+#
+# Real infrastructure: PostgreSQL, Redis, NATS, Tempo (optional).
+# Persistent volumes for reputation data (SM-3 restart test).
+# All images pinned to semver tags (Flatline SKP-001/IMP-003).
+#
+# Usage:
+#   cp .env.example deploy/.env.staging  # fill in values
+#   docker compose -f deploy/docker-compose.staging.yml up -d --wait
+#   curl http://localhost:3001/api/health
+#   npm run test:e2e
+#   docker compose -f deploy/docker-compose.staging.yml down -v
+#
+# With Tempo (observability):
+#   docker compose -f deploy/docker-compose.staging.yml --profile observability up -d
+
+services:
+  # --- PostgreSQL (persistent reputation + governance stores) ---
+  postgres:
+    image: postgres:16.6-alpine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: dixie
+      POSTGRES_USER: dixie
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.staging}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dixie"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    # Internal only — not exposed to host
+
+  # --- Redis (session cache, rate limiting) ---
+  redis:
+    image: redis:7.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    # Internal only — not exposed to host
+
+  # --- NATS (event bus for agent fleet) ---
+  nats:
+    image: nats:2.10-alpine
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    # Internal only — not exposed to host
+
+  # --- Tempo (trace collector — optional) ---
+  tempo:
+    image: grafana/tempo:2.7.0
+    profiles: [observability]
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - tempo-data:/tmp/tempo
+    ports:
+      - "3200:3200"   # Tempo query UI
+      - "4317:4317"   # OTLP gRPC receiver
+
+  # --- loa-finn (inference backend — pinned tag) ---
+  loa-finn:
+    image: ghcr.io/0xhoneyjar/loa-finn:v3.2.0
+    environment:
+      PORT: "3000"
+      NODE_ENV: staging
+      REDIS_URL: "redis://redis:6379"
+      JWT_SECRET: ${DIXIE_JWT_PRIVATE_KEY:-change-me-minimum-32-characters-long}
+      JWT_ISSUER: "dixie-bff"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => { if (!r.ok) process.exit(1) })"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Internal only — not exposed to host
+
+  # --- Dixie BFF (the service under test) ---
+  dixie-bff:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      loa-finn:
+        condition: service_healthy
+    env_file: .env.staging
+    environment:
+      FINN_URL: "http://loa-finn:3000"
+      FINN_WS_URL: "ws://loa-finn:3000"
+      DATABASE_URL: "postgresql://dixie:${POSTGRES_PASSWORD}@postgres:5432/dixie"
+      REDIS_URL: "redis://redis:6379"
+      NATS_URL: "nats://nats:4222"
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+      NODE_ENV: staging
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:
+  tempo-data:

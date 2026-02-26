@@ -42,7 +42,7 @@ import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
 import { protocolVersionMiddleware } from './services/protocol-version.js';
 import { KnowledgePriorityStore } from './services/knowledge-priority-store.js';
-import { ReputationService, InMemoryReputationStore, seedCollectionAggregator } from './services/reputation-service.js';
+import { ReputationService, InMemoryReputationStore, seedCollectionAggregator, type ReputationStore } from './services/reputation-service.js';
 import { PostgreSQLReputationStore } from './services/pg-reputation-store.js';
 import { MutationLogStore } from './services/mutation-log-store.js';
 import { AuditTrailStore } from './services/audit-trail-store.js';
@@ -206,10 +206,19 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Phase 2: Compound learning engine (batch processing every 10 interactions)
   const learningEngine = new CompoundLearningEngine();
 
-  // Phase 2 / cycle-009: Reputation service — PostgreSQL when available, in-memory fallback
-  const reputationStore = dbPool
-    ? new PostgreSQLReputationStore(dbPool)
-    : new InMemoryReputationStore();
+  // Phase 2 / cycle-009: Reputation service — PostgreSQL when available, environment-gated fallback
+  let reputationStore: ReputationStore;
+  if (dbPool) {
+    reputationStore = new PostgreSQLReputationStore(dbPool);
+  } else if (config.nodeEnv === 'development' || config.nodeEnv === 'test') {
+    log('warn', { event: 'reputation_store_fallback', backend: 'in-memory', reason: 'DATABASE_URL not set (dev/test mode)' });
+    reputationStore = new InMemoryReputationStore();
+  } else {
+    throw new Error(
+      `DATABASE_URL is required in ${config.nodeEnv} mode. ` +
+      'InMemoryReputationStore is only permitted in development/test.',
+    );
+  }
   const reputationService = new ReputationService(reputationStore);
 
   // Phase 2: Enrichment service for autopoietic loop (Sprint 11, Task 11.1)
