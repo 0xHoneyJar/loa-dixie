@@ -78,6 +78,26 @@ export interface FreesideConvictionResponse {
   readonly validatorId?: string;
 }
 
+/** Set of valid tier strings for runtime validation. */
+const VALID_TIERS: ReadonlySet<string> = new Set(TIER_ORDER);
+
+/**
+ * Parse and validate a ConvictionTier from an untrusted string (e.g., request header).
+ * Returns the validated tier or the fallback (default: 'observer').
+ */
+export function parseConvictionTier(raw: string | undefined): ConvictionTier {
+  if (raw && VALID_TIERS.has(raw)) return raw as ConvictionTier;
+  return 'observer';
+}
+
+/**
+ * Strict variant: returns undefined on invalid input (for routes that reject invalid tiers).
+ */
+export function parseConvictionTierStrict(raw: string | undefined): ConvictionTier | undefined {
+  if (raw && VALID_TIERS.has(raw)) return raw as ConvictionTier;
+  return undefined;
+}
+
 /**
  * Check if a tier meets or exceeds a required tier.
  */

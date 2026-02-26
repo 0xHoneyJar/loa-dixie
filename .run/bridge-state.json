@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "bridge_id": "bridge-20260226-dixie-mvp",
+  "bridge_id": "bridge-20260226-deep-review",
   "state": "JACKED_OUT",
   "config": {
-    "depth": 3,
+    "depth": 5,
     "mode": "full",
     "flatline_threshold": 0.05,
     "per_sprint": false,
@@ -11,135 +11,48 @@
     "repo": "0xHoneyJar/loa-dixie"
   },
   "timestamps": {
-    "started": "2026-02-25T07:47:10Z",
-    "last_activity": "2026-02-26T18:10:00Z"
+    "started": "2026-02-26T22:00:00Z",
+    "last_activity": "2026-02-26T23:35:00Z"
   },
   "iterations": [
     {
       "iteration": 1,
-      "state": "completed",
-      "sprint_plan_source": "existing",
-      "sprints_executed": 7,
-      "bridgebuilder": {
-        "total_findings": 4,
-        "by_severity": {
-          "critical": 0,
-          "high": 2,
-          "medium": 1,
-          "low": 1,
-          "vision": 0,
-          "praise": 0
-        },
-        "severity_weighted_score": 0.65,
-        "pr_comment_url": null
-      },
-      "enrichment": {
-        "persona_loaded": true,
-        "persona_validation": "passed",
-        "findings_format": "structured_json",
-        "field_fill_rates": {
-          "faang_parallel": 0.75,
-          "metaphor": 0.5,
-          "teachable_moment": 0.75,
-          "connection": 0.5
-        },
-        "praise_count": 0,
-        "insights_size_bytes": 4096,
-        "redactions_applied": 0
-      },
-      "visions_captured": 0,
-      "started_at": "2026-02-25T07:47:10Z",
-      "completed_at": "2026-02-26T16:00:00Z"
+      "sprint": "sprint-105",
+      "findings": { "high": 5, "medium": 8, "low": 5 },
+      "addressed": 8,
+      "commit": "6940613"
     },
     {
       "iteration": 2,
-      "state": "completed",
-      "sprint_plan_source": "findings",
-      "sprints_executed": 1,
-      "bridgebuilder": {
-        "total_findings": 14,
-        "by_severity": {
-          "critical": 0,
-          "high": 3,
-          "medium": 4,
-          "low": 4,
-          "vision": 0,
-          "praise": 3
-        },
-        "severity_weighted_score": 0.85,
-        "pr_comment_url": null
-      },
-      "enrichment": {
-        "persona_loaded": true,
-        "persona_validation": "passed",
-        "findings_format": "structured_json",
-        "field_fill_rates": {
-          "faang_parallel": 0.85,
-          "metaphor": 0.7,
-          "teachable_moment": 0.85,
-          "connection": 0.7
-        },
-        "praise_count": 3,
-        "insights_size_bytes": 8192,
-        "redactions_applied": 0
-      },
-      "visions_captured": 0,
-      "started_at": "2026-02-26T16:00:00Z",
-      "completed_at": "2026-02-26T17:30:00Z"
+      "sprint": null,
+      "findings": { "high": 0, "medium": 2, "low": 3 },
+      "addressed": 2,
+      "commit": "69cb7b1"
     },
     {
       "iteration": 3,
-      "state": "completed",
-      "sprint_plan_source": "findings",
-      "sprints_executed": 1,
-      "bridgebuilder": {
-        "total_findings": 2,
-        "by_severity": {
-          "critical": 0,
-          "high": 0,
-          "medium": 2,
-          "low": 0,
-          "vision": 0,
-          "praise": 0
-        },
-        "severity_weighted_score": 0.15,
-        "pr_comment_url": null
-      },
-      "enrichment": {
-        "persona_loaded": true,
-        "persona_validation": "passed",
-        "findings_format": "structured_json",
-        "field_fill_rates": {
-          "faang_parallel": 0.5,
-          "metaphor": 0.5,
-          "teachable_moment": 1.0,
-          "connection": 0.5
-        },
-        "praise_count": 0,
-        "insights_size_bytes": 2048,
-        "redactions_applied": 0
-      },
-      "visions_captured": 0,
-      "started_at": "2026-02-26T17:30:00Z",
-      "completed_at": "2026-02-26T18:10:00Z"
+      "sprint": null,
+      "findings": { "high": 0, "medium": 0, "low": 3 },
+      "addressed": 0,
+      "commit": null
     }
   ],
   "flatline": {
-    "initial_score": 0.65,
-    "last_score": 0.15,
-    "consecutive_below_threshold": 1,
+    "initial_score": 18,
+    "last_score": 3,
+    "consecutive_below_threshold": 2,
     "flatlined": true,
-    "termination_reason": "severity_drop_82pct_below_threshold"
+    "termination_reason": "kaironic_flatline_iteration_3"
   },
   "metrics": {
-    "total_sprints_executed": 9,
-    "total_files_changed": 64,
-    "total_findings_addressed": 15,
+    "total_sprints_executed": 1,
+    "total_files_changed": 25,
+    "total_findings_addressed": 10,
     "total_visions_captured": 0
   },
   "finalization": {
     "ground_truth_updated": false,
     "rtfm_passed": false,
-    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/47"
+    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/50"
   }
 }

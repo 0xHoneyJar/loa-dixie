@@ -21,6 +21,7 @@
  * @since cycle-012 — Sprint 90, Fleet Governor
  */
 import type { DbPool } from '../db/client.js';
+import { startSanitizedSpan, addSanitizedAttributes } from '../utils/span-sanitizer.js';
 import type { ConvictionTier } from '../types/conviction.js';
 import type { FleetTaskStatus, CreateFleetTaskInput, FleetTaskRecord } from '../types/fleet.js';
 import type {
@@ -45,8 +46,8 @@ export interface FleetState {
 /** Events that can transition fleet state. */
 export type FleetEvent =
   | { type: 'SPAWN_REQUESTED'; operatorId: string; tier: ConvictionTier }
-  | { type: 'AGENT_COMPLETED'; taskId: string }
-  | { type: 'AGENT_FAILED'; taskId: string }
+  | { type: 'AGENT_COMPLETED'; taskId: string; operatorId: string }
+  | { type: 'AGENT_FAILED'; taskId: string; operatorId: string }
   | { type: 'TIER_CHANGED'; operatorId: string; newTier: ConvictionTier };
 
 /** Fleet invariant identifiers. */
@@ -116,6 +117,10 @@ interface FleetTaskRow {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  /** @since cycle-013 — persistent agent identity */
+  agent_identity_id: string | null;
+  /** @since cycle-013 — geometry group membership */
+  group_id: string | null;
 }
 
 function rowToRecord(row: FleetTaskRow): FleetTaskRecord {
@@ -143,6 +148,8 @@ function rowToRecord(row: FleetTaskRow): FleetTaskRecord {
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    agentIdentityId: row.agent_identity_id,
+    groupId: row.group_id,
   };
 }
 
@@ -174,6 +181,15 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
   readonly resourceId: string;
   readonly resourceType = 'fleet-governor';
 
+  /**
+   * Last-written operator state snapshot.
+   *
+   * LIMITATION (S5-F03): This is a per-request ephemeral snapshot, not a
+   * canonical resource state. `verify()` and `verifyAll()` check only the
+   * LAST operator's state. For per-operator invariant checking, query the
+   * DB directly via `admitAndInsert()`. Future: replace with a proper
+   * per-operator state map or remove from GovernedResource contract.
+   */
   private _current: FleetState;
   private _version = 0;
   private readonly _auditTrail: AuditTrail;
@@ -245,8 +261,8 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
       }
       case 'AGENT_COMPLETED':
       case 'AGENT_FAILED': {
-        // Invalidate cache for the operator
-        this.invalidateCache(this._current.operatorId);
+        // Invalidate cache for the owning operator (not _current singleton)
+        this.invalidateCache(event.operatorId);
         this._version++;
         return { success: true, state: this._current, version: this._version };
       }
@@ -381,8 +397,13 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
     input: CreateFleetTaskInput,
     tier: ConvictionTier,
   ): Promise<FleetTaskRecord> {
+    return startSanitizedSpan(
+      'dixie.governance.check',
+      { resource_type: 'fleet_task', decision: 'pending', witness_count: 0 },
+      async (span) => {
     const limit = this.tierLimits[tier];
     if (limit <= 0) {
+      addSanitizedAttributes(span, 'dixie.governance.check', { decision: 'denied', denial_reason: 'tier_not_permitted' });
       throw new SpawnDeniedError(
         { operatorId: input.operatorId, tier, activeCount: 0, tierLimit: limit },
         `Tier '${tier}' is not permitted to spawn agents (limit=0)`,
@@ -405,6 +426,7 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
 
       if (activeCount >= limit) {
         await client.query('ROLLBACK');
+        addSanitizedAttributes(span, 'dixie.governance.check', { denial_reason: 'tier_limit_exceeded' });
         const state: FleetState = {
           operatorId: input.operatorId,
           tier,
@@ -455,6 +477,7 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
       };
       this._version++;
 
+      addSanitizedAttributes(span, 'dixie.governance.check', { decision: 'admit', witness_count: activeCount + 1 });
       return record;
     } catch (err) {
       // Rollback on any non-SpawnDeniedError failure
@@ -465,10 +488,15 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
           // Swallow rollback errors
         }
       }
+      if (err instanceof SpawnDeniedError) {
+        addSanitizedAttributes(span, 'dixie.governance.check', { decision: 'denied' });
+      }
       throw err;
     } finally {
       client.release();
     }
+      },
+    );
   }
 
   // -------------------------------------------------------------------------

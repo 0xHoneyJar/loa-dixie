@@ -74,9 +74,13 @@ vi.mock('node:fs/promises', () => ({
   access: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('node:crypto', () => ({
-  randomBytes: vi.fn().mockReturnValue({ toString: () => 'deadbeef' }),
-}));
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:crypto')>();
+  return {
+    ...actual,
+    randomBytes: vi.fn().mockReturnValue({ toString: () => 'deadbeef' }),
+  };
+});
 
 // Import after mocks
 import { writeFile, unlink, mkdir } from 'node:fs/promises';

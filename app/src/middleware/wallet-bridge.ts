@@ -11,7 +11,7 @@ import type { MiddlewareHandler } from 'hono';
  */
 export function createWalletBridge(): MiddlewareHandler {
   return async (c, next) => {
-    const wallet = c.get('wallet' as never) as string | undefined;
+    const wallet = c.get('wallet');
     if (wallet) {
       c.req.raw.headers.set('x-wallet-address', wallet);
     }

@@ -14,7 +14,7 @@
  */
 
 import { Hono } from 'hono';
-import { tierMeetsRequirement } from '../types/conviction.js';
+import { tierMeetsRequirement, parseConvictionTier } from '../types/conviction.js';
 import { buildConvictionDenialResponse } from '../services/conviction-boundary.js';
 import type { ConvictionTier } from '../types/conviction.js';
 import type { EnrichmentService, EnrichmentContext } from '../services/enrichment-service.js';
@@ -56,7 +56,7 @@ export function createEnrichmentRoutes(deps: EnrichmentRouteDeps): Hono {
 
   app.post('/review-context', async (c) => {
     // --- Access Control: builder+ tier required ---
-    const tier = (c.req.header('x-conviction-tier') ?? 'observer') as ConvictionTier;
+    const tier = parseConvictionTier(c.req.header('x-conviction-tier'));
     if (!tierMeetsRequirement(tier, REQUIRED_TIER)) {
       const denial = buildConvictionDenialResponse(
         tier,

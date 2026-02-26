@@ -42,7 +42,7 @@ import { governorRegistry } from './services/governor-registry.js';
 import { corpusMeta } from './services/corpus-meta.js';
 import { protocolVersionMiddleware } from './services/protocol-version.js';
 import { KnowledgePriorityStore } from './services/knowledge-priority-store.js';
-import { ReputationService, InMemoryReputationStore, seedCollectionAggregator } from './services/reputation-service.js';
+import { ReputationService, InMemoryReputationStore, seedCollectionAggregator, type ReputationStore } from './services/reputation-service.js';
 import { PostgreSQLReputationStore } from './services/pg-reputation-store.js';
 import { MutationLogStore } from './services/mutation-log-store.js';
 import { AuditTrailStore } from './services/audit-trail-store.js';
@@ -50,6 +50,7 @@ import { DynamicContractStore } from './services/dynamic-contract-store.js';
 import { KnowledgeGovernor } from './services/knowledge-governor.js';
 import { migrate } from './db/migrate.js';
 import { EnrichmentService } from './services/enrichment-service.js';
+import { FleetGovernor } from './services/fleet-governor.js';
 import { createEnrichmentRoutes } from './routes/enrich.js';
 import type { TBAVerification } from './types/agent-api.js';
 import { createDbPool, type DbPool } from './db/client.js';
@@ -121,6 +122,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   if (config.databaseUrl) {
     dbPool = createDbPool({
       connectionString: config.databaseUrl,
+      maxConnections: config.databasePoolSize,
       log,
     });
   }
@@ -206,10 +208,19 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Phase 2: Compound learning engine (batch processing every 10 interactions)
   const learningEngine = new CompoundLearningEngine();
 
-  // Phase 2 / cycle-009: Reputation service — PostgreSQL when available, in-memory fallback
-  const reputationStore = dbPool
-    ? new PostgreSQLReputationStore(dbPool)
-    : new InMemoryReputationStore();
+  // Phase 2 / cycle-009: Reputation service — PostgreSQL when available, environment-gated fallback
+  let reputationStore: ReputationStore;
+  if (dbPool) {
+    reputationStore = new PostgreSQLReputationStore(dbPool);
+  } else if (config.nodeEnv === 'development' || config.nodeEnv === 'test') {
+    log('warn', { event: 'reputation_store_fallback', backend: 'in-memory', reason: 'DATABASE_URL not set (dev/test mode)' });
+    reputationStore = new InMemoryReputationStore();
+  } else {
+    throw new Error(
+      `DATABASE_URL is required in ${config.nodeEnv} mode. ` +
+      'InMemoryReputationStore is only permitted in development/test.',
+    );
+  }
   const reputationService = new ReputationService(reputationStore);
 
   // Phase 2: Enrichment service for autopoietic loop (Sprint 11, Task 11.1)
@@ -293,6 +304,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Allowlist (community membership) gates payment (economic access), which gates
   // routes (capability access). This ordering ensures community governance controls
   // economic flows, not the other way around. Reordering is an architectural decision.
+  // See: docs/adr/001-middleware-pipeline-ordering.md (canonical source)
   // See: grimoires/loa/context/adr-communitarian-agents.md
   // See: grimoires/loa/context/adr-conway-positioning.md
   //
@@ -526,6 +538,16 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   }
   if (!governorRegistry.get(knowledgeGovernor.resourceType)) {
     governorRegistry.register(knowledgeGovernor);
+  }
+
+  // --- Fleet governor registration (BB-DEEP-01: FleetGovernor must participate in governance health) ---
+  // Register as GovernedResource so verifyAllResources() checks INV-014/015/016
+  // and GET /health/governance includes fleet state.
+  if (dbPool) {
+    const fleetGovernor = new FleetGovernor(dbPool);
+    if (!governorRegistry.getResource(fleetGovernor.resourceType)) {
+      governorRegistry.registerResource(fleetGovernor);
+    }
   }
 
   // --- SPA fallback (placeholder — web build integrated later) ---

@@ -18,6 +18,18 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import type { DbPool } from './client.js';
 
+/**
+ * Compute a deterministic advisory lock ID from an application name.
+ * Uses a simple hash to map a string to a 31-bit positive integer,
+ * preventing cross-app collisions in shared PostgreSQL clusters.
+ * @since cycle-014 Sprint 105 — BB-DEEP-04
+ */
+function computeLockId(appName: string): number {
+  const hash = createHash('sha256').update(appName).digest();
+  // Read first 4 bytes as unsigned 32-bit integer, mask to 31-bit positive
+  return hash.readUInt32BE(0) & 0x7FFFFFFF;
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = join(__dirname, 'migrations');
 
@@ -144,65 +156,108 @@ export async function migrate(pool: DbPool): Promise<MigrationResult> {
     warnings: [],
   };
 
-  // 1. Ensure tracking table exists
-  await ensureMigrationsTable(pool);
-
-  // 2. Get applied migrations
-  const applied = await getAppliedMigrations(pool);
-
-  // 3. Discover migration files
-  const migrationFiles = await discoverMigrations();
-  result.total = migrationFiles.length;
-
-  // 4. Seed pre-existing migrations (003, 004) if tables exist but aren't tracked
-  const seeded = await seedExistingMigrations(pool, applied, migrationFiles);
-  for (const filename of seeded) {
-    result.skipped.push(filename);
-  }
-
-  // 5. Apply pending migrations in order
-  for (const filename of migrationFiles) {
-    const content = await readFile(join(MIGRATIONS_DIR, filename), 'utf-8');
-    const checksum = computeChecksum(content);
-
-    const existingChecksum = applied.get(filename);
-    if (existingChecksum !== undefined) {
-      // Already applied — verify checksum
-      if (existingChecksum !== checksum) {
-        result.warnings.push(
-          `Checksum mismatch for ${filename}: expected ${existingChecksum}, got ${checksum}. Migration file has changed after application.`,
-        );
-      }
-      if (!seeded.includes(filename)) {
-        result.skipped.push(filename);
-      }
-      continue;
-    }
-
-    // Apply migration
-    const client = await pool.connect();
+  // 0. Acquire advisory lock (prevents concurrent migration across replicas)
+  // BB-DEEP-04: Lock ID derived from app name hash for collision-resistance.
+  // Prevents cross-app collisions in shared PostgreSQL clusters.
+  const MIGRATION_LOCK_ID = computeLockId('dixie-bff:migration');
+  const LOCK_TIMEOUT_MS = 30_000;
+  const lockClient = await pool.connect();
+  let lockAcquired = false;
+  try {
+    await lockClient.query(`SELECT set_config('lock_timeout', $1, false)`, [`${LOCK_TIMEOUT_MS}ms`]);
     try {
-      await client.query('BEGIN');
-      await client.query(content);
-      await client.query(
-        'INSERT INTO _migrations (filename, checksum) VALUES ($1, $2)',
-        [filename, checksum],
-      );
-      await client.query('COMMIT');
-      result.applied.push(filename);
-    } catch (err) {
-      try {
-        await client.query('ROLLBACK');
-      } catch {
-        // ROLLBACK failure must not mask the original migration error
-      }
+      await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
+      lockAcquired = true;
+    } catch {
       throw new Error(
-        `Migration ${filename} failed: ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to acquire migration lock within ${LOCK_TIMEOUT_MS}ms. ` +
+          'Another instance may be migrating. Check and retry.',
       );
-    } finally {
-      client.release();
     }
+  } catch (err) {
+    // S5-F17: Single release point — avoid double-release on lock failure
+    if (!lockAcquired) {
+      lockClient.release();
+    }
+    throw err;
   }
 
-  return result;
+  try {
+    // S6-T2: Reset lock_timeout INSIDE the outer try block so that if this
+    // fails, the finally block still releases the advisory lock and client.
+    // Previously at line 178 in the inner try — a failure there would skip
+    // the outer try/finally entirely, leaking the lock client.
+    await lockClient.query("SET lock_timeout = '0'");
+    // 1. Ensure tracking table exists
+    await ensureMigrationsTable(pool);
+
+    // 2. Get applied migrations
+    const applied = await getAppliedMigrations(pool);
+
+    // 3. Discover migration files
+    const migrationFiles = await discoverMigrations();
+    result.total = migrationFiles.length;
+
+    // 4. Seed pre-existing migrations (003, 004) if tables exist but aren't tracked
+    const seeded = await seedExistingMigrations(pool, applied, migrationFiles);
+    for (const filename of seeded) {
+      result.skipped.push(filename);
+    }
+
+    // 5. Apply pending migrations in order
+    for (const filename of migrationFiles) {
+      const content = await readFile(join(MIGRATIONS_DIR, filename), 'utf-8');
+      const checksum = computeChecksum(content);
+
+      const existingChecksum = applied.get(filename);
+      if (existingChecksum !== undefined) {
+        // Already applied — verify checksum
+        if (existingChecksum !== checksum) {
+          result.warnings.push(
+            `Checksum mismatch for ${filename}: expected ${existingChecksum}, got ${checksum}. Migration file has changed after application.`,
+          );
+        }
+        if (!seeded.includes(filename)) {
+          result.skipped.push(filename);
+        }
+        continue;
+      }
+
+      // Apply migration
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(content);
+        await client.query(
+          'INSERT INTO _migrations (filename, checksum) VALUES ($1, $2)',
+          [filename, checksum],
+        );
+        await client.query('COMMIT');
+        result.applied.push(filename);
+      } catch (err) {
+        try {
+          await client.query('ROLLBACK');
+        } catch {
+          // ROLLBACK failure must not mask the original migration error
+        }
+        throw new Error(
+          `Migration ${filename} failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      } finally {
+        client.release();
+      }
+    }
+
+    return result;
+  } finally {
+    // Release advisory lock
+    try {
+      await lockClient.query('SELECT pg_advisory_unlock($1)', [
+        MIGRATION_LOCK_ID,
+      ]);
+    } catch {
+      // Unlock failure must not mask migration result
+    }
+    lockClient.release();
+  }
 }

@@ -270,7 +270,9 @@ export class ConductorEngine {
     );
 
     // Step 5: Build CreateFleetTaskInput for the saga (BF-001)
-    const branch = `fleet/${request.operatorId}-${Date.now()}`;
+    // S6-T3 / BF-008: Derive branch from idempotency token for determinism.
+    // Two identical spawn requests now produce the same branch name.
+    const branch = `fleet/${request.operatorId}-${idempotencyToken.slice(0, 8)}`;
     const sagaInput: CreateFleetTaskInput = {
       operatorId: request.operatorId,
       agentType: routing.agentType,
@@ -280,6 +282,7 @@ export class ConductorEngine {
       branch,
       maxRetries: request.maxRetries,
       contextHash: undefined, // saga injects idempotencyToken as contextHash
+      routingReason: routing.reason, // S6-T4 / BF-009: routing metadata for event
     };
 
     // Step 6: Execute saga with correct positional args (BF-001)

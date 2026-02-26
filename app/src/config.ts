@@ -1,3 +1,15 @@
+/**
+ * Parse an integer env var with bounds validation.
+ * Returns defaultVal on NaN or negative. Clamps to max if provided.
+ * Note: 0 is a valid return value (not treated as falsy/default).
+ */
+export function safeParseInt(raw: string | undefined, defaultVal: number, max?: number): number {
+  const parsed = parseInt(raw ?? String(defaultVal), 10);
+  if (Number.isNaN(parsed) || parsed < 0) return defaultVal;
+  if (max !== undefined && parsed > max) return max;
+  return parsed;
+}
+
 export interface DixieConfig {
   port: number;
   finnUrl: string;
@@ -36,6 +48,9 @@ export interface DixieConfig {
   autonomousPermissionTtlSec: number;
   autonomousBudgetDefaultMicroUsd: number;
 
+  // Phase 2: Connection pool sizing
+  databasePoolSize: number;
+
   // Phase 2: Rate limiting backend
   rateLimitBackend: 'memory' | 'redis';
 
@@ -68,6 +83,7 @@ export interface DixieConfig {
  * DIXIE_PERSONALITY_TTL       (optional) — BEAUVOIR personality cache TTL in seconds; default 1800
  * DIXIE_AUTONOMOUS_PERMISSION_TTL (optional) — autonomous permission cache TTL in seconds; default 300
  * DIXIE_AUTONOMOUS_BUDGET     (optional) — default autonomous budget in micro-USD; default 100000
+ * DATABASE_POOL_SIZE          (optional) — max connections in PostgreSQL pool; default 10
  * DIXIE_RATE_LIMIT_BACKEND    (optional) — 'memory' or 'redis'; default 'memory' (auto-upgrades to 'redis' when REDIS_URL set)
  * DIXIE_SCHEDULE_CALLBACK_SECRET (optional) — HMAC secret for schedule callback verification; default '' (rejects all callbacks in production)
  */
@@ -94,7 +110,7 @@ export function loadConfig(): DixieConfig {
     );
   }
 
-  const port = parseInt(process.env.DIXIE_PORT ?? '3001', 10);
+  const port = safeParseInt(process.env.DIXIE_PORT, 3001, 65535);
   const finnWsUrl = process.env.FINN_WS_URL
     ?? finnUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
 
@@ -129,7 +145,7 @@ export function loadConfig(): DixieConfig {
     jwtPrivateKey,
     nodeEnv,
     logLevel: process.env.LOG_LEVEL ?? 'info',
-    rateLimitRpm: parseInt(process.env.DIXIE_RATE_LIMIT_RPM ?? '100', 10),
+    rateLimitRpm: safeParseInt(process.env.DIXIE_RATE_LIMIT_RPM, 100, 10_000),
     otelEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? null,
 
     // Phase 2: Infrastructure
@@ -138,18 +154,21 @@ export function loadConfig(): DixieConfig {
     natsUrl: process.env.NATS_URL ?? null,
 
     // Phase 2: Memory config
-    memoryProjectionTtlSec: parseInt(process.env.DIXIE_MEMORY_PROJECTION_TTL ?? '300', 10),
-    memoryMaxEventsPerQuery: parseInt(process.env.DIXIE_MEMORY_MAX_EVENTS ?? '100', 10),
+    memoryProjectionTtlSec: safeParseInt(process.env.DIXIE_MEMORY_PROJECTION_TTL, 300, 86_400),
+    memoryMaxEventsPerQuery: safeParseInt(process.env.DIXIE_MEMORY_MAX_EVENTS, 100, 10_000),
 
     // Phase 2: Conviction
-    convictionTierTtlSec: parseInt(process.env.DIXIE_CONVICTION_TIER_TTL ?? '300', 10),
+    convictionTierTtlSec: safeParseInt(process.env.DIXIE_CONVICTION_TIER_TTL, 300, 86_400),
 
     // Phase 2: Personality
-    personalityTtlSec: parseInt(process.env.DIXIE_PERSONALITY_TTL ?? '1800', 10),
+    personalityTtlSec: safeParseInt(process.env.DIXIE_PERSONALITY_TTL, 1800, 86_400),
 
     // Phase 2: Autonomous
-    autonomousPermissionTtlSec: parseInt(process.env.DIXIE_AUTONOMOUS_PERMISSION_TTL ?? '300', 10),
-    autonomousBudgetDefaultMicroUsd: parseInt(process.env.DIXIE_AUTONOMOUS_BUDGET ?? '100000', 10),
+    autonomousPermissionTtlSec: safeParseInt(process.env.DIXIE_AUTONOMOUS_PERMISSION_TTL, 300, 86_400),
+    autonomousBudgetDefaultMicroUsd: safeParseInt(process.env.DIXIE_AUTONOMOUS_BUDGET, 100_000, 100_000_000),
+
+    // Phase 2: Connection pool sizing (BF-011)
+    databasePoolSize: safeParseInt(process.env.DATABASE_POOL_SIZE, 10, 100),
 
     // Phase 2: Rate limiting
     rateLimitBackend,

@@ -27,6 +27,52 @@ export interface GovernedResourceState {
   readonly mutation_count: number;
 }
 
+// ---------------------------------------------------------------------------
+// Cross-Governor Coordination (BB-DEEP-08 Foundation)
+// ---------------------------------------------------------------------------
+
+/**
+ * Typed event for cross-governor coordination.
+ *
+ * Foundation for future cross-governor governance — currently logging +
+ * span emission only (no cross-governor side effects). The event bus
+ * (`CrossGovernorEventBus`) handles fleet lifecycle events; this
+ * interface handles governance-level coordination between registered
+ * governors (e.g., reputation freeze → fleet pause).
+ *
+ * @since cycle-014 Sprint 105, Task T10 (BB-DEEP-08)
+ */
+export interface GovernorCoordinationEvent {
+  /** Resource type of the originating governor. */
+  readonly source: string;
+  /** Resource type of the target governor (or '*' for broadcast). */
+  readonly target: string;
+  /** Coordination event type (e.g., 'resource_frozen', 'capacity_changed'). */
+  readonly eventType: string;
+  /** Arbitrary payload — structure depends on eventType. */
+  readonly payload: Record<string, unknown>;
+  /** ISO-8601 timestamp of event creation. */
+  readonly timestamp: string;
+}
+
+/**
+ * Result of a coordinate() dispatch.
+ *
+ * Note: `dispatched: true` means the event was logged/acknowledged for the
+ * target governor(s), NOT that a side-effect handler was invoked. Current
+ * implementation is logging-only (BB-DEEP-08 foundation). Future iterations
+ * will add handler invocation, at which point `dispatched` will indicate
+ * that the handler was called.
+ *
+ * @since cycle-014 Sprint 105, Task T10 (BB-DEEP-08)
+ */
+export interface CoordinationResult {
+  /** Whether the event was acknowledged (logged). Does not imply handler invocation. */
+  readonly dispatched: boolean;
+  readonly target: string;
+  readonly reason?: string;
+}
+
 /** Snapshot of a governor's health for external consumption */
 export interface GovernorSnapshot {
   readonly resourceType: string;
@@ -135,6 +181,70 @@ export class GovernorRegistry {
       auditEntryCount: resource.auditTrail.entries.length,
       mutationCount: resource.mutationLog.length,
     }));
+  }
+
+  // -------------------------------------------------------------------------
+  // Cross-Governor Coordination (BB-DEEP-08)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Dispatch a coordination event to a registered governor.
+   *
+   * Initial implementation: logging only (no cross-governor side effects).
+   * Future iterations will invoke governor-specific handlers.
+   *
+   * - Broadcast (`target: '*'`): logs event for all registered governors.
+   * - Targeted: validates target exists, logs the coordination event.
+   * - Unknown target: returns `{ dispatched: false, reason }`.
+   *
+   * @param event - The coordination event to dispatch
+   * @param log - Optional structured logger
+   * @returns CoordinationResult indicating dispatch outcome
+   * @since cycle-014 Sprint 105, Task T10 (BB-DEEP-08)
+   */
+  coordinate(
+    event: GovernorCoordinationEvent,
+    log?: (level: 'info' | 'warn', data: Record<string, unknown>) => void,
+  ): CoordinationResult {
+    if (event.target === '*') {
+      // Broadcast: log for all registered governors (deduplicated across both maps)
+      const allTypes = [
+        ...new Set([...this.governors.keys(), ...this.governedResources.keys()]),
+      ];
+      log?.('info', {
+        event: 'governor_coordination_broadcast',
+        source: event.source,
+        eventType: event.eventType,
+        targets: allTypes,
+      });
+      return { dispatched: true, target: '*' };
+    }
+
+    // Targeted dispatch
+    const hasGovernor = this.governors.has(event.target);
+    const hasResource = this.governedResources.has(event.target);
+
+    if (!hasGovernor && !hasResource) {
+      log?.('warn', {
+        event: 'governor_coordination_unknown_target',
+        source: event.source,
+        target: event.target,
+        eventType: event.eventType,
+      });
+      return {
+        dispatched: false,
+        target: event.target,
+        reason: `Unknown governor target: ${event.target}`,
+      };
+    }
+
+    log?.('info', {
+      event: 'governor_coordination_dispatched',
+      source: event.source,
+      target: event.target,
+      eventType: event.eventType,
+    });
+    return { dispatched: true, target: event.target };
   }
 
   /** Number of registered governors */

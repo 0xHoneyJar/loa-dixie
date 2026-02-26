@@ -86,6 +86,8 @@ export interface CreateFleetTaskInput {
   readonly branch: string;
   readonly maxRetries?: number;
   readonly contextHash?: string;
+  /** Routing decision reason from AgentModelRouter (S6-T4 / BF-009). */
+  readonly routingReason?: string;
 }
 
 /** API-facing spawn request body. */

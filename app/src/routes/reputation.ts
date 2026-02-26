@@ -12,7 +12,7 @@
 import { Hono } from 'hono';
 import type { ReputationService } from '../services/reputation-service.js';
 import { isValidPathParam } from '../validation.js';
-import { tierMeetsRequirement, TIER_ORDER } from '../types/conviction.js';
+import { tierMeetsRequirement, parseConvictionTier } from '../types/conviction.js';
 import type { ConvictionTier } from '../types/conviction.js';
 import { safeEqual } from '../utils/crypto.js';
 import { ReputationCache } from '../services/reputation-cache.js';
@@ -45,13 +45,6 @@ function parseRoutingKey(routingKey: string): string | null {
 
 const REQUIRED_TIER: ConvictionTier = 'builder';
 
-/** Validate that a header value is a known conviction tier. */
-const VALID_TIERS = new Set<string>(TIER_ORDER);
-
-function parseConvictionTier(raw: string | undefined): ConvictionTier {
-  if (raw && VALID_TIERS.has(raw)) return raw as ConvictionTier;
-  return 'observer';
-}
 
 // ---------------------------------------------------------------------------
 // T2.2: createReputationRoutes factory

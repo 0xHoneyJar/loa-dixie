@@ -203,7 +203,7 @@ describe('FleetGovernor', () => {
     });
 
     it('handles AGENT_COMPLETED event', async () => {
-      const event: FleetEvent = { type: 'AGENT_COMPLETED', taskId: 'task-1' };
+      const event: FleetEvent = { type: 'AGENT_COMPLETED', taskId: 'task-1', operatorId: 'op-1' };
       const result = await governor.transition(event, 'actor-1');
 
       expect(result.success).toBe(true);
@@ -213,7 +213,7 @@ describe('FleetGovernor', () => {
     });
 
     it('handles AGENT_FAILED event', async () => {
-      const event: FleetEvent = { type: 'AGENT_FAILED', taskId: 'task-1' };
+      const event: FleetEvent = { type: 'AGENT_FAILED', taskId: 'task-1', operatorId: 'op-1' };
       const result = await governor.transition(event, 'actor-1');
 
       expect(result.success).toBe(true);
@@ -260,7 +260,7 @@ describe('FleetGovernor', () => {
       expect(governor.version).toBe(1);
 
       await governor.transition(
-        { type: 'AGENT_COMPLETED', taskId: 'task-1' },
+        { type: 'AGENT_COMPLETED', taskId: 'task-1', operatorId: 'op-1' },
         'actor-1',
       );
       expect(governor.version).toBe(2);
@@ -287,7 +287,7 @@ describe('FleetGovernor', () => {
 
       // AGENT_COMPLETED should invalidate cache
       await governor.transition(
-        { type: 'AGENT_COMPLETED', taskId: 'task-1' },
+        { type: 'AGENT_COMPLETED', taskId: 'task-1', operatorId: 'op-1' },
         'actor-1',
       );
 

@@ -9,7 +9,7 @@
  *
  * @since cycle-012 — Sprint 88, Tasks T-3.5, T-3.6, T-3.7
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mocked } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mocks — node:child_process (same pattern as agent-spawner.test.ts)
@@ -123,7 +123,7 @@ function makeHandle(overrides: Partial<AgentHandle> = {}): AgentHandle {
 }
 
 /** Create a mock TaskRegistry with all methods as vi.fn(). */
-function createMockRegistry(): TaskRegistry & Record<string, ReturnType<typeof vi.fn>> {
+function createMockRegistry(): Mocked<TaskRegistry> {
   return {
     create: vi.fn(),
     get: vi.fn(),
@@ -134,11 +134,11 @@ function createMockRegistry(): TaskRegistry & Record<string, ReturnType<typeof v
     listLive: vi.fn().mockResolvedValue([]),
     transition: vi.fn(),
     recordFailure: vi.fn(),
-  } as unknown as TaskRegistry & Record<string, ReturnType<typeof vi.fn>>;
+  } as unknown as Mocked<TaskRegistry>;
 }
 
 /** Create a mock AgentSpawner with all methods as vi.fn(). */
-function createMockSpawner(): AgentSpawner & Record<string, ReturnType<typeof vi.fn>> {
+function createMockSpawner(): Mocked<AgentSpawner> {
   return {
     spawn: vi.fn(),
     isAlive: vi.fn().mockResolvedValue(true),
@@ -146,7 +146,7 @@ function createMockSpawner(): AgentSpawner & Record<string, ReturnType<typeof vi
     getLogs: vi.fn(),
     cleanup: vi.fn(),
     listActive: vi.fn().mockResolvedValue([]),
-  } as unknown as AgentSpawner & Record<string, ReturnType<typeof vi.fn>>;
+  } as unknown as Mocked<AgentSpawner>;
 }
 
 /** Reset the execFile spy with default success behavior. */
