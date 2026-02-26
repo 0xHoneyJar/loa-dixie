@@ -113,9 +113,11 @@ describe('computeTaskAwareCrossModelScore', () => {
     ];
     const score = computeTaskAwareCrossModelScore(cohorts, 'code_review');
     expect(score).not.toBeNull();
-    // With task match boost, code_review weight = 10 * 3.0 = 30, reasoning = 10
-    // Expected: (0.9 * 30 + 0.5 * 10) / 40 = (27 + 5) / 40 = 0.8
-    expect(score!).toBeCloseTo(0.8, 5);
+    // Derive expected from constants — survives TASK_MATCH_WEIGHT_MULTIPLIER changes
+    const matchWeight = 10 * TASK_MATCH_WEIGHT_MULTIPLIER;
+    const nonMatchWeight = 10;
+    const expected = (0.9 * matchWeight + 0.5 * nonMatchWeight) / (matchWeight + nonMatchWeight);
+    expect(score!).toBeCloseTo(expected, 10);
   });
 
   it('falls back to standard cross-model scoring when no taskType', () => {

@@ -46,8 +46,8 @@ export interface FleetState {
 /** Events that can transition fleet state. */
 export type FleetEvent =
   | { type: 'SPAWN_REQUESTED'; operatorId: string; tier: ConvictionTier }
-  | { type: 'AGENT_COMPLETED'; taskId: string }
-  | { type: 'AGENT_FAILED'; taskId: string }
+  | { type: 'AGENT_COMPLETED'; taskId: string; operatorId: string }
+  | { type: 'AGENT_FAILED'; taskId: string; operatorId: string }
   | { type: 'TIER_CHANGED'; operatorId: string; newTier: ConvictionTier };
 
 /** Fleet invariant identifiers. */
@@ -261,8 +261,8 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
       }
       case 'AGENT_COMPLETED':
       case 'AGENT_FAILED': {
-        // Invalidate cache for the operator
-        this.invalidateCache(this._current.operatorId);
+        // Invalidate cache for the owning operator (not _current singleton)
+        this.invalidateCache(event.operatorId);
         this._version++;
         return { success: true, state: this._current, version: this._version };
       }
