@@ -56,7 +56,7 @@ resource "aws_elasticache_parameter_group" "dixie" {
 
 resource "aws_elasticache_replication_group" "dixie" {
   replication_group_id = local.service_name
-  description          = "Dixie BFF dedicated Redis — ${var.environment}"
+  description          = "Dixie BFF dedicated Redis - ${var.environment}"
 
   engine               = "redis"
   engine_version       = "7.1"
