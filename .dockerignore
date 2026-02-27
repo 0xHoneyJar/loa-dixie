@@ -1,0 +1,36 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies (npm ci installs fresh in container)
+**/node_modules
+
+# Loa framework
+.claude
+.run
+.beads
+.ck
+grimoires
+.flatline
+.loa.config.yaml
+
+# Test files (not needed in production image)
+tests
+
+# Documentation
+*.md
+
+# Environment files (secrets)
+.env*
+deploy/.env*
+
+# CI artifacts
+.hounfour-ci
+
+# IDE / Editor
+.vscode
+.idea
+*.swp
+
+# NOTE: .hounfour-build is intentionally NOT excluded — it is the
+# hounfour delivery mechanism for the Docker build.

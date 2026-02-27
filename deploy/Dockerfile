@@ -2,15 +2,23 @@ FROM node:22-slim AS base
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Path resolution: WORKDIR=/app, package.json says file:../../loa-hounfour
+# From /app, ../../loa-hounfour resolves to /loa-hounfour
+# So we COPY .hounfour-build to /loa-hounfour to satisfy the file: reference.
+
 # --- Dependencies ---
 FROM base AS deps
+COPY .hounfour-build /loa-hounfour
 COPY app/package.json app/package-lock.json* ./
-RUN npm ci --omit=dev
+# --install-links dereferences file: symlinks into real directories.
+# Fallback to npm install if npm ci rejects the link:true lockfile.
+RUN npm ci --omit=dev --install-links || npm install --omit=dev --install-links
 
 # --- Build ---
 FROM base AS build
+COPY .hounfour-build /loa-hounfour
 COPY app/package.json app/package-lock.json* ./
-RUN npm ci
+RUN npm ci --install-links || npm install --install-links
 COPY app/tsconfig.json ./
 COPY app/src/ ./src/
 RUN npm run build
