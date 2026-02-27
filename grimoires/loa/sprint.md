@@ -304,3 +304,100 @@ T2.2 ──→ T2.4 (Terraform apply) → T2.5 → T2.6 (Deploy) → T2.7 (Wire 
 - **PgBouncer vs direct RDS**: Check if dixie should connect through PgBouncer (freeside's staging has it)
 - **Health check timing**: startPeriod=60 gives migrations time, but first deploy may need patience
 - **DNS propagation**: Route53 A record alias may take a few minutes to propagate
+
+---
+
+## Sprint 3: Post-Deploy Hardening — NATS Connectivity & Dependency Updates
+
+**Global ID**: 115
+**Status**: PLANNED
+**Goal**: Achieve fully healthy status by fixing NATS connectivity and incorporating
+safe dependency updates from open Dependabot PRs.
+
+**Branch**: `feature/dixie-mvp` (same as Sprint 1-2)
+
+**Acceptance Criteria**:
+- Dixie health endpoint returns `status: healthy` (not `degraded`)
+- NATS shows `connected` in health response
+- CI action versions are current (no security-relevant drift)
+- All 2373+ tests pass
+
+### Task 3.1: Fix NATS Security Group Ingress
+
+**Description**: The NATS service SG (`sg-0df20023c098de62b`) lacks an inbound rule
+for Dixie's SG (`sg-0790b2636abe2498e`) on port 4222. Existing services (freeside
+workers, gateway) connect via the shared `arrakis-staging-ecs-tasks` SG, but Dixie
+uses a dedicated SG.
+
+**Root Cause**: Dixie's terraform creates its own SG with correct egress to
+`10.0.0.0/8:4222`, but the NATS SG (managed by freeside) doesn't know about Dixie's SG.
+
+**Implementation**:
+1. Add the SG rule via AWS CLI (immediate fix):
+   ```bash
+   aws ec2 authorize-security-group-ingress \
+     --group-id sg-0df20023c098de62b \
+     --protocol tcp --port 4222 \
+     --source-group sg-0790b2636abe2498e \
+     --description "NATS client from Dixie" \
+     --region us-east-1
+   ```
+2. Force ECS deployment to re-establish NATS connection
+3. Verify health endpoint shows NATS connected
+
+**Acceptance Criteria**:
+- [ ] NATS SG has inbound rule for Dixie SG on port 4222
+- [ ] Dixie health shows `nats: connected`
+- [ ] No regressions — PostgreSQL, Redis, Finn all still healthy
+
+### Task 3.2: Merge CI Action Dependabot PRs
+
+**Description**: Three Dependabot PRs bump GitHub Actions versions:
+- PR #55: `actions/checkout` v4 → v6
+- PR #53: `actions/upload-artifact` v4 → v7
+- PR #52: `actions/setup-node` v4 → v6
+
+These are CI infrastructure updates. Merge them to stay current on security patches.
+
+**Implementation**:
+1. Review each PR for breaking changes
+2. Merge PRs via `gh pr merge`
+3. Pull merged changes into `feature/dixie-mvp`
+4. Verify CI still passes
+
+**NOT included**: PR #54 (node 22→25 Docker image) — major version jump requires
+separate testing cycle. Out of scope for this sprint.
+
+**Acceptance Criteria**:
+- [ ] All three CI action PRs merged to main
+- [ ] CI workflows pass with new action versions
+- [ ] Changes pulled into feature branch
+
+### Task 3.3: Force Redeploy & Full Health Validation
+
+**Description**: After NATS fix, force a new ECS deployment and validate all
+subsystems report healthy.
+
+**Commands**:
+```bash
+aws ecs update-service --cluster arrakis-staging-cluster \
+  --service dixie-armitage --force-new-deployment
+
+curl -sf https://dixie-armitage.arrakis.community/api/health | jq .
+```
+
+**Acceptance Criteria**:
+- [ ] Health status: `healthy` (not `degraded`)
+- [ ] All infrastructure: postgresql=healthy, redis=healthy, nats=connected
+- [ ] Finn circuit: closed, latency < 50ms
+- [ ] Governance: healthy (requires NATS for event distribution)
+- [ ] No CloudWatch alarms firing
+
+---
+
+### Sprint 3 Dependency Graph
+
+```
+T3.1 (NATS SG) → T3.3 (Validate)
+T3.2 (CI PRs) ─→ T3.3 (Validate)
+```

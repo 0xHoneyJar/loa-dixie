@@ -1002,6 +1002,14 @@
           "local_label": "sprint-2",
           "label": "Armitage Deployment — ECR, Docker, Terraform Apply, SSM, Wiring",
           "tasks": 8,
+          "status": "completed"
+        },
+        {
+          "id": "sprint-3",
+          "global_id": 115,
+          "local_label": "sprint-3",
+          "label": "Post-Deploy Hardening — NATS Connectivity & Dependency Updates",
+          "tasks": 3,
           "status": "in_progress"
         }
       ]
@@ -1009,7 +1017,7 @@
   ],
   "active_cycle": "cycle-018",
   "active_bugfix": null,
-  "global_sprint_counter": 114,
+  "global_sprint_counter": 115,
   "bugfix_cycles": [],
   "release_cycles": [
     {
