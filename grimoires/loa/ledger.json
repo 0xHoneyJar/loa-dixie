@@ -939,7 +939,7 @@
           "local_label": "sprint-1",
           "label": "Docker Build Fix & E2E Smoke Test Repair",
           "tasks": 10,
-          "status": "pending"
+          "status": "completed"
         }
       ]
     }
