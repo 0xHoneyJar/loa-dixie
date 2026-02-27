@@ -1,4 +1,4 @@
-FROM node:22-slim AS base
+FROM node:25-slim AS base
 WORKDIR /app
 ENV NODE_ENV=production
 
