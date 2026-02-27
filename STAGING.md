@@ -5,9 +5,13 @@ Operational guide for running the dixie-bff staging environment.
 ## 1. Prerequisites
 
 - Docker Engine 24+ with Compose v2
-- Node.js 20+ and npm
+- Node.js 22+ and npm (must match Dockerfile and CI)
 - Git (for building dixie-bff image from source)
 - Access to loa-finn Docker image (`ghcr.io/0xhoneyjar/loa-finn:v3.2.0`)
+- Authenticated Docker client for `ghcr.io/0xhoneyjar` images:
+  ```bash
+  echo $GHCR_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+  ```
 
 ## 2. Environment Setup
 
@@ -30,6 +34,29 @@ cp .env.example deploy/.env.staging
 - `POSTGRES_PASSWORD`
 
 All 24 variables are documented in `.env.example`.
+
+## 2.5 Build Preparation (Hounfour)
+
+The Dockerfile requires loa-hounfour build artifacts in the Docker context.
+Run the build preparation script before building:
+
+```bash
+# Prepare hounfour build artifacts
+./deploy/prepare-build.sh
+
+# Verify (should show dist/, package.json)
+ls .hounfour-build/
+```
+
+**Requirements**:
+- loa-hounfour checked out as sibling directory (`../loa-hounfour`)
+- loa-hounfour built (`dist/` exists) — script will build from source if needed
+- Version must be v8.2.0 (script validates automatically, override with `HOUNFOUR_VERSION=x.y.z`)
+
+**Cleanup**:
+```bash
+./deploy/prepare-build.sh --clean
+```
 
 ## 3. Build & Start
 
@@ -135,14 +162,14 @@ docker compose -f deploy/docker-compose.staging.yml restart dixie-bff
 ## 6. Smoke Tests
 
 ```bash
-# Install test dependencies (from project root)
-npm install
+# Install test dependencies (from app/ directory)
+cd app && npm install
 
 # Run all 6 E2E smoke tests
-npm run test:e2e
+cd app && npm run test:e2e
 
 # Run a specific smoke test
-npx vitest run tests/e2e/staging/smoke-health.test.ts
+cd app && npx vitest run tests/e2e/staging/smoke-health.test.ts
 ```
 
 ### Smoke Test Summary

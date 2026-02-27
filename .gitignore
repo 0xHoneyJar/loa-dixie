@@ -234,6 +234,9 @@ docs/screenshots/
 evals/results/*
 !evals/results/.gitkeep
 
+# Docker build artifacts
+.hounfour-build/
+
 # Application build artifacts
 app/dist/
 app/node_modules/

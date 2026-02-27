@@ -34,7 +34,7 @@ describe('E2E-2: SIWE Authentication', () => {
     expect(res.status).toBe(200);
     expect(res.body.token).toBeDefined();
     expect(res.body.token.length).toBeGreaterThan(20);
-    expect(res.body.wallet.toLowerCase()).toBe(TEST_WALLET.toLowerCase());
+    expect(res.body.wallet.toLowerCase()).toBe(TEST_WALLET.address.toLowerCase());
   });
 
   it('JWT verifies and contains correct wallet', async () => {
@@ -51,7 +51,7 @@ describe('E2E-2: SIWE Authentication', () => {
     });
 
     expect(verifyRes.status).toBe(200);
-    expect(verifyRes.body.wallet.toLowerCase()).toBe(TEST_WALLET.toLowerCase());
+    expect(verifyRes.body.wallet.toLowerCase()).toBe(TEST_WALLET.address.toLowerCase());
   });
 
   it('rejects invalid signatures', async () => {

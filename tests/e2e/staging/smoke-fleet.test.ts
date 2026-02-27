@@ -13,7 +13,7 @@ import { TEST_WALLET } from './helpers/siwe-wallet.js';
 // Fleet endpoints require TBA auth headers
 const TBA_HEADERS = {
   'x-agent-tba': '0x' + 'ab'.repeat(20),
-  'x-agent-owner': TEST_WALLET,
+  'x-agent-owner': TEST_WALLET.address,
   'x-conviction-tier': 'architect',
 };
 
