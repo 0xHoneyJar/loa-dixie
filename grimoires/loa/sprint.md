@@ -310,7 +310,7 @@ T2.2 ──→ T2.4 (Terraform apply) → T2.5 → T2.6 (Deploy) → T2.7 (Wire 
 ## Sprint 3: Post-Deploy Hardening — NATS Connectivity & Dependency Updates
 
 **Global ID**: 115
-**Status**: PLANNED
+**Status**: REVIEW_APPROVED
 **Goal**: Achieve fully healthy status by fixing NATS connectivity and incorporating
 safe dependency updates from open Dependabot PRs.
 
@@ -346,9 +346,9 @@ uses a dedicated SG.
 3. Verify health endpoint shows NATS connected
 
 **Acceptance Criteria**:
-- [ ] NATS SG has inbound rule for Dixie SG on port 4222
-- [ ] Dixie health shows `nats: connected`
-- [ ] No regressions — PostgreSQL, Redis, Finn all still healthy
+- [x] NATS SG has inbound rule for Dixie SG on port 4222
+- [x] Dixie health shows `nats: connected`
+- [x] No regressions — PostgreSQL, Redis, Finn all still healthy
 
 ### Task 3.2: Merge CI Action Dependabot PRs
 
@@ -369,9 +369,9 @@ These are CI infrastructure updates. Merge them to stay current on security patc
 separate testing cycle. Out of scope for this sprint.
 
 **Acceptance Criteria**:
-- [ ] All three CI action PRs merged to main
-- [ ] CI workflows pass with new action versions
-- [ ] Changes pulled into feature branch
+- [x] All three CI action PRs merged to main
+- [x] CI workflows pass with new action versions
+- [x] Changes pulled into feature branch
 
 ### Task 3.3: Force Redeploy & Full Health Validation
 
@@ -387,11 +387,11 @@ curl -sf https://dixie-armitage.arrakis.community/api/health | jq .
 ```
 
 **Acceptance Criteria**:
-- [ ] Health status: `healthy` (not `degraded`)
-- [ ] All infrastructure: postgresql=healthy, redis=healthy, nats=connected
-- [ ] Finn circuit: closed, latency < 50ms
-- [ ] Governance: healthy (requires NATS for event distribution)
-- [ ] No CloudWatch alarms firing
+- [x] Health status: `healthy` (not `degraded`)
+- [x] All infrastructure: postgresql=healthy, redis=healthy, nats=connected
+- [x] Finn circuit: closed, latency < 50ms
+- [x] Governance: healthy (requires NATS for event distribution)
+- [x] No CloudWatch alarms firing
 
 ---
 
