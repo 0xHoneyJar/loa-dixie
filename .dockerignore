@@ -26,11 +26,9 @@ deploy/.env*
 
 # CI artifacts
 .hounfour-ci
+.hounfour-build
 
 # IDE / Editor
 .vscode
 .idea
 *.swp
-
-# NOTE: .hounfour-build is intentionally NOT excluded — it is the
-# hounfour delivery mechanism for the Docker build.
