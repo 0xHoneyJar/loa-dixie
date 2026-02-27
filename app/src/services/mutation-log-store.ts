@@ -111,7 +111,9 @@ export class MutationLogStore {
       resource_type: row.resource_type,
       mutation_type: row.mutation_type,
       payload: row.payload,
-      created_at: String(row.created_at),
+      created_at: typeof row.created_at === 'object' && row.created_at !== null && 'toISOString' in row.created_at
+        ? (row.created_at as unknown as Date).toISOString()
+        : String(row.created_at),
     }));
   }
 

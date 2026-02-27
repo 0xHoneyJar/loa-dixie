@@ -29,6 +29,7 @@ import type {
   TransitionResult,
   InvariantResult,
 } from './governed-resource.js';
+import { AUDIT_TRAIL_GENESIS_HASH } from '@0xhoneyjar/loa-hounfour/commons';
 import type { AuditTrail, GovernanceMutation } from '@0xhoneyjar/loa-hounfour/commons';
 
 // ---------------------------------------------------------------------------
@@ -221,7 +222,7 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
     this._auditTrail = {
       entries: [],
       hash_algorithm: 'sha256' as const,
-      genesis_hash: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      genesis_hash: AUDIT_TRAIL_GENESIS_HASH,
       integrity_status: 'verified' as const,
     };
   }

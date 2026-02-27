@@ -20,7 +20,10 @@ export default [
       'no-redeclare': 'off',
       // TypeScript uses `const enum` etc. which triggers this
       'no-shadow': 'off',
-      // typeof checks are valid in TS
+      // The JS no-undef rule does not understand TypeScript type-level
+      // declarations (interfaces, type aliases, enums). Disabled per
+      // typescript-eslint.io/troubleshooting — use @typescript-eslint/no-undef
+      // or tsconfig noUnusedLocals instead.
       'no-undef': 'off',
     },
   },
