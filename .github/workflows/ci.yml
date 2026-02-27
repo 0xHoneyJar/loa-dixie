@@ -22,13 +22,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # loa-hounfour is a file: dependency (../../loa-hounfour from app/).
-      # Clone it as a sibling so npm ci can resolve the link.
+      # app/package.json uses file:../../loa-hounfour (sibling dir).
+      # Clone hounfour into .hounfour-ci/ and symlink to the expected path.
       - name: Checkout loa-hounfour
         uses: actions/checkout@v4
         with:
           repository: 0xHoneyJar/loa-hounfour
-          path: ../loa-hounfour
+          path: .hounfour-ci
 
       - uses: actions/setup-node@v4
         with:
@@ -37,8 +37,11 @@ jobs:
           cache-dependency-path: app/package-lock.json
 
       - name: Build loa-hounfour
-        working-directory: ../loa-hounfour
+        working-directory: .hounfour-ci
         run: npm ci && npm run build
+
+      - name: Link hounfour to expected path
+        run: ln -s "$GITHUB_WORKSPACE/.hounfour-ci" "$GITHUB_WORKSPACE/../loa-hounfour"
 
       - name: Install dependencies
         working-directory: app
