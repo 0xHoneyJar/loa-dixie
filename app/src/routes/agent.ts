@@ -140,7 +140,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
   };
 
   /** POST /query — Agent-to-Oracle query */
-  app.post('/query', async (c) => {
+  app.post('/query', async (c): Promise<Response> => {
     const agentTba = c.req.header('x-agent-tba');
     if (!agentTba) {
       return c.json({ error: 'unauthorized', message: 'TBA authentication required' }, 401);
@@ -548,7 +548,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
   });
 
   /** POST /schedule — Agent-initiated schedule creation */
-  app.post('/schedule', async (c) => {
+  app.post('/schedule', async (c): Promise<Response> => {
     const agentTba = c.req.header('x-agent-tba');
     if (!agentTba) {
       return c.json({ error: 'unauthorized', message: 'TBA authentication required' }, 401);

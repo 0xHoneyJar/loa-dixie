@@ -1,4 +1,7 @@
-name: E2E Smoke Tests
+# Advisory workflow — requires live staging infrastructure (PostgreSQL, Redis, NATS, loa-finn).
+# Will fail in CI-only context. Use workflow_dispatch to run manually when staging is available.
+# See: Phase 0.7 in loa-finn #66 (Command Deck — Staging Deployment Sequence)
+name: E2E Smoke Tests (Advisory)
 
 on:
   pull_request:
@@ -11,16 +14,17 @@ on:
 
 jobs:
   e2e:
-    name: Staging Smoke Tests
+    name: Staging Smoke Tests (Advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
 

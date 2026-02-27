@@ -220,7 +220,9 @@ export class FleetGovernor implements GovernedResource<FleetState, FleetEvent, F
 
     this._auditTrail = {
       entries: [],
-      hash_chain_head: null,
+      hash_algorithm: 'sha256' as const,
+      genesis_hash: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      integrity_status: 'verified' as const,
     };
   }
 

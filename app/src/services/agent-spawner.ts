@@ -92,7 +92,7 @@ export class SpawnError extends Error {
 // ---------------------------------------------------------------------------
 
 /** Branch name safety regex: alphanumeric, dots, underscores, hyphens, slashes. */
-const BRANCH_REGEX = /^[a-zA-Z0-9._\/-]+$/;
+const BRANCH_REGEX = /^[a-zA-Z0-9._/-]+$/;
 
 /** Maximum branch name length. */
 const MAX_BRANCH_LENGTH = 128;

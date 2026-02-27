@@ -68,7 +68,7 @@ export interface ConformanceSuiteResult {
  * Governance schema map for direct TypeBox validation.
  * These schemas are imported from @0xhoneyjar/loa-hounfour/governance.
  */
-const GOVERNANCE_SCHEMAS: Record<string, unknown> = {
+const GOVERNANCE_SCHEMAS: Record<string, any> = {
   taskType: TaskTypeSchema,
   taskTypeCohort: TaskTypeCohortSchema,
   reputationEvent: ReputationEventSchema,
@@ -123,7 +123,7 @@ export function validatePayload(
     }
 
     // For other schemas, use the pre-built validators
-    const validatorFn = validators[schemaName];
+    const validatorFn = (validators as Record<string, ((...args: unknown[]) => unknown) | undefined>)[schemaName];
     if (!validatorFn) {
       return {
         schemaName,
@@ -132,7 +132,7 @@ export function validatePayload(
       };
     }
 
-    const compiled = validatorFn();
+    const compiled = validatorFn() as { Check: (v: unknown) => boolean; Errors: (v: unknown) => Iterable<{ path: string; message: string }> };
     if (compiled.Check(payload)) {
       return { schemaName, valid: true, errors: [] };
     }

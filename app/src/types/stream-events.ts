@@ -104,6 +104,7 @@ export interface EconomicEvent {
   readonly cost_micro_usd: number;
   readonly model: string;
   readonly tokens: TokenBreakdown;
+  readonly incomplete?: boolean;
 }
 
 export interface PersonalityEvent {

@@ -241,7 +241,7 @@ export function authorizeMemoryAccess(params: {
       role: matchedRole,
     });
     // Sprint 6 — Task 6.3: Forward structured denial_code if hounfour provides it
-    const denialCode = (result as Record<string, unknown>).denial_code as string | undefined;
+    const denialCode = (result as unknown as Record<string, unknown>).denial_code as string | undefined;
     return { allowed: result.allowed, reason: translateReason(result.reason, result.allowed, policyType, operation, denialCode) };
   }
 
@@ -281,7 +281,7 @@ export function authorizeMemoryAccess(params: {
   const result = evaluateAccessPolicy(effectivePolicy, ctx);
 
   // Sprint 6 — Task 6.3: Forward structured denial_code if hounfour provides it
-  const denialCode = (result as Record<string, unknown>).denial_code as string | undefined;
+  const denialCode = (result as unknown as Record<string, unknown>).denial_code as string | undefined;
   return {
     allowed: result.allowed,
     reason: translateReason(result.reason, result.allowed, policyType, operation, denialCode),

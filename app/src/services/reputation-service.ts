@@ -270,7 +270,7 @@ export class InMemoryReputationStore implements ReputationStore {
     const snapshot = new Map(this.store);
     const cohortSnapshot = new Map(this.taskCohorts);
     const eventLogSnapshot = new Map(
-      [...this.eventLog.entries()].map(([k, v]) => [k, [...v]] as const),
+      [...this.eventLog.entries()].map(([k, v]) => [k, [...v]]),
     );
     try {
       return await fn(this);

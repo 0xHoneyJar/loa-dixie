@@ -9,10 +9,10 @@ import { BffError } from '../errors.js';
  * @since Sprint 55 — Task 1.3 (Bridgebuilder finding: inconsistent route error handling)
  */
 export function handleRouteError(
-  c: { json: (data: unknown, status: number) => unknown },
+  c: { json: (data: unknown, status: number) => Response },
   err: unknown,
   fallbackMessage = 'Internal server error',
-): unknown {
+): Response {
   if (BffError.isBffError(err)) {
     return c.json(err.body, err.status);
   }

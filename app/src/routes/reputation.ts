@@ -146,7 +146,7 @@ export function createReputationRoutes(deps: ReputationRouteDeps): Hono {
       personal_score: aggregate.personal_score,
       sample_count: aggregate.sample_count,
       state: aggregate.state,
-      reliability: reputationService.checkReliability(aggregate),
+      reliability: reputationService.checkReliability(aggregate as unknown as Parameters<typeof reputationService.checkReliability>[0]),
       dimensions: aggregate.task_cohorts ?? [],
       snapshot_at: new Date().toISOString(),
     });

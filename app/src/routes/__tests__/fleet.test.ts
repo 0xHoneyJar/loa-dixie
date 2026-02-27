@@ -41,9 +41,11 @@ function makeTaskRecord(overrides: Partial<FleetTaskRecord> = {}): FleetTaskReco
     contextHash: null,
     failureContext: null,
     spawnedAt: '2026-02-26T00:00:00Z',
+    agentIdentityId: null,
     completedAt: null,
     createdAt: '2026-02-26T00:00:00Z',
     updatedAt: '2026-02-26T00:00:00Z',
+    groupId: null,
     ...overrides,
   };
 }

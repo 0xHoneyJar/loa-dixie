@@ -208,10 +208,7 @@ export class AuditTrailStore {
     return result.rows.map((row) => ({
       entry_id: row.entry_id,
       resource_type: row.resource_type,
-      timestamp:
-        row.timestamp instanceof Date
-          ? row.timestamp.toISOString()
-          : String(row.timestamp),
+      timestamp: String(row.timestamp),
       event_type: row.event_type,
       ...(row.actor_id !== null && { actor_id: row.actor_id }),
       ...(row.payload !== null && { payload: row.payload }),
