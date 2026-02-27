@@ -1,122 +1,178 @@
-# Sprint Plan: Staging Deploy Fixes — Hounfour Git Pin & Docker Build Repair
+# Sprint Plan: Deploy Dixie to Armitage Ring — Terraform Refactoring
 
-**Version**: 16.4.0
-**Date**: 2026-02-27
-**Cycle**: cycle-016
-**PRD**: v16.1.0
-**SDD**: v16.1.0
+**Version**: 18.0.0
+**Date**: 2026-02-28
+**Cycle**: cycle-018
+**PRD**: v18.0.0
+**SDD**: v18.0.0
 
-> Source: Staging deployment session discovered 3 Docker build failures + hounfour
-> dependency portability issue. loa-hounfour commit b6e0027a fixes dist/ (was in .gitignore).
-> Cross-repo issues: loa-dixie #57, loa-finn #111, loa-finn #112.
+> Source: PRD §4 (10 functional requirements), SDD §2-8 (terraform file structure),
+> Finn terraform reference (10 files), existing dixie.tf (583 lines, monolithic production config)
 
 ---
 
-## Sprint 3: Staging Deploy Fixes — Hounfour Git Pin & Docker Build Repair
+## Sprint 1: Terraform Refactoring — Environment-Aware Multi-File Split
 
-**Global ID**: 112
-**Goal**: Switch hounfour dependency from non-portable `file:` link to git pin at `b6e0027a`, fix 3 Docker build failures discovered during staging deployment, and simplify the Dockerfile by removing the `.hounfour-build` pipeline.
-**Branch**: `fix/staging-docker-build`
-**Closes**: loa-dixie #57
+**Goal**: Replace the monolithic 583-line `deploy/terraform/dixie.tf` with 6 environment-aware
+terraform files following Finn's exact pattern, plus an `armitage.tfvars` for staging overrides.
+
+**Approach**: Delete `dixie.tf` entirely. Create 6 new files from scratch using Finn as the
+reference implementation, adapted for Dixie's specific needs (port 3001, SSM instead of Secrets
+Manager, no EFS/KMS/DynamoDB/S3, dedicated ElastiCache Redis).
+
+### Task 1.1: Create `variables.tf` — Backend, Provider, Variables, Locals
+
+**Description**: Create the terraform backend configuration (S3 + DynamoDB), AWS provider with
+default tags, all variable definitions, environment-aware locals, and workspace safety check.
+
 **Acceptance Criteria**:
-- `app/package.json` uses `github:0xHoneyJar/loa-hounfour#b6e0027a` instead of `file:../../loa-hounfour`
-- Dockerfile builds successfully without `.hounfour-build/` directory
-- `docker compose -f deploy/docker-compose.staging.yml up -d` starts dixie-bff (healthy)
-- All 13 migrations run in order (no `_down.sql` interference)
-- `cd app && npx tsc --noEmit` passes
-- All existing tests pass (no regressions)
+- [ ] S3 backend: bucket `honeyjar-terraform-state`, key `loa-dixie/terraform.tfstate`, DynamoDB locks
+- [ ] Workspace key prefix `env` for workspace isolation
+- [ ] Provider: `us-east-1`, default tags `Project=loa-dixie`, `ManagedBy=terraform`
+- [ ] Variable `environment` with validation: `["production", "armitage"]`
+- [ ] Variable `image_tag` with validation: `!= "latest"`
+- [ ] All 15 variables from SDD §3.3 defined
+- [ ] Locals: `service_name`, `hostname`, `ssm_prefix`, `ecs_cluster`, `common_tags`
+- [ ] Workspace safety check (null_resource prevents workspace/environment mismatch)
+- [ ] Data sources: `aws_caller_identity`, `aws_region`
 
-### Tasks
+### Task 1.2: Create `dixie-ecs.tf` — IAM, Security Group, Task Definition, ECS Service
 
-| ID | Task | File(s) | Priority | Effort | Depends |
-|----|------|---------|----------|--------|---------|
-| T1 | Switch hounfour dep from file: to git pin b6e0027a | `app/package.json` | P0 | S | — |
-| T2 | Regenerate lockfile with git-pinned hounfour | `app/package-lock.json` | P0 | S | T1 |
-| T3 | Simplify Dockerfile: remove .hounfour-build, use npm install directly | `deploy/Dockerfile` | P0 | M | T1 |
-| T4 | Add tsconfig.build.json excluding test files for Docker build | `app/tsconfig.build.json` | P0 | S | — |
-| T5 | Fix migration runner to exclude _down.sql rollback files | `app/src/db/migrate.ts` | P0 | S | — |
-| T6 | Validate: Docker build, tsc --noEmit, test suite | All | P0 | S | T1-T5 |
+**Description**: Create IAM roles (execution + task), security group with all required rules,
+CloudWatch log group, ECS task definition with environment variables and SSM secrets,
+and ECS service with stop-before-start deployment.
 
-### Task Details
+**Acceptance Criteria**:
+- [ ] Execution role with `AmazonECSTaskExecutionRolePolicy` + SSM GetParameters inline policy
+- [ ] Task role with SSM read + CloudWatch logs permissions (region-conditioned)
+- [ ] Security group: ingress 3001 from ALB SG; egress 443/6379/5432/4222/4317
+- [ ] Redis egress as standalone `aws_security_group_rule` (breaks SG cycle with ElastiCache)
+- [ ] Log group `/ecs/${local.service_name}`, 30-day retention
+- [ ] Task definition: Fargate, awsvpc, parameterized CPU/memory, port 3001
+- [ ] Container: 5 environment vars (NODE_ENV, DIXIE_PORT, DIXIE_ENVIRONMENT, ALLOWLIST_PATH, OTEL)
+- [ ] Container: 8 SSM secrets (FINN_URL, FINN_WS_URL, DATABASE_URL, REDIS_URL, NATS_URL, JWT, ADMIN, CORS)
+- [ ] Health check: `fetch('http://localhost:3001/api/health')`, startPeriod=60
+- [ ] ECS service: desired_count=1, stop-before-start (100%/0%), circuit breaker + rollback
+- [ ] `lifecycle { prevent_destroy = true }`
+- [ ] Desired count drift alarm (single-writer invariant)
 
-#### T1: Switch hounfour dependency to git pin
+### Task 1.3: Create `dixie-alb.tf` — Target Group, Listener Rule, Route53
 
-**File**: `app/package.json` (MODIFY)
-**Closes**: loa-dixie #57
+**Description**: Create ALB target group for port 3001, host-based listener rule at
+priority 220 (staging) / 200 (production), and Route53 A record alias.
 
-```diff
--"@0xhoneyjar/loa-hounfour": "file:../../loa-hounfour",
-+"@0xhoneyjar/loa-hounfour": "github:0xHoneyJar/loa-hounfour#b6e0027a",
-```
+**Acceptance Criteria**:
+- [ ] Target group: `local.service_name`, port 3001, HTTP, IP target type
+- [ ] Health check: `/api/health`, 30s interval, 2 healthy / 3 unhealthy, matcher "200"
+- [ ] Deregistration delay 30s
+- [ ] Listener rule: priority 220 for staging, 200 for production (environment-conditional)
+- [ ] Host header condition: `local.hostname`
+- [ ] Route53 A record alias to ALB (evaluate_target_health = true)
 
-**Why**: The `file:` link only works when `../loa-hounfour` exists as a sibling directory. This breaks in Docker, CI (without the checkout+symlink workaround), and any clean clone. Hounfour commit `b6e0027a` fixed the `.gitignore` to include `dist/`, making git-based consumption reliable. npm fetches GitHub refs as tarballs (no git binary needed in Docker).
+### Task 1.4: Create `dixie-env.tf` — SSM Parameter Store Definitions
 
-#### T2: Regenerate lockfile
+**Description**: Create all SSM Parameter Store entries with PLACEHOLDER values and
+`lifecycle { ignore_changes = [value] }` so operators set real values via AWS CLI.
 
-**File**: `app/package-lock.json` (MODIFY)
+**Acceptance Criteria**:
+- [ ] 8 SSM parameters under `${local.ssm_prefix}/` path
+- [ ] SecureString for: FINN_URL, FINN_WS_URL, DATABASE_URL, REDIS_URL, DIXIE_JWT_PRIVATE_KEY, DIXIE_ADMIN_KEY
+- [ ] String for: NATS_URL, DIXIE_CORS_ORIGINS
+- [ ] All parameters have `lifecycle { ignore_changes = [value] }`
+- [ ] All parameters tagged with Environment + Service
 
-Run `cd app && npm install` to regenerate the lockfile with the git-pinned hounfour. This replaces the `file:` reference entries with GitHub tarball references that are portable across environments.
+### Task 1.5: Create `dixie-redis.tf` — Dedicated ElastiCache
 
-#### T3: Simplify Dockerfile
+**Description**: Create dedicated ElastiCache Redis following Finn's pattern — subnet group,
+security group, parameter group (noeviction), and replication group with environment-aware sizing.
 
-**File**: `deploy/Dockerfile` (MODIFY)
+**Acceptance Criteria**:
+- [ ] Subnet group: `dixie-{env}-redis`, same private subnets
+- [ ] Security group: ingress 6379 from ECS SG only
+- [ ] Parameter group: `dixie-{env}-redis7`, family `redis7`, `maxmemory-policy=noeviction`
+- [ ] Replication group: Redis 7.1, `cache.t4g.micro` staging / `cache.t4g.small` production
+- [ ] Staging: single node, no Multi-AZ, no auto-failover
+- [ ] Production: 2 nodes, Multi-AZ, auto-failover
+- [ ] TLS in transit + encryption at rest enabled
+- [ ] Snapshot: 1-day staging, 7-day production
 
-Remove the `.hounfour-build` COPY pipeline. With hounfour as a git pin, `npm install` fetches it directly from GitHub inside the container — no build context workaround needed.
+### Task 1.6: Create `dixie-monitoring.tf` — SNS, Alarms, Metric Filters
 
-Key changes:
-- Remove `COPY .hounfour-build /loa-hounfour` from both stages
-- Remove `--install-links` (no longer needed without `file:` reference)
-- Add `--include=dev` in build stage (NODE_ENV=production causes npm to skip @types/pg)
-- Use `tsconfig.build.json` to exclude test files from compilation
-- Copy SQL migrations into dist (tsc doesn't copy non-TS files)
-- Exclude `_down.sql` rollback files from migration copy
+**Description**: Create SNS alarm topic, CloudWatch alarms (CPU, memory, unhealthy hosts,
+Finn latency, circuit breaker), and log metric filters.
 
-#### T4: Add tsconfig.build.json
+**Acceptance Criteria**:
+- [ ] SNS topic `dixie-{env}-alarms` with optional email subscription
+- [ ] CPU alarm: > 80%, 300s period, 3 evaluations
+- [ ] Memory alarm: > 80%, 300s period, 3 evaluations
+- [ ] Unhealthy hosts alarm: < 1, 60s period, 3 evaluations
+- [ ] Finn latency alarm: p95 > 5s, 60s period, 5 evaluations
+- [ ] Circuit breaker metric filter + alarm: `{ $.circuit_state = "open" }`
+- [ ] Allowlist denied metric filter: `{ $.auth_type = "none" && $.action = "denied" }`
+- [ ] Redis memory alarm: > 70%, 300s period, 3 evaluations
+- [ ] All alarms/filters use environment-aware naming
 
-**File**: `app/tsconfig.build.json` (NEW)
+### Task 1.7: Create `environments/armitage.tfvars` — Staging Overrides
 
-Extends `tsconfig.json` with additional excludes for test files. The Docker build doesn't need test files, and they import `vitest` (a devDependency that causes type errors even with `--include=dev` in some configurations).
+**Description**: Create the armitage.tfvars file with all staging-specific values from
+AWS infrastructure discovery.
 
-```json
-{
-  "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "dist", "tests", "src/**/__tests__/**", "src/**/*.test.ts"]
-}
-```
+**Acceptance Criteria**:
+- [ ] `environment = "armitage"`
+- [ ] `ecs_cluster_name = "arrakis-staging-cluster"`
+- [ ] `dixie_cpu = 256`, `dixie_memory = 512`
+- [ ] ECR repository URL for `dixie-armitage`
+- [ ] VPC, subnet, ALB, Route53 values from discovery (SDD §12)
+- [ ] `image_tag = "DEPLOY_SHA_REQUIRED"` (must be overridden at deploy time)
 
-#### T5: Fix migration runner — exclude _down.sql
+### Task 1.8: Delete `dixie.tf` and Validate
 
-**File**: `app/src/db/migrate.ts` (MODIFY)
+**Description**: Delete the old monolithic `deploy/terraform/dixie.tf` (583 lines).
+Run `terraform fmt` and `terraform validate` on the new files. Ensure no duplicate
+resource names or variable redeclarations.
 
-The `discoverMigrations()` function picks up ALL `.sql` files including `*_down.sql` rollback files. These DOWN migrations drop tables that later UP migrations reference, causing cascading failures (e.g., 013_fleet_orchestration_down.sql drops `fleet_tasks`, then 015_agent_ecology.sql fails because `fleet_tasks` doesn't exist).
-
-```diff
- return files
--  .filter((f) => f.endsWith('.sql'))
-+  .filter((f) => f.endsWith('.sql') && !f.includes('_down'))
-   .sort((a, b) => {
-```
-
-This aligns with the migration runner's documented design principle: "Forward-only: no rollbacks."
-
-#### T6: Validation
-
-1. `cd app && npx tsc --noEmit` — type check passes
-2. `cd app && npm test` — full test suite passes
-3. Docker build succeeds: `docker compose -f deploy/docker-compose.staging.yml build dixie-bff`
-4. Staging stack starts: postgres, redis, nats, dixie-bff all healthy
+**Acceptance Criteria**:
+- [ ] `deploy/terraform/dixie.tf` deleted
+- [ ] `terraform fmt -check` passes on all new files
+- [ ] `terraform validate` passes (requires `terraform init` with backend config)
+- [ ] No references to Secrets Manager (replaced by SSM)
+- [ ] No references to EFS (removed for staging)
+- [ ] No auto-scaling resources (removed for staging)
+- [ ] All resource names use `local.service_name` or `local.hostname` (not hardcoded)
 
 ---
 
-## Dependency Graph
+## Sprint Scope Summary
 
-```
-T1 ──→ T2 ──→ T3 ──→ T6
-T4 ──────────────────→ T6
-T5 ──────────────────→ T6
-```
+| Metric | Value |
+|--------|-------|
+| Files created | 7 (6 .tf + 1 .tfvars) |
+| Files deleted | 1 (dixie.tf) |
+| Lines removed | ~583 |
+| Lines added | ~800 (estimated) |
+| AWS resources managed | ~25 (ECR repo created separately) |
 
-## Estimates
+## Out of Sprint Scope (Manual Operations)
 
-- **Sprint 3**: 6 tasks (5 small, 1 medium) — single implement cycle
-- **Files**: 4 modified, 1 new
+These are documented in the SDD but executed manually by the operator:
+
+1. **ECR creation**: `aws ecr create-repository --repository-name dixie-armitage`
+2. **Docker build & push**: `docker build + tag + push`
+3. **Database setup**: `psql` on RDS to create `dixie` database + user
+4. **Terraform workspace**: `terraform workspace new armitage`
+5. **SSM seeding**: `aws ssm put-parameter` for each secret
+6. **Terraform apply**: `terraform apply -var-file=environments/armitage.tfvars`
+7. **Finn wiring**: Update Finn's DIXIE_BASE_URL SSM + force redeploy
+8. **Health verification**: `curl` both health endpoints
+
+## Dependencies
+
+- No code dependencies between tasks (all can be implemented in parallel)
+- Task 1.8 (delete + validate) depends on Tasks 1.1-1.7 being complete
+
+## Risk Notes
+
+- Terraform `validate` requires `terraform init` which needs AWS credentials and the S3 backend
+- The `null_resource` for workspace check requires the `hashicorp/null` provider
+- ElastiCache creation takes ~10 minutes; first `terraform apply` may take a while
+- NATS URL will need discovery via `aws ecs describe-tasks` after deploy

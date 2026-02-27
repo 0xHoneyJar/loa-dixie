@@ -19,7 +19,7 @@ run_mode:
     timeout_hours: 8
   sprint_plan:
     branch_prefix: "feat/"
-    default_branch_name: "platform-hardening-c015"
+    default_branch_name: "dixie-mvp"
     consolidate_pr: true
     commit_prefix: "feat"
     include_commits_by_sprint: true

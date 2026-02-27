@@ -1,383 +1,358 @@
-# PRD: Staging Deployment — Docker Build Fix & Stack Validation
+# PRD: Deploy Dixie to Armitage Ring (arrakis-staging-cluster)
 
-**Version**: 16.1.0
-**Date**: 2026-02-27
+**Version**: 18.0.0
+**Date**: 2026-02-28
 **Author**: Merlin (Direction), Claude (Synthesis)
-**Cycle**: cycle-016
-**Status**: Approved (post-Flatline)
-**Predecessor**: cycle-015 PRD v15.0.0 (Phase 0 — CI Pipeline & Pre-Merge Hygiene)
+**Cycle**: cycle-018
+**Status**: Approved
+**Issue**: https://github.com/0xHoneyJar/loa-dixie/issues/59
+**Predecessor**: cycle-017 PRD v17.0.0 (Hounfour v9 Extraction — delivered as PR comment)
 
-> Sources: cycle-014 staging infrastructure (docker-compose.staging.yml, Dockerfile, STAGING.md,
-> .env.example, 6 E2E smoke tests), cycle-015 CI pipeline (ci.yml hounfour checkout+build+symlink
-> pattern), app/package.json (`file:../../loa-hounfour` dependency), loa-finn concurrent
-> staging deployment from finn repo
->
-> Flatline Review: 2026-02-27 | HIGH_CONSENSUS: 7 integrated | BLOCKER: 1 resolved (fix smoke tests)
+> Sources: loa-dixie#59 (issue), loa-finn terraform reference (`infrastructure/terraform/`),
+> AWS CLI discovery (account 891376933289), existing `deploy/terraform/dixie.tf` (583 lines),
+> STAGING.md operational docs, Finn armitage.tfvars, Bridgebuilder reviews from cycles 014-016
+> (staging infrastructure + Docker build fixes)
 
 ---
 
 ## 1. Problem Statement
 
-Dixie's staging infrastructure is complete (cycle-014) and CI pipeline is green (cycle-015),
-but the **Docker build fails**. The Dockerfile runs `npm ci` which encounters
-`"@0xhoneyjar/loa-hounfour": "file:../../loa-hounfour"` in package.json — a path that
-resolves outside the Docker build context.
+Dixie has a working Docker image (PR #58 merged, bridge-reviewed) and a healthy local staging
+stack (postgres, redis, nats, dixie-bff all verified). But Dixie is NOT deployed to the shared
+cloud staging environment. Finn is deployed and healthy at `finn-armitage.arrakis.community`.
+The **autopoietic feedback loop cannot close** until Finn and Dixie are wired together on the
+same network — Finn needs Dixie's reputation API to route scoring decisions, and Dixie needs
+Finn's inference engine for chat completions.
 
-The CI workflow (ci.yml) solved this with a checkout+build+symlink pattern on GitHub Actions,
-but the Dockerfile has no equivalent mechanism. Until this is fixed, `docker compose up` cannot
-build the `dixie-bff` image.
+### What Exists Today
 
-### What Exists (from cycle-014)
+| Component | Status |
+|-----------|--------|
+| Docker image | Working (multi-stage, `npm ci`, health check, PR #58) |
+| Local staging | Healthy (docker compose, 4 services, postgres+redis+nats+dixie-bff) |
+| Terraform (`dixie.tf`) | 583 lines, **hardcoded to production** (`dixie.thj.dev`, freeside EFS) |
+| ECS cluster | `arrakis-staging-cluster` ACTIVE (9 services, 7 tasks) |
+| Finn on Armitage | Deployed, healthy at `finn-armitage.arrakis.community` |
+| RDS | `arrakis-staging-postgres` AVAILABLE |
+| NATS | `arrakis-staging-nats` running in cluster |
+| Tempo | `arrakis-staging-tempo` running in cluster |
+| Dixie ECR repo | **DOES NOT EXIST** |
+| Dixie SSM params | **DO NOT EXIST** |
+| Dixie ALB rule | **DOES NOT EXIST** |
 
-| Component | Location | Status |
-|-----------|----------|--------|
-| Docker Compose staging stack | `deploy/docker-compose.staging.yml` | Ready |
-| Dockerfile (multi-stage) | `deploy/Dockerfile` | **Broken** — hounfour not in build context |
-| Environment template | `.env.example` | 24 vars documented |
-| 16 DB migrations | `app/src/db/migrations/` | Auto-run on startup |
-| E2E smoke tests (6) | `tests/e2e/staging/` | **2 broken** — siwe-wallet.ts missing exports |
-| Terraform (ECS Fargate) | `deploy/terraform/dixie.tf` | Production (future) |
-| Runbook | `STAGING.md` | 370 lines |
+### Three-Ring Deployment Model
 
-### What's Broken
+| Ring | Name | Purpose | Gate to Next |
+|------|------|---------|-------------|
+| 1 | **Armitage** | Dev staging, integration testing | Manual promote |
+| 2 | **Chiba** | Pre-production, load testing | Automated canary |
+| 3 | **Production** | Live traffic | — |
 
-1. **Dockerfile `npm ci` fails**: `file:../../loa-hounfour` resolves to `/loa-hounfour` from
-   the `/app` working directory — that path doesn't exist in the build container.
+**This PRD covers Ring 1 (Armitage) only.**
 
-2. **`link: true` in package-lock.json**: `npm ci` creates a **symlink** in
-   `node_modules/@0xhoneyjar/loa-hounfour` pointing to `../../loa-hounfour`. Docker's
-   `COPY --from=deps` copies the symlink itself (not the target), producing a **dangling
-   symlink in the runtime stage** that crashes at startup with `MODULE_NOT_FOUND`.
-   Fix: `npm ci --install-links` dereferences symlinks during install.
-
-3. **No `.dockerignore`**: The build context includes `.git/`, `node_modules/`, test fixtures,
-   and framework files, making builds slow and bloated.
-
-4. **STAGING.md says Node 20+**: Should be Node 22+ to match Dockerfile, CI, and package.json engines.
-
-5. **Smoke test TypeScript errors**: `signMessage` is imported from `siwe-wallet.ts` in
-   `smoke-auth.test.ts` and `smoke-chat.test.ts` but is **not exported**. Additionally,
-   `createTestSiweMessage(nonce: string)` is called without the required `nonce` argument
-   in 4 places. These tests cannot compile.
+---
 
 ## 2. Goals & Success Criteria
 
-| # | Goal | Acceptance Criteria |
-|---|------|-------------------|
-| G1 | Docker build succeeds | `docker compose -f deploy/docker-compose.staging.yml build` completes without error |
-| G2 | Full stack boots | `docker compose up -d --wait` starts all 5 services (postgres, redis, nats, loa-finn, dixie-bff) |
-| G3 | Health endpoint green | `curl http://localhost:3001/api/health` returns `{"status": "healthy"}` with all infrastructure deps |
-| G4 | Smoke tests pass | `npm run test:e2e` — all 6 staging smoke tests pass |
+| Criterion | Metric |
+|-----------|--------|
+| `dixie-armitage.arrakis.community` returns 200 | Health endpoint responds |
+| Finn can reach Dixie | Finn's health shows `dixie: healthy` |
+| Dixie can reach Finn | Dixie's health shows `loa_finn: healthy, circuit_state: closed` |
+| Dixie can reach PostgreSQL | Health shows `postgresql: healthy` |
+| Dixie can reach Redis | Health shows `redis: healthy` |
+| Dixie can reach NATS | Health shows `nats: healthy` |
+| Terraform is environment-aware | `armitage.tfvars` + workspace isolation |
+| Zero hardcoded production values | All values from vars/SSM |
+| OTEL traces flow to Tempo | Spans visible in staging Tempo |
 
-### Non-Goals
+---
 
-- Production deployment (ECS Fargate) — that's a future cycle
-- Publishing loa-hounfour to npm registry — long-term fix, not this cycle
-- Changes to the loa-finn image — that's being handled from the finn repo concurrently
+## 3. Shared Infrastructure Discovery
 
-## 3. Constraints
+### Available on arrakis-staging-cluster (from AWS CLI)
 
-### Cross-Repo Coordination
+| Resource | Value | Notes |
+|----------|-------|-------|
+| ECS Cluster | `arrakis-staging-cluster` | ACTIVE, 9 services |
+| VPC | `vpc-0d08ce69dba7485da` | 10.1.0.0/16 |
+| Private Subnets | `subnet-0a08a8fce7004ee11`, `subnet-07973b30fe8f675e7` | From Finn's tfvars |
+| ALB | `arrakis-staging-alb` | HTTPS listener active |
+| ALB Listener ARN | `arn:aws:elasticloadbalancing:us-east-1:891376933289:listener/app/arrakis-staging-alb/0d434b50265789c1/e6ff22557f66633c` | |
+| ALB SG | `sg-007cdd539bcc3360c` | |
+| ALB DNS | `arrakis-staging-alb-616899391.us-east-1.elb.amazonaws.com` | |
+| ALB Zone ID | `Z35SXDOTRQ7X7K` | |
+| Route53 Zone | `Z01194812Z6NUWBWMFB7T` | `arrakis.community` |
+| RDS | `arrakis-staging-postgres.cho404os6nnb.us-east-1.rds.amazonaws.com` | PostgreSQL, AVAILABLE |
+| NATS | `arrakis-staging-nats` service | Running in cluster |
+| Tempo | `arrakis-staging-tempo` service | OTLP on 4317 |
+| PgBouncer | `arrakis-staging-pgbouncer` | Desired=1, running=0 (unhealthy) |
+| Finn | `loa-finn-armitage` | Running, priority 210 |
+| Account | `891376933289` | arrakis-deployer |
 
-- **loa-finn**: Being deployed to staging concurrently from the finn repo. Dixie depends on
-  `ghcr.io/0xhoneyjar/loa-finn:v3.2.0` being pullable.
-- **loa-hounfour**: Private sibling dependency at `file:../../loa-hounfour` (v8.2.0).
-  The Dockerfile must include hounfour in the build context since npm registry publication
-  doesn't exist.
-- **JWT shared secret**: `DIXIE_JWT_PRIVATE_KEY` in dixie must match `JWT_SECRET` in loa-finn
-  for cross-service auth to work. docker-compose.staging.yml already wires this correctly.
+### Finn's ALB Routing (current state)
 
-### Technical Constraints
+| Priority | Host | Target |
+|----------|------|--------|
+| 210 | `finn-armitage.arrakis.community` | `loa-finn-armitage` TG |
+| default | * | `arrakis-staging-api-tg` |
 
-- Node 22 across all environments (Dockerfile, CI, package.json engines)
-- Hounfour v8.2.0 pinned (matching CI's `ref: v8.2.0`)
-- Docker Compose v2 (required for `--wait` flag and health conditions)
-- Private GitHub repo (0xHoneyJar/loa-hounfour) — Docker build must not require GitHub auth
-- `npm ci --install-links` required to dereference `file:` symlinks in multi-stage builds
+Dixie will add **priority 220**: `dixie-armitage.arrakis.community` → dixie TG.
+
+---
 
 ## 4. Functional Requirements
 
-### FR-1: Fix Dockerfile Hounfour Dependency
+### F1: Terraform Refactoring
 
-The Dockerfile MUST be modified to handle the `file:../../loa-hounfour` dependency in a
-multi-stage Docker build. Two changes are required:
+Refactor `deploy/terraform/dixie.tf` from monolithic production config to environment-aware
+multi-environment setup following Finn's patterns:
 
-**A. Build preparation script** (`deploy/prepare-build.sh`):
-Copies hounfour build artifacts (`dist/`, `package.json`, `package-lock.json` — NOT
-`node_modules`) into `.hounfour-build/` within the project root (Docker build context).
+**F1.1: Backend Configuration**
+- S3 backend: `honeyjar-terraform-state` bucket
+- Key: `loa-dixie/terraform.tfstate`
+- DynamoDB lock: `terraform-locks`
+- Workspace isolation: `env:/{workspace}/loa-dixie/terraform.tfstate`
 
-The script MUST:
-- Verify hounfour exists at `../loa-hounfour`
-- Verify version matches v8.2.0 (`jq -r .version package.json`)
-- Copy only `dist/`, `package.json`, `package-lock.json` (no `node_modules`, no `.git/`)
-- If `dist/` doesn't exist, build from source as fallback
-- Guard `rm -rf` with path validation (ensure target ends with `.hounfour-build`)
-- Support `--clean` flag to remove `.hounfour-build/`
+**F1.2: Environment-Aware Locals**
+```hcl
+locals {
+  is_production = var.environment == "production"
+  service_name  = local.is_production ? "dixie-bff" : "dixie-${var.environment}"
+  hostname      = local.is_production ? "dixie.thj.dev" : "dixie-${var.environment}.arrakis.community"
+  ssm_prefix    = "/dixie/${var.environment}"
+  log_group     = "/ecs/${local.service_name}"
+}
+```
 
-**B. Dockerfile modifications**:
-Both `deps` and `build` stages MUST:
-1. `COPY .hounfour-build /loa-hounfour` — place hounfour at the resolved path
-2. Use `npm ci --install-links` — dereferences the `file:` symlink, copying package
-   contents into `node_modules/` instead of creating a symlink. This ensures
-   `COPY --from=deps /app/node_modules` in the runtime stage includes the actual
-   hounfour package, not a dangling symlink.
+**F1.3: Split Into Files** (following Finn pattern)
+- `variables.tf` — all variable definitions + backend
+- `dixie-ecs.tf` — task definition, service, IAM roles
+- `dixie-alb.tf` — target group, listener rule, Route53
+- `dixie-env.tf` — SSM Parameter Store definitions
+- `dixie-monitoring.tf` — CloudWatch alarms, SNS
+- `environments/armitage.tfvars` — staging overrides
 
-**Acceptance Criteria**:
-- `npm ci --install-links` succeeds in both `deps` and `build` stages
-- No GitHub authentication required during Docker build
-- Build prep script verifies hounfour version matches v8.2.0
-- `node_modules/@0xhoneyjar/loa-hounfour` in runtime stage is a real directory (not symlink)
-- Build prep script documented in STAGING.md
+### F2: ECR Repository
 
-### FR-2: Add .dockerignore
+Create `dixie-armitage` ECR repository:
+- Image scanning: enabled on push
+- Tag immutability: enabled (like Finn)
+- Lifecycle policy: keep last 10 images
 
-Create `.dockerignore` at the **project root** (not `deploy/` — Docker resolves it relative
-to the build context, which is `..` per docker-compose.staging.yml).
+### F3: ECS Service Configuration
 
-**Exclusions**:
-- `.git/`
-- `**/node_modules/`
-- `.claude/`
-- `.run/`
-- `grimoires/`
-- `.beads/`
-- `.ck/`
-- `tests/`
-- `*.md`
-- `.env*`
-- `.flatline/`
+**Task Definition:**
+- Family: `dixie-armitage` (environment-aware)
+- CPU: 256, Memory: 512 (staging sizing)
+- Port: 3001 (Dixie's port, not 3000 like Finn)
+- Health check: `/api/health`
+- Network mode: awsvpc
 
-**Explicit inclusions** (must NOT be excluded):
-- `.hounfour-build/` — this is the hounfour delivery mechanism
-- `app/` — source code
-- `deploy/Dockerfile` — referenced by path
+**Environment Variables (from env + SSM):**
 
-**Acceptance Criteria**:
-- `docker build` outputs "Sending build context to Docker daemon" < 15MB total
-- `.hounfour-build/` is accessible in the build context
-- No secrets (`.env*`) in build context
+| Variable | Source | Value |
+|----------|--------|-------|
+| `NODE_ENV` | env | `production` |
+| `DIXIE_PORT` | env | `3001` |
+| `DIXIE_ENVIRONMENT` | env | `armitage` |
+| `FINN_URL` | SSM | `http://<finn-service-discovery>:3000` |
+| `FINN_WS_URL` | SSM | `ws://<finn-service-discovery>:3000` |
+| `DATABASE_URL` | SSM (SecureString) | `postgresql://dixie:<pw>@arrakis-staging-postgres...:5432/dixie` |
+| `REDIS_URL` | SSM (SecureString) | `redis://<elasticache-endpoint>:6379` |
+| `NATS_URL` | SSM | `nats://<nats-service-discovery>:4222` |
+| `DIXIE_JWT_PRIVATE_KEY` | SSM (SecureString) | (generated) |
+| `DIXIE_ADMIN_KEY` | SSM (SecureString) | (generated) |
+| `DIXIE_CORS_ORIGINS` | SSM | `https://dixie-armitage.arrakis.community` |
+| `DIXIE_ALLOWLIST_PATH` | env | `/app/allowlist.json` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | env | `http://tempo.arrakis.local:4317` |
 
-### FR-3: Update STAGING.md
+**Service Configuration:**
+- Desired count: 1
+- Deployment: stop-before-start (100% max, 0% min) — like Finn
+- Circuit breaker: enabled with rollback
+- Private subnets only, no public IP
 
-- Fix Node.js version requirement: 20+ → 22+
-- Add build preparation step before `docker compose build`
-- Document `deploy/prepare-build.sh` usage
-- Document `deploy/prepare-build.sh --clean` for cleanup
+### F4: ALB Integration
 
-**Acceptance Criteria**:
-- All version references consistent (Node 22)
-- Deployment sequence includes build prep step
+- Target group: `dixie-armitage`, port 3001, HTTP, IP target type
+- Health check: `/api/health`, 30s interval, 2 healthy / 3 unhealthy
+- Listener rule: priority 220, host `dixie-armitage.arrakis.community`
+- Route53: A record alias to ALB
 
-### FR-4: Validate End-to-End Stack
+### F5: Security Groups
 
-After Dockerfile is fixed, validate the full deployment sequence:
-1. Run `deploy/prepare-build.sh`
-2. Create `deploy/.env.staging` from `.env.example`
-3. `docker compose -f deploy/docker-compose.staging.yml --env-file deploy/.env.staging up -d --wait`
-4. `curl http://localhost:3001/api/health`
-5. `npm run test:e2e`
+```
+ALB (sg-007cdd539bcc3360c)
+  └─→ Dixie SG: port 3001 (HTTP)
 
-**Smoke Test Dependency Matrix**:
+Dixie SG egress:
+  ├─→ Finn: port 3000 (10.0.0.0/8) — inference requests
+  ├─→ PostgreSQL: port 5432 (RDS endpoint)
+  ├─→ Redis: port 6379 (ElastiCache)
+  ├─→ NATS: port 4222 (staging NATS)
+  ├─→ Tempo: port 4317 (OTLP)
+  └─→ HTTPS: port 443 (0.0.0.0/0) — external APIs
 
-| Test | External Dependencies | Expected Outcome |
-|------|----------------------|------------------|
-| smoke-health | None (health endpoint only) | Pass |
-| smoke-auth | SIWE wallet signing, allowlist | Pass (after FR-5) |
-| smoke-chat | Working loa-finn inference | Pass if finn healthy |
-| smoke-fleet | Agent spawn infrastructure | Pass (governs via DB) |
-| smoke-reputation | PostgreSQL persistence | Pass |
-| smoke-governance | Admin key, governance tables | Pass |
+Finn SG ingress addition:
+  └─→ From Dixie SG: port 3000 (service-to-service, not via ALB)
+```
 
-**Acceptance Criteria**:
-- Stack boots within 60 seconds
-- Health returns `healthy` for all infrastructure deps
-- All 6 smoke tests pass
+### F6: Database Setup
 
-### FR-5: Fix E2E Smoke Test Helpers (Flatline BLOCKER Resolution)
+- Create database `dixie` on `arrakis-staging-postgres` RDS instance
+- Create user `dixie` with password in SSM
+- Migrations run automatically on ECS task startup (advisory lock pattern)
+- PgBouncer connection optional (direct RDS endpoint for now since PgBouncer is unhealthy)
 
-Fix pre-existing TypeScript errors in `tests/e2e/staging/helpers/siwe-wallet.ts`:
+### F7: Redis (ElastiCache)
 
-1. **Export `signMessage` function**: Add a `signMessage(message: string): Promise<string>`
-   function that signs with the hardhat test wallet private key using `viem` or manual
-   ECDSA signing.
+Option A: **Dedicated ElastiCache** (like Finn) — `cache.t4g.micro`, single node, Redis 7.1
+Option B: **Shared Redis** if one exists in the cluster
 
-2. **Fix `createTestSiweMessage` calls**: The function requires `nonce: string` but is
-   called without arguments in `smoke-auth.test.ts` (lines 26, 41, 58) and
-   `smoke-chat.test.ts` (line 14). Either:
-   - Make `nonce` optional with a default (e.g., `nonce = 'test-nonce'`), OR
-   - Update callers to fetch nonce from `/api/auth/nonce` first
+Recommendation: **Dedicated** (Finn pattern) — isolation, independent lifecycle, `noeviction` policy.
 
-**Acceptance Criteria**:
-- `npx tsc --noEmit` passes for the E2E test files
-- `signMessage` is exported and produces valid SIWE signatures
-- `createTestSiweMessage` works with the test flow (nonce from server or default)
+### F8: Finn↔Dixie Connectivity
 
-## 5. Technical Approach
+After Dixie deploys:
+1. Update Finn's SSM: `/loa-finn/armitage/DIXIE_BASE_URL` → `http://<dixie-service>:3001`
+2. Force Finn ECS service redeployment
+3. Verify bidirectional health
 
-### Hounfour Build Context Strategy
+Service discovery options:
+- **Option A**: ECS Service Connect (AWS Cloud Map) — automatic DNS
+- **Option B**: Internal ALB routing — `dixie-armitage.arrakis.community` via ALB
+- **Option C**: Direct IP/task discovery — fragile, not recommended
 
-The Dockerfile stays simple by using a **COPY-based approach** with a build preparation script.
+Recommendation: **Option B** (ALB routing) — simplest, already proven with Finn, works for both
+internal and external traffic. Dixie's ALB hostname resolves inside the VPC too.
 
-**Build prep script** (`deploy/prepare-build.sh`):
+### F9: Docker Image Build & Push
+
 ```bash
-#!/bin/bash
-set -euo pipefail
+# 1. Build from repo root
+docker build -f deploy/Dockerfile -t dixie-armitage .
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-HOUNFOUR_SRC="${PROJECT_ROOT}/../loa-hounfour"
-HOUNFOUR_DEST="${PROJECT_ROOT}/.hounfour-build"
-EXPECTED_VERSION="8.2.0"
+# 2. Tag with git SHA
+docker tag dixie-armitage:latest 891376933289.dkr.ecr.us-east-1.amazonaws.com/dixie-armitage:$(git rev-parse --short HEAD)
 
-# Clean mode
-if [[ "${1:-}" == "--clean" ]]; then
-  rm -rf "$HOUNFOUR_DEST"
-  echo "Cleaned .hounfour-build"
-  exit 0
-fi
-
-# Validate source exists
-if [[ ! -d "$HOUNFOUR_SRC" ]]; then
-  echo "ERROR: loa-hounfour not found at $HOUNFOUR_SRC"
-  exit 1
-fi
-
-# Validate version
-ACTUAL_VERSION=$(jq -r .version "$HOUNFOUR_SRC/package.json")
-if [[ "$ACTUAL_VERSION" != "$EXPECTED_VERSION" ]]; then
-  echo "ERROR: Expected hounfour v$EXPECTED_VERSION, found v$ACTUAL_VERSION"
-  exit 1
-fi
-
-# Guard rm -rf target
-if [[ "$HOUNFOUR_DEST" != *".hounfour-build" ]]; then
-  echo "ERROR: Unexpected destination path: $HOUNFOUR_DEST"
-  exit 1
-fi
-
-rm -rf "$HOUNFOUR_DEST"
-mkdir -p "$HOUNFOUR_DEST"
-
-# Copy only production artifacts (no node_modules — npm ci handles deps)
-if [[ -d "$HOUNFOUR_SRC/dist" ]]; then
-  cp -r "$HOUNFOUR_SRC/dist" "$HOUNFOUR_DEST/dist"
-  cp "$HOUNFOUR_SRC/package.json" "$HOUNFOUR_DEST/"
-  cp "$HOUNFOUR_SRC/package-lock.json" "$HOUNFOUR_DEST/" 2>/dev/null || true
-  echo "Copied hounfour v$ACTUAL_VERSION build artifacts"
-else
-  echo "dist/ not found, building from source..."
-  cp -r "$HOUNFOUR_SRC" "$HOUNFOUR_DEST"
-  rm -rf "$HOUNFOUR_DEST"/{.git,.github,tests,src}
-  cd "$HOUNFOUR_DEST" && npm ci && npm run build
-  rm -rf "$HOUNFOUR_DEST/node_modules"
-  echo "Built hounfour v$ACTUAL_VERSION from source"
-fi
+# 3. Auth + Push
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 891376933289.dkr.ecr.us-east-1.amazonaws.com
+docker push 891376933289.dkr.ecr.us-east-1.amazonaws.com/dixie-armitage:$(git rev-parse --short HEAD)
 ```
 
-**Modified Dockerfile** (`deploy/Dockerfile`):
-```dockerfile
-FROM node:22-slim AS base
-WORKDIR /app
-ENV NODE_ENV=production
+### F10: Monitoring & Alarms
 
-# --- Dependencies ---
-FROM base AS deps
-COPY .hounfour-build /loa-hounfour
-COPY app/package.json app/package-lock.json* ./
-RUN npm ci --omit=dev --install-links
+Following Finn's pattern:
+1. **Health check failure** — HealthyHostCount < 1 for 3 evaluations
+2. **Finn latency** — p95 response time > 5s for 5 minutes
+3. **Circuit breaker open** — log metric filter on `circuit_state = "open"`
+4. **Allowlist denied spike** — > 50 denied in 5 minutes
+5. **CPU/Memory high** — > 80% for 15 minutes
 
-# --- Build ---
-FROM base AS build
-COPY .hounfour-build /loa-hounfour
-COPY app/package.json app/package-lock.json* ./
-RUN npm ci --install-links
-COPY app/tsconfig.json ./
-COPY app/src/ ./src/
-RUN npm run build
+---
 
-# --- Runtime ---
-FROM base AS runtime
-RUN addgroup --system dixie && adduser --system --ingroup dixie dixie
+## 5. Technical Constraints
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY app/package.json ./
+| Constraint | Rationale |
+|-----------|-----------|
+| Single writer (desired_count=1) | PostgreSQL migrations use advisory locks |
+| Stop-before-start deployment | Prevents dual-writer WAL corruption |
+| Port 3001 (not 3000) | Dixie convention, distinct from Finn |
+| SSM Parameter Store (not Secrets Manager) | Align with Finn; SSM has native ECS integration |
+| Immutable ECR tags | Prevents tag mutation; use git SHA |
+| Private subnets only | Public access via ALB, tasks never directly exposed |
+| Region-conditioned IAM | All policies condition on `us-east-1` |
 
-USER dixie
-EXPOSE 3001
+---
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://localhost:3001/api/health').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"
+## 6. Implementation Sequence
 
-CMD ["node", "dist/index.js"]
-```
+| Step | Description | Prereq | AWS Resources Created |
+|------|-------------|--------|----------------------|
+| 1 | Create ECR repository | None | ECR repo |
+| 2 | Build & push Docker image | ECR repo | ECR image |
+| 3 | Create database on RDS | None | PG database + user |
+| 4 | Refactor terraform (split files, env-aware) | None | No AWS resources |
+| 5 | Create `armitage.tfvars` | Terraform refactor | No AWS resources |
+| 6 | Seed SSM parameters | None | SSM params |
+| 7 | `terraform apply` | Steps 1-6 | ECS service, TG, listener rule, SG, IAM, Route53, Redis, CW |
+| 8 | Verify Dixie health | Terraform apply | None |
+| 9 | Wire Finn↔Dixie | Dixie healthy | SSM update + Finn redeploy |
+| 10 | Verify bidirectional connectivity | Wire complete | None |
 
-Key insight: `--install-links` causes `npm ci` to **copy** the `file:` dependency contents
-into `node_modules/` rather than creating a symlink. This means `COPY --from=deps /app/node_modules`
-in the runtime stage includes the actual hounfour package, not a dangling symlink.
+---
 
-### Why Not Git Clone in Dockerfile
+## 7. Scope
 
-- loa-hounfour is a private repo — would require GitHub auth tokens in build args
-- Coupling Docker build to network access is fragile
-- Local copy is simpler and faster
+### In Scope (this cycle)
+- Terraform refactoring for multi-environment support
+- ECR repository creation
+- Docker image build and push
+- ECS service deployment on Armitage ring
+- ALB routing + Route53 DNS
+- SSM parameter seeding
+- Security group configuration
+- Dedicated ElastiCache Redis
+- Database creation on shared RDS
+- NATS connectivity
+- Finn↔Dixie wiring
+- Basic CloudWatch monitoring
 
-### Why Not Copy node_modules from Hounfour
+### Out of Scope
+- Ring 2 (Chiba) deployment
+- Production deployment
+- CI/CD pipeline automation (GitHub Actions → ECR → ECS)
+- Blue-green or canary deployment strategy
+- Auto-scaling beyond basic CPU tracking
+- Custom domain (production `dixie.thj.dev`)
+- Disaster recovery / backup strategy
+- Cost monitoring / budget alerts
 
-- Host `node_modules` may contain native binaries compiled for a different architecture
-  (e.g., macOS arm64 vs Docker linux/amd64)
-- `npm ci` in the container installs the correct platform-specific dependencies
-- Reduces build context by ~66MB
+---
 
-### Stack Architecture (unchanged from cycle-014)
+## 8. Risks & Mitigations
 
-```
-postgres:16.6 ─┐
-redis:7.4 ─────┤
-nats:2.10 ─────┤
-loa-finn:v3.2 ─┤
-                └── dixie-bff:latest (built from Dockerfile)
-                    └── exposed on :3001
-```
+| Risk | Impact | Probability | Mitigation |
+|------|--------|------------|------------|
+| PgBouncer unhealthy (running=0) | LOW | CONFIRMED | Use direct RDS endpoint; investigate PgBouncer separately |
+| Finn SG doesn't allow Dixie ingress | HIGH | MEDIUM | Add SG rule; may need Finn terraform change |
+| SSM parameter naming conflicts | MEDIUM | LOW | Follow `/dixie/armitage/*` convention |
+| NATS service discovery DNS unknown | MEDIUM | MEDIUM | Discover via ECS service describe or Cloud Map |
+| Docker image larger than Finn's (different deps) | LOW | LOW | Multi-stage build already optimized |
+| Migration lock timeout on first deploy | MEDIUM | LOW | Advisory lock has timeout; task will retry |
 
-## 6. Risks & Mitigations
+---
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| loa-finn image not pullable | Stack can't start | Verify ghcr.io access before deploy |
-| Hounfour not built locally | Build prep fails | Script builds from source as fallback |
-| Hounfour version drift | Lockfile integrity error | Script verifies version matches v8.2.0 |
-| JWT secret mismatch | Auth fails between services | docker-compose wires single `DIXIE_JWT_PRIVATE_KEY` to both |
-| Port conflict on :3001 | dixie-bff can't bind | Check `lsof -i :3001` before deploy |
-| CI Docker builds (image push) | `prepare-build.sh` won't work in CI | Separate CI concern — CI uses checkout+symlink pattern |
-| Allowlist.json missing | Auth may reject all wallets | Verify allowlist behavior when file absent |
+## 9. Cross-Repo Coordination
 
-## 7. Out of Scope
+### Finn Changes Required
+1. **SSM Parameter**: `/loa-finn/armitage/DIXIE_BASE_URL` must be set/updated
+2. **Security Group**: May need ingress rule from Dixie's SG on port 3000
+3. **ECS Redeploy**: Force new deployment to pick up DIXIE_BASE_URL
 
-- Fly.io deployment (no Fly config exists; project targets Docker Compose for staging)
-- loa-hounfour npm publication (long-term improvement, separate cycle)
-- Production deployment (ECS Fargate, future cycle)
-- loa-finn image changes (being handled in finn repo)
-- TLS/HTTPS (staging is localhost-only)
+### Hounfour
+- No changes needed — Dixie already pins `github:0xHoneyJar/loa-hounfour#b6e0027a`
+- Docker image includes hounfour via npm ci (verified in PR #58)
 
-## 8. Flatline Review Log
+### Local Repos Available
+- `/home/merlin/Documents/thj/code/loa-finn/` — reference terraform
+- `/home/merlin/Documents/thj/code/loa-hounfour/` — protocol library
+- `/home/merlin/Documents/thj/code/loa-freeside/` — arrakis infrastructure reference
+- `/home/merlin/Documents/thj/code/loa-beauvoir/` — personality engine
+- `/home/merlin/Documents/thj/code/loa-constructs/` — Loa framework
 
-**Run**: 2026-02-27 | **Phase**: PRD | **Mode**: Interactive (HITL)
+---
 
-| Category | Count | Action |
-|----------|-------|--------|
-| HIGH_CONSENSUS | 7 | Auto-integrated into v16.1.0 |
-| BLOCKER | 1 | Resolved: FR-5 added (fix smoke test helpers) |
-| DISPUTED | 0 | — |
-| LOW_VALUE | 0 | — |
-| PRAISE | 3 | Logged |
+## 10. References
 
-**Key integrations**:
-- HC-1: Added `--install-links` to solve symlink/COPY problem (Section 1.2, FR-1B, Section 5)
-- HC-2: Removed node_modules from build prep copy (Section 5, "Why Not Copy node_modules")
-- HC-3: Added .gitignore requirement for `.hounfour-build/` (FR-1A)
-- HC-4: Added version verification to build prep script (FR-1A)
-- HC-5: Specified .dockerignore at project root (FR-2)
-- HC-6: Clarified both `deps` and `build` stages need COPY + --install-links (FR-1B)
-- HC-7: Added CI Docker build divergence to risks (Section 6)
-- BLOCKER-1: Added FR-5 to fix smoke test TypeScript errors
+| Reference | Location |
+|-----------|----------|
+| Issue #59 | `https://github.com/0xHoneyJar/loa-dixie/issues/59` |
+| Finn terraform | `/home/merlin/Documents/thj/code/loa-finn/infrastructure/terraform/` |
+| Finn armitage.tfvars | `loa-finn/infrastructure/terraform/environments/armitage.tfvars` |
+| Dixie existing terraform | `deploy/terraform/dixie.tf` (583 lines, production-only) |
+| Dixie Dockerfile | `deploy/Dockerfile` (38 lines, multi-stage) |
+| Dixie STAGING.md | `STAGING.md` (375 lines, operational docs) |
+| PR #58 (Docker fixes) | `https://github.com/0xHoneyJar/loa-dixie/pull/58` |
+| Finn staging | `https://finn-armitage.arrakis.community` |
