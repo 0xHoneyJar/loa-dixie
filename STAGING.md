@@ -35,29 +35,6 @@ cp .env.example deploy/.env.staging
 
 All 24 variables are documented in `.env.example`.
 
-## 2.5 Build Preparation (Hounfour)
-
-The Dockerfile requires loa-hounfour build artifacts in the Docker context.
-Run the build preparation script before building:
-
-```bash
-# Prepare hounfour build artifacts
-./deploy/prepare-build.sh
-
-# Verify (should show dist/, package.json)
-ls .hounfour-build/
-```
-
-**Requirements**:
-- loa-hounfour checked out as sibling directory (`../loa-hounfour`)
-- loa-hounfour built (`dist/` exists) — script will build from source if needed
-- Version must be v8.2.0 (script validates automatically, override with `HOUNFOUR_VERSION=x.y.z`)
-
-**Cleanup**:
-```bash
-./deploy/prepare-build.sh --clean
-```
-
 ## 3. Build & Start
 
 ```bash
