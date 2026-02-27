@@ -11,14 +11,24 @@ FROM base AS deps
 COPY .hounfour-build /loa-hounfour
 COPY app/package.json app/package-lock.json* ./
 # --install-links dereferences file: symlinks into real directories.
-# Fallback to npm install if npm ci rejects the link:true lockfile.
-RUN npm ci --omit=dev --install-links || npm install --omit=dev --install-links
+# Explicit conditional: npm ci for lockfile integrity when present, npm install otherwise.
+RUN if [ -f package-lock.json ]; then \
+      npm ci --omit=dev --install-links; \
+    else \
+      npm install --omit=dev --install-links; \
+    fi
 
 # --- Build ---
 FROM base AS build
+# Both stages need hounfour: npm install --install-links resolves the file: reference
+# at install time, and multi-stage builds have independent filesystems.
 COPY .hounfour-build /loa-hounfour
 COPY app/package.json app/package-lock.json* ./
-RUN npm ci --install-links || npm install --install-links
+RUN if [ -f package-lock.json ]; then \
+      npm ci --install-links; \
+    else \
+      npm install --install-links; \
+    fi
 COPY app/tsconfig.json ./
 COPY app/src/ ./src/
 RUN npm run build

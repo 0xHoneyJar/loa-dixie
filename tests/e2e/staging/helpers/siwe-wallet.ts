@@ -25,6 +25,10 @@ export async function signMessage(message: string): Promise<string> {
  * Create a SIWE message for the test wallet.
  * @param nonce - Nonce value (default: test nonce, no server endpoint exists)
  * @param domain - Domain for the SIWE message (default: localhost)
+ *
+ * TODO: When /api/auth/nonce endpoint is added, replace static nonce with
+ * async function fetchNonce(baseUrl: string): Promise<string> that calls the endpoint.
+ * Current static nonce works because server-side SIWE verify doesn't validate nonces.
  */
 export function createTestSiweMessage(nonce = 'test-nonce-00000000', domain = 'localhost'): string {
   const now = new Date().toISOString();
