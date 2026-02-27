@@ -1,178 +1,306 @@
-# Sprint Plan: Deploy Dixie to Armitage Ring — Terraform Refactoring
+# Sprint Plan: Deploy Dixie to Armitage Ring
 
-**Version**: 18.0.0
-**Date**: 2026-02-28
+**Version**: 18.1.0
+**Date**: 2026-02-27
 **Cycle**: cycle-018
 **PRD**: v18.0.0
 **SDD**: v18.0.0
 
-> Source: PRD §4 (10 functional requirements), SDD §2-8 (terraform file structure),
-> Finn terraform reference (10 files), existing dixie.tf (583 lines, monolithic production config)
+> Source: PRD §4 (10 functional requirements), SDD §9-13 (deployment sequence),
+> freeside #105 (canonical deployment), dixie #59 (deployment scope),
+> Finn deployment pattern (loa-finn-armitage on arrakis-staging-cluster)
 
 ---
 
 ## Sprint 1: Terraform Refactoring — Environment-Aware Multi-File Split
 
-**Goal**: Replace the monolithic 583-line `deploy/terraform/dixie.tf` with 6 environment-aware
-terraform files following Finn's exact pattern, plus an `armitage.tfvars` for staging overrides.
+**Global ID**: 113
+**Status**: COMPLETED (PR #60)
 
-**Approach**: Delete `dixie.tf` entirely. Create 6 new files from scratch using Finn as the
-reference implementation, adapted for Dixie's specific needs (port 3001, SSM instead of Secrets
-Manager, no EFS/KMS/DynamoDB/S3, dedicated ElastiCache Redis).
-
-### Task 1.1: Create `variables.tf` — Backend, Provider, Variables, Locals
-
-**Description**: Create the terraform backend configuration (S3 + DynamoDB), AWS provider with
-default tags, all variable definitions, environment-aware locals, and workspace safety check.
-
-**Acceptance Criteria**:
-- [ ] S3 backend: bucket `honeyjar-terraform-state`, key `loa-dixie/terraform.tfstate`, DynamoDB locks
-- [ ] Workspace key prefix `env` for workspace isolation
-- [ ] Provider: `us-east-1`, default tags `Project=loa-dixie`, `ManagedBy=terraform`
-- [ ] Variable `environment` with validation: `["production", "armitage"]`
-- [ ] Variable `image_tag` with validation: `!= "latest"`
-- [ ] All 15 variables from SDD §3.3 defined
-- [ ] Locals: `service_name`, `hostname`, `ssm_prefix`, `ecs_cluster`, `common_tags`
-- [ ] Workspace safety check (null_resource prevents workspace/environment mismatch)
-- [ ] Data sources: `aws_caller_identity`, `aws_region`
-
-### Task 1.2: Create `dixie-ecs.tf` — IAM, Security Group, Task Definition, ECS Service
-
-**Description**: Create IAM roles (execution + task), security group with all required rules,
-CloudWatch log group, ECS task definition with environment variables and SSM secrets,
-and ECS service with stop-before-start deployment.
-
-**Acceptance Criteria**:
-- [ ] Execution role with `AmazonECSTaskExecutionRolePolicy` + SSM GetParameters inline policy
-- [ ] Task role with SSM read + CloudWatch logs permissions (region-conditioned)
-- [ ] Security group: ingress 3001 from ALB SG; egress 443/6379/5432/4222/4317
-- [ ] Redis egress as standalone `aws_security_group_rule` (breaks SG cycle with ElastiCache)
-- [ ] Log group `/ecs/${local.service_name}`, 30-day retention
-- [ ] Task definition: Fargate, awsvpc, parameterized CPU/memory, port 3001
-- [ ] Container: 5 environment vars (NODE_ENV, DIXIE_PORT, DIXIE_ENVIRONMENT, ALLOWLIST_PATH, OTEL)
-- [ ] Container: 8 SSM secrets (FINN_URL, FINN_WS_URL, DATABASE_URL, REDIS_URL, NATS_URL, JWT, ADMIN, CORS)
-- [ ] Health check: `fetch('http://localhost:3001/api/health')`, startPeriod=60
-- [ ] ECS service: desired_count=1, stop-before-start (100%/0%), circuit breaker + rollback
-- [ ] `lifecycle { prevent_destroy = true }`
-- [ ] Desired count drift alarm (single-writer invariant)
-
-### Task 1.3: Create `dixie-alb.tf` — Target Group, Listener Rule, Route53
-
-**Description**: Create ALB target group for port 3001, host-based listener rule at
-priority 220 (staging) / 200 (production), and Route53 A record alias.
-
-**Acceptance Criteria**:
-- [ ] Target group: `local.service_name`, port 3001, HTTP, IP target type
-- [ ] Health check: `/api/health`, 30s interval, 2 healthy / 3 unhealthy, matcher "200"
-- [ ] Deregistration delay 30s
-- [ ] Listener rule: priority 220 for staging, 200 for production (environment-conditional)
-- [ ] Host header condition: `local.hostname`
-- [ ] Route53 A record alias to ALB (evaluate_target_health = true)
-
-### Task 1.4: Create `dixie-env.tf` — SSM Parameter Store Definitions
-
-**Description**: Create all SSM Parameter Store entries with PLACEHOLDER values and
-`lifecycle { ignore_changes = [value] }` so operators set real values via AWS CLI.
-
-**Acceptance Criteria**:
-- [ ] 8 SSM parameters under `${local.ssm_prefix}/` path
-- [ ] SecureString for: FINN_URL, FINN_WS_URL, DATABASE_URL, REDIS_URL, DIXIE_JWT_PRIVATE_KEY, DIXIE_ADMIN_KEY
-- [ ] String for: NATS_URL, DIXIE_CORS_ORIGINS
-- [ ] All parameters have `lifecycle { ignore_changes = [value] }`
-- [ ] All parameters tagged with Environment + Service
-
-### Task 1.5: Create `dixie-redis.tf` — Dedicated ElastiCache
-
-**Description**: Create dedicated ElastiCache Redis following Finn's pattern — subnet group,
-security group, parameter group (noeviction), and replication group with environment-aware sizing.
-
-**Acceptance Criteria**:
-- [ ] Subnet group: `dixie-{env}-redis`, same private subnets
-- [ ] Security group: ingress 6379 from ECS SG only
-- [ ] Parameter group: `dixie-{env}-redis7`, family `redis7`, `maxmemory-policy=noeviction`
-- [ ] Replication group: Redis 7.1, `cache.t4g.micro` staging / `cache.t4g.small` production
-- [ ] Staging: single node, no Multi-AZ, no auto-failover
-- [ ] Production: 2 nodes, Multi-AZ, auto-failover
-- [ ] TLS in transit + encryption at rest enabled
-- [ ] Snapshot: 1-day staging, 7-day production
-
-### Task 1.6: Create `dixie-monitoring.tf` — SNS, Alarms, Metric Filters
-
-**Description**: Create SNS alarm topic, CloudWatch alarms (CPU, memory, unhealthy hosts,
-Finn latency, circuit breaker), and log metric filters.
-
-**Acceptance Criteria**:
-- [ ] SNS topic `dixie-{env}-alarms` with optional email subscription
-- [ ] CPU alarm: > 80%, 300s period, 3 evaluations
-- [ ] Memory alarm: > 80%, 300s period, 3 evaluations
-- [ ] Unhealthy hosts alarm: < 1, 60s period, 3 evaluations
-- [ ] Finn latency alarm: p95 > 5s, 60s period, 5 evaluations
-- [ ] Circuit breaker metric filter + alarm: `{ $.circuit_state = "open" }`
-- [ ] Allowlist denied metric filter: `{ $.auth_type = "none" && $.action = "denied" }`
-- [ ] Redis memory alarm: > 70%, 300s period, 3 evaluations
-- [ ] All alarms/filters use environment-aware naming
-
-### Task 1.7: Create `environments/armitage.tfvars` — Staging Overrides
-
-**Description**: Create the armitage.tfvars file with all staging-specific values from
-AWS infrastructure discovery.
-
-**Acceptance Criteria**:
-- [ ] `environment = "armitage"`
-- [ ] `ecs_cluster_name = "arrakis-staging-cluster"`
-- [ ] `dixie_cpu = 256`, `dixie_memory = 512`
-- [ ] ECR repository URL for `dixie-armitage`
-- [ ] VPC, subnet, ALB, Route53 values from discovery (SDD §12)
-- [ ] `image_tag = "DEPLOY_SHA_REQUIRED"` (must be overridden at deploy time)
-
-### Task 1.8: Delete `dixie.tf` and Validate
-
-**Description**: Delete the old monolithic `deploy/terraform/dixie.tf` (583 lines).
-Run `terraform fmt` and `terraform validate` on the new files. Ensure no duplicate
-resource names or variable redeclarations.
-
-**Acceptance Criteria**:
-- [ ] `deploy/terraform/dixie.tf` deleted
-- [ ] `terraform fmt -check` passes on all new files
-- [ ] `terraform validate` passes (requires `terraform init` with backend config)
-- [ ] No references to Secrets Manager (replaced by SSM)
-- [ ] No references to EFS (removed for staging)
-- [ ] No auto-scaling resources (removed for staging)
-- [ ] All resource names use `local.service_name` or `local.hostname` (not hardcoded)
+Replaced monolithic 583-line `dixie.tf` with 6 environment-aware terraform files + `armitage.tfvars`.
+- `terraform fmt` ✓, `terraform validate` ✓, 2373 tests pass ✓
 
 ---
 
-## Sprint Scope Summary
+## Sprint 2: Armitage Deployment — ECR, Docker, Terraform Apply, SSM, Wiring
 
-| Metric | Value |
-|--------|-------|
-| Files created | 7 (6 .tf + 1 .tfvars) |
-| Files deleted | 1 (dixie.tf) |
-| Lines removed | ~583 |
-| Lines added | ~800 (estimated) |
-| AWS resources managed | ~25 (ECR repo created separately) |
+**Global ID**: 114
+**Goal**: Deploy Dixie to `arrakis-staging-cluster` using the terraform from Sprint 1.
+Create ECR repository, build+push Docker image, initialize terraform workspace,
+seed SSM parameters, apply infrastructure, create database, and wire Finn↔Dixie.
 
-## Out of Sprint Scope (Manual Operations)
+**Branch**: `feature/dixie-mvp` (same as Sprint 1)
 
-These are documented in the SDD but executed manually by the operator:
+**Acceptance Criteria**:
+- `dixie-armitage.arrakis.community` resolves and health endpoint returns 200
+- ECS service `dixie-armitage` running with 1 healthy task
+- Finn↔Dixie connectivity verified (bidirectional health)
+- All 13 database migrations run successfully
 
-1. **ECR creation**: `aws ecr create-repository --repository-name dixie-armitage`
-2. **Docker build & push**: `docker build + tag + push`
-3. **Database setup**: `psql` on RDS to create `dixie` database + user
-4. **Terraform workspace**: `terraform workspace new armitage`
-5. **SSM seeding**: `aws ssm put-parameter` for each secret
-6. **Terraform apply**: `terraform apply -var-file=environments/armitage.tfvars`
-7. **Finn wiring**: Update Finn's DIXIE_BASE_URL SSM + force redeploy
-8. **Health verification**: `curl` both health endpoints
+### Task 2.1: Create ECR Repository
 
-## Dependencies
+**Description**: Create the ECR repository for dixie-armitage with immutable tags and scan-on-push.
 
-- No code dependencies between tasks (all can be implemented in parallel)
-- Task 1.8 (delete + validate) depends on Tasks 1.1-1.7 being complete
+**Commands**:
+```bash
+aws ecr create-repository \
+  --repository-name dixie-armitage \
+  --image-scanning-configuration scanOnPush=true \
+  --image-tag-mutability IMMUTABLE \
+  --region us-east-1
+
+aws ecr put-lifecycle-policy \
+  --repository-name dixie-armitage \
+  --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 10","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+```
+
+**Acceptance Criteria**:
+- [ ] ECR repository `dixie-armitage` exists in `891376933289.dkr.ecr.us-east-1.amazonaws.com`
+- [ ] Lifecycle policy retains last 10 images
+
+### Task 2.2: Build & Push Docker Image
+
+**Description**: Build the Docker image from loa-dixie and push to ECR with git SHA tag.
+
+**Commands**:
+```bash
+IMAGE_TAG=$(git rev-parse --short HEAD)
+ECR_URL="891376933289.dkr.ecr.us-east-1.amazonaws.com/dixie-armitage"
+
+docker build -f deploy/Dockerfile -t dixie-armitage .
+docker tag dixie-armitage:latest ${ECR_URL}:${IMAGE_TAG}
+
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin 891376933289.dkr.ecr.us-east-1.amazonaws.com
+
+docker push ${ECR_URL}:${IMAGE_TAG}
+```
+
+**Acceptance Criteria**:
+- [ ] Docker image builds successfully (tested in Sprint 1)
+- [ ] Image pushed to ECR with git SHA tag (not `latest`)
+- [ ] ECR scan shows no CRITICAL vulnerabilities
+
+### Task 2.3: Create Database on RDS
+
+**Description**: Connect to `arrakis-staging-postgres` RDS and create the `dixie` database and user.
+
+**Steps**:
+1. Discover RDS endpoint: `aws rds describe-db-instances --query 'DBInstances[?contains(DBInstanceIdentifier, \`staging\`)].Endpoint'`
+2. Connect via PgBouncer or direct: `psql -h <endpoint> -U <admin_user> -d postgres`
+3. Create database + user:
+```sql
+CREATE DATABASE dixie;
+CREATE USER dixie WITH PASSWORD '<generated-password>';
+GRANT ALL PRIVILEGES ON DATABASE dixie TO dixie;
+\c dixie
+GRANT ALL ON SCHEMA public TO dixie;
+```
+
+**Acceptance Criteria**:
+- [ ] Database `dixie` exists on RDS
+- [ ] User `dixie` can connect and create tables
+- [ ] DATABASE_URL connection string verified
+
+### Task 2.4: Initialize Terraform & Apply
+
+**Description**: Initialize terraform workspace and apply infrastructure.
+
+**Commands**:
+```bash
+cd deploy/terraform
+terraform init
+terraform workspace new armitage || terraform workspace select armitage
+
+# Plan with the deployed image tag
+terraform plan \
+  -var-file=environments/armitage.tfvars \
+  -var="image_tag=${IMAGE_TAG}"
+
+# Review plan, then apply
+terraform apply \
+  -var-file=environments/armitage.tfvars \
+  -var="image_tag=${IMAGE_TAG}"
+```
+
+**Acceptance Criteria**:
+- [ ] `terraform init` connects to S3 backend
+- [ ] Workspace `armitage` created/selected
+- [ ] `terraform plan` shows ~25 resources to create
+- [ ] `terraform apply` completes successfully
+- [ ] ElastiCache Redis replication group created
+- [ ] ECS service created (will start failing until SSM params are seeded)
+
+### Task 2.5: Seed SSM Parameters
+
+**Description**: Populate all 8 SSM parameters with real values. The terraform created
+PLACEHOLDERs; now we set actual connection strings and secrets.
+
+**Parameters to seed**:
+```bash
+SSM_PREFIX="/dixie/armitage"
+
+# Discover values first
+REDIS_ENDPOINT=$(aws elasticache describe-replication-groups \
+  --replication-group-id dixie-armitage \
+  --query 'ReplicationGroups[0].NodeGroups[0].PrimaryEndpoint.{Address:Address,Port:Port}' \
+  --output text)
+
+# 1. Finn URL (via ALB — not Cloud Map)
+aws ssm put-parameter --name "${SSM_PREFIX}/FINN_URL" \
+  --value "https://finn-armitage.arrakis.community" \
+  --type SecureString --overwrite
+
+# 2. Finn WebSocket URL
+aws ssm put-parameter --name "${SSM_PREFIX}/FINN_WS_URL" \
+  --value "wss://finn-armitage.arrakis.community" \
+  --type SecureString --overwrite
+
+# 3. Database URL (from Task 2.3)
+aws ssm put-parameter --name "${SSM_PREFIX}/DATABASE_URL" \
+  --value "postgresql://dixie:<password>@<rds-endpoint>:5432/dixie" \
+  --type SecureString --overwrite
+
+# 4. Redis URL (TLS endpoint from ElastiCache)
+aws ssm put-parameter --name "${SSM_PREFIX}/REDIS_URL" \
+  --value "rediss://${REDIS_ENDPOINT}:6379" \
+  --type SecureString --overwrite
+
+# 5. NATS URL (discover from ECS tasks)
+NATS_TASK=$(aws ecs list-tasks --cluster arrakis-staging-cluster \
+  --service-name arrakis-staging-nats --query 'taskArns[0]' --output text)
+NATS_IP=$(aws ecs describe-tasks --cluster arrakis-staging-cluster \
+  --tasks ${NATS_TASK} \
+  --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value' --output text)
+aws ssm put-parameter --name "${SSM_PREFIX}/NATS_URL" \
+  --value "nats://${NATS_IP}:4222" \
+  --type String --overwrite
+
+# 6. JWT Private Key (generate 64-char secret)
+JWT_KEY=$(openssl rand -hex 32)
+aws ssm put-parameter --name "${SSM_PREFIX}/DIXIE_JWT_PRIVATE_KEY" \
+  --value "${JWT_KEY}" \
+  --type SecureString --overwrite
+
+# 7. Admin Key
+ADMIN_KEY=$(openssl rand -hex 32)
+aws ssm put-parameter --name "${SSM_PREFIX}/DIXIE_ADMIN_KEY" \
+  --value "${ADMIN_KEY}" \
+  --type SecureString --overwrite
+
+# 8. CORS Origins
+aws ssm put-parameter --name "${SSM_PREFIX}/DIXIE_CORS_ORIGINS" \
+  --value "https://dixie-armitage.arrakis.community" \
+  --type String --overwrite
+```
+
+**Acceptance Criteria**:
+- [ ] All 8 SSM parameters populated with real values
+- [ ] `aws ssm get-parameters-by-path --path /dixie/armitage --recursive` returns 8 params
+- [ ] DATABASE_URL connectivity verified
+- [ ] Redis endpoint reachable (ElastiCache may take ~10 min)
+
+### Task 2.6: Force ECS Deployment & Verify
+
+**Description**: After SSM params are seeded, force a new ECS deployment so the task
+picks up the real secret values. Wait for health check to pass.
+
+**Commands**:
+```bash
+aws ecs update-service \
+  --cluster arrakis-staging-cluster \
+  --service dixie-armitage \
+  --force-new-deployment
+
+# Wait for service to stabilize
+aws ecs wait services-stable \
+  --cluster arrakis-staging-cluster \
+  --services dixie-armitage
+
+# Check health
+curl -s https://dixie-armitage.arrakis.community/api/health | jq .
+```
+
+**Acceptance Criteria**:
+- [ ] ECS service has 1 running task
+- [ ] Health endpoint returns `{ "status": "healthy" }`
+- [ ] CloudWatch logs show successful startup + migration run
+- [ ] No circuit breaker rollbacks in deployment
+
+### Task 2.7: Wire Finn → Dixie
+
+**Description**: Update Finn's SSM parameter so it knows where Dixie is, then force Finn redeploy.
+
+**Commands**:
+```bash
+# Set DIXIE_BASE_URL in Finn's SSM
+aws ssm put-parameter \
+  --name "/loa-finn/armitage/DIXIE_BASE_URL" \
+  --value "https://dixie-armitage.arrakis.community" \
+  --type SecureString --overwrite
+
+# Force Finn redeploy to pick up new parameter
+aws ecs update-service \
+  --cluster arrakis-staging-cluster \
+  --service loa-finn-armitage \
+  --force-new-deployment
+
+# Wait for Finn to stabilize
+aws ecs wait services-stable \
+  --cluster arrakis-staging-cluster \
+  --services loa-finn-armitage
+```
+
+**Acceptance Criteria**:
+- [ ] Finn SSM param `/loa-finn/armitage/DIXIE_BASE_URL` set
+- [ ] Finn redeployed and healthy
+- [ ] Finn health shows Dixie connectivity
+
+### Task 2.8: End-to-End Validation
+
+**Description**: Verify both services are healthy, DNS resolves, and bidirectional
+connectivity works.
+
+**Commands**:
+```bash
+# 1. DNS resolution
+nslookup dixie-armitage.arrakis.community
+
+# 2. Dixie health (should show finn: healthy, circuit_state: closed)
+curl -sf https://dixie-armitage.arrakis.community/api/health | jq .
+
+# 3. Finn health (should show dixie: connected)
+curl -sf https://finn-armitage.arrakis.community/health | jq .
+
+# 4. Dixie migrations ran
+curl -sf https://dixie-armitage.arrakis.community/api/health | jq '.services'
+
+# 5. Redis connectivity
+curl -sf https://dixie-armitage.arrakis.community/api/health | jq '.infrastructure'
+```
+
+**Acceptance Criteria**:
+- [ ] `dixie-armitage.arrakis.community` resolves to ALB
+- [ ] Dixie health: `status: healthy`, Finn circuit closed
+- [ ] Finn health: Dixie connected
+- [ ] Database migrations completed (13 migrations)
+- [ ] Redis connected
+- [ ] No CloudWatch alarm firing
+
+---
+
+## Dependency Graph
+
+```
+T2.1 (ECR) ──→ T2.2 (Docker push)
+T2.3 (Database) ─────────────────→ T2.5 (SSM seed)
+T2.2 ──→ T2.4 (Terraform apply) → T2.5 → T2.6 (Deploy) → T2.7 (Wire Finn) → T2.8 (Validate)
+```
 
 ## Risk Notes
 
-- Terraform `validate` requires `terraform init` which needs AWS credentials and the S3 backend
-- The `null_resource` for workspace check requires the `hashicorp/null` provider
-- ElastiCache creation takes ~10 minutes; first `terraform apply` may take a while
-- NATS URL will need discovery via `aws ecs describe-tasks` after deploy
+- **ElastiCache creation**: Takes ~10-15 minutes; `terraform apply` will block
+- **NATS discovery**: NATS IP may change on task restart; consider Cloud Map or service discovery
+- **PgBouncer vs direct RDS**: Check if dixie should connect through PgBouncer (freeside's staging has it)
+- **Health check timing**: startPeriod=60 gives migrations time, but first deploy may need patience
+- **DNS propagation**: Route53 A record alias may take a few minutes to propagate
