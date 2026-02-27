@@ -1,26 +1,19 @@
 # Dependabot Configuration for Automated Dependency Updates
-# LOW-004: Security fix for automated dependency monitoring
-#
-# This configuration enables Dependabot to automatically check for and create
-# pull requests for dependency updates in the integration layer.
+# Monitors app/ (BFF), deploy/ (Docker), and GitHub Actions.
 
 version: 2
 updates:
-  # Integration layer (Discord bot, Linear integration, webhooks)
+  # BFF application dependencies
   - package-ecosystem: "npm"
-    directory: "/integration"
+    directory: "/app"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 10
-    reviewers:
-      - "your-team"
     labels:
       - "dependencies"
       - "security"
-      - "integration"
-    # Group non-security updates to reduce PR noise
     groups:
       development-dependencies:
         dependency-type: "development"
@@ -30,33 +23,16 @@ updates:
         dependency-type: "production"
         patterns:
           - "*"
-    # Allow both direct and indirect dependency updates
     versioning-strategy: "increase"
-    # Automatically rebase pull requests when base branch is updated
     rebase-strategy: "auto"
-    # Commit message prefix
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
       include: "scope"
 
-  # Root package.json (if exists)
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "security"
-    commit-message:
-      prefix: "chore(deps)"
-
   # Docker base images
   - package-ecosystem: "docker"
-    directory: "/integration"
+    directory: "/deploy"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -82,21 +58,3 @@ updates:
       - "ci"
     commit-message:
       prefix: "chore(ci)"
-
-# Security Updates:
-# - Dependabot will automatically create PRs for security updates regardless of schedule
-# - Security updates are prioritized and opened immediately when detected
-# - Critical vulnerabilities will open PRs even if open-pull-requests-limit is reached
-#
-# To customize for your team:
-# 1. Replace "your-team" with your GitHub team name or individual usernames
-# 2. Adjust schedule timing to match your team's workflow
-# 3. Add assignees if you want automatic PR assignments
-# 4. Configure ignore rules if specific packages should not be updated
-#
-# Example ignore configuration (add to any update block):
-# ignore:
-#   - dependency-name: "package-name"
-#     versions: ["1.x", "2.x"]
-#   - dependency-name: "another-package"
-#     update-types: ["version-update:semver-major"]
