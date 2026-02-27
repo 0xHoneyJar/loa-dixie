@@ -1,5 +1,13 @@
 # Sprint Status Index
 
+## Cycle 018: Deploy Dixie to Armitage Ring (arrakis-staging-cluster)
+
+| Sprint | Global ID | Status | Phase |
+|--------|-----------|--------|-------|
+| Sprint 1 | 113 | COMPLETED | Terraform refactoring (PR #60) |
+| Sprint 2 | 114 | COMPLETED | Armitage deployment ops |
+| Sprint 3 | 115 | IN_PROGRESS | implement: COMPLETE |
+
 ## Cycle 041: Vision-Aware Planning — Creative Agency for AI Peers
 
 | Sprint | Global ID | Status | Phase |
