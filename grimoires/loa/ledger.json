@@ -955,7 +955,7 @@
           "local_label": "sprint-3",
           "label": "Staging Deploy Fixes — Hounfour Git Pin & Docker Build Repair",
           "tasks": 6,
-          "status": "in_progress"
+          "status": "completed"
         }
       ]
     }
