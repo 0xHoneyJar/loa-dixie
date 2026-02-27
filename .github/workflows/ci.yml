@@ -19,12 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
-    defaults:
-      run:
-        working-directory: app
-
     steps:
       - uses: actions/checkout@v4
+
+      # loa-hounfour is a file: dependency (../../loa-hounfour from app/).
+      # Clone it as a sibling so npm ci can resolve the link.
+      - name: Checkout loa-hounfour
+        uses: actions/checkout@v4
+        with:
+          repository: 0xHoneyJar/loa-hounfour
+          path: ../loa-hounfour
 
       - uses: actions/setup-node@v4
         with:
@@ -32,17 +36,26 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
+      - name: Build loa-hounfour
+        working-directory: ../loa-hounfour
+        run: npm ci && npm run build
+
       - name: Install dependencies
+        working-directory: app
         run: npm ci
 
       - name: Typecheck
+        working-directory: app
         run: npm run typecheck
 
       - name: Lint
+        working-directory: app
         run: npm run lint
 
       - name: Unit tests
+        working-directory: app
         run: npm run test
 
       - name: Build
+        working-directory: app
         run: npm run build
