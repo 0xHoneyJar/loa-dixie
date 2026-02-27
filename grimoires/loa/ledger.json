@@ -948,13 +948,21 @@
           "label": "Bridge Iteration 1 — Build Pipeline Hardening",
           "tasks": 4,
           "status": "completed"
+        },
+        {
+          "id": "sprint-3",
+          "global_id": 112,
+          "local_label": "sprint-3",
+          "label": "Staging Deploy Fixes — Hounfour Git Pin & Docker Build Repair",
+          "tasks": 6,
+          "status": "in_progress"
         }
       ]
     }
   ],
   "active_cycle": "cycle-016",
   "active_bugfix": null,
-  "global_sprint_counter": 111,
+  "global_sprint_counter": 112,
   "bugfix_cycles": [],
   "release_cycles": [
     {

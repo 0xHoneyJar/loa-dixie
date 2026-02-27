@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@0xhoneyjar/loa-hounfour": "file:../../loa-hounfour",
+    "@0xhoneyjar/loa-hounfour": "github:0xHoneyJar/loa-hounfour#b6e0027a",
     "@hono/node-server": "^1.14.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-trace-otlp-grpc": "0.57.0",

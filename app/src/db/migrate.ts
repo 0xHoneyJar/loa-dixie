@@ -87,7 +87,7 @@ async function getAppliedMigrations(
 async function discoverMigrations(): Promise<string[]> {
   const files = await readdir(MIGRATIONS_DIR);
   return files
-    .filter((f) => f.endsWith('.sql'))
+    .filter((f) => f.endsWith('.sql') && !f.includes('_down'))
     .sort((a, b) => {
       const numA = parseInt(a.split('_')[0], 10);
       const numB = parseInt(b.split('_')[0], 10);
