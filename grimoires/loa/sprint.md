@@ -310,7 +310,7 @@ T2.2 ──→ T2.4 (Terraform apply) → T2.5 → T2.6 (Deploy) → T2.7 (Wire 
 ## Sprint 3: Post-Deploy Hardening — NATS Connectivity & Dependency Updates
 
 **Global ID**: 115
-**Status**: REVIEW_APPROVED
+**Status**: COMPLETED
 **Goal**: Achieve fully healthy status by fixing NATS connectivity and incorporating
 safe dependency updates from open Dependabot PRs.
 

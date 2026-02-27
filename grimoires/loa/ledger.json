@@ -1010,7 +1010,7 @@
           "local_label": "sprint-3",
           "label": "Post-Deploy Hardening — NATS Connectivity & Dependency Updates",
           "tasks": 3,
-          "status": "in_progress"
+          "status": "completed"
         }
       ]
     }
