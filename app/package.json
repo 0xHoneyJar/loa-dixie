@@ -3,6 +3,9 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
@@ -16,6 +19,12 @@
   "dependencies": {
     "@0xhoneyjar/loa-hounfour": "file:../../loa-hounfour",
     "@hono/node-server": "^1.14.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "0.57.0",
+    "@opentelemetry/resources": "^1.30.0",
+    "@opentelemetry/sdk-node": "0.57.0",
+    "@opentelemetry/sdk-trace-node": "1.30.0",
+    "@opentelemetry/semantic-conventions": "^1.30.0",
     "hono": "^4.7.0",
     "ioredis": "^5.9.3",
     "jose": "^6.0.0",
@@ -23,18 +32,14 @@
     "pg": "^8.18.0",
     "siwe": "^2.3.0",
     "viem": "^2.23.0",
-    "zod": "^4.3.6",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-node": "0.57.0",
-    "@opentelemetry/sdk-trace-node": "1.30.0",
-    "@opentelemetry/exporter-trace-otlp-grpc": "0.57.0",
-    "@opentelemetry/resources": "^1.30.0",
-    "@opentelemetry/semantic-conventions": "^1.30.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/pg": "^8.16.0",
     "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
     "eslint": "^9.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",

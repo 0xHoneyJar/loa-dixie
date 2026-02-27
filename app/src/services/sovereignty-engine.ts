@@ -22,6 +22,7 @@ import type {
   TransitionResult,
   InvariantResult,
 } from './governed-resource.js';
+import { AUDIT_TRAIL_GENESIS_HASH } from '@0xhoneyjar/loa-hounfour/commons';
 import type { AuditTrail, GovernanceMutation } from '@0xhoneyjar/loa-hounfour/commons';
 import type { CrossGovernorEventBus } from './cross-governor-event-bus.js';
 
@@ -130,7 +131,9 @@ export class SovereigntyEngine
 
     this._auditTrail = {
       entries: [],
-      hash_chain_head: null,
+      hash_algorithm: 'sha256' as const,
+      genesis_hash: AUDIT_TRAIL_GENESIS_HASH,
+      integrity_status: 'verified' as const,
     };
   }
 

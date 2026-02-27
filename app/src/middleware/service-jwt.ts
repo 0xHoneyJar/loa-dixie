@@ -33,9 +33,9 @@ export interface ServiceJwtConfig {
 // Key import helper
 // ---------------------------------------------------------------------------
 
-let _cachedKey: jose.KeyLike | Uint8Array | null = null;
+let _cachedKey: CryptoKey | Uint8Array | null = null;
 
-async function resolveKey(raw: string | jose.JWK): Promise<jose.KeyLike | Uint8Array> {
+async function resolveKey(raw: string | jose.JWK): Promise<CryptoKey | Uint8Array> {
   if (_cachedKey) return _cachedKey;
 
   if (typeof raw === 'string') {

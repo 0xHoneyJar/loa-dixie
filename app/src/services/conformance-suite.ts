@@ -67,8 +67,13 @@ export interface ConformanceSuiteResult {
 /**
  * Governance schema map for direct TypeBox validation.
  * These schemas are imported from @0xhoneyjar/loa-hounfour/governance.
+ *
+ * Type: Uses the first parameter type of validate() to ensure schemas are
+ * compatible. A direct TSchema import from @sinclair/typebox would be ideal
+ * but is not a direct dependency of Dixie.
  */
-const GOVERNANCE_SCHEMAS: Record<string, unknown> = {
+type GovernanceSchemaType = Parameters<typeof validate>[0];
+const GOVERNANCE_SCHEMAS: Record<string, GovernanceSchemaType> = {
   taskType: TaskTypeSchema,
   taskTypeCohort: TaskTypeCohortSchema,
   reputationEvent: ReputationEventSchema,
@@ -123,7 +128,7 @@ export function validatePayload(
     }
 
     // For other schemas, use the pre-built validators
-    const validatorFn = validators[schemaName];
+    const validatorFn = (validators as Record<string, ((...args: unknown[]) => unknown) | undefined>)[schemaName];
     if (!validatorFn) {
       return {
         schemaName,
@@ -132,7 +137,10 @@ export function validatePayload(
       };
     }
 
-    const compiled = validatorFn();
+    // NOTE(BB-C015-005): These casts describe the runtime validator shape that
+    // hounfour returns. Fragile if hounfour changes its validator API — ideally
+    // hounfour would export a CompiledValidator type. TODO: propose type export upstream.
+    const compiled = validatorFn() as { Check: (v: unknown) => boolean; Errors: (v: unknown) => Iterable<{ path: string; message: string }> };
     if (compiled.Check(payload)) {
       return { schemaName, valid: true, errors: [] };
     }

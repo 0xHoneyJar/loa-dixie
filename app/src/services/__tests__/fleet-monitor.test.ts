@@ -1321,8 +1321,8 @@ describe('FleetMonitor — runCycle() edge cases', () => {
     await monitor.runCycle();
 
     // getPrForBranch should NOT have been called (gh pr list)
-    const prListCalls = execFileSpy.mock.calls.filter(
-      (c: [string, string[]]) => c[0] === 'gh' && c[1][0] === 'pr',
+    const prListCalls = (execFileSpy.mock.calls as [string, string[]][]).filter(
+      (c) => c[0] === 'gh' && c[1][0] === 'pr',
     );
     expect(prListCalls).toHaveLength(0);
   });
@@ -1424,8 +1424,8 @@ describe('FleetMonitor — runCycle() edge cases', () => {
 
     expect(result.stallsDetected).toBe(0);
     // getLastCommitTimestamp should not be called for pr_created tasks
-    const commitCalls = execFileSpy.mock.calls.filter(
-      (c: [string, string[]]) =>
+    const commitCalls = (execFileSpy.mock.calls as [string, string[]][]).filter(
+      (c) =>
         c[0] === 'gh' && c[1][0] === 'api' && c[1][1] && !c[1][1].includes('check-runs'),
     );
     expect(commitCalls).toHaveLength(0);

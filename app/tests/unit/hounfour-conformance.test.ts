@@ -565,7 +565,6 @@ describe('Hounfour Conformance: Billing Conservation', () => {
 // ─── 10. Fixture Freshness — Schema Drift Detection ──────────────
 
 describe('Hounfour Conformance: Fixture Freshness', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const generatedSamples = require('../fixtures/hounfour-generated-samples.json');
 
   /** Minimum number of valid samples across auto + manual. Raise as coverage improves. */

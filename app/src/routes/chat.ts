@@ -49,7 +49,7 @@ export function createChatRoutes(finnClient: FinnClient, deps?: ChatRouteDeps): 
   const app = new Hono();
 
   /** POST / — Send a chat message */
-  app.post('/', async (c) => {
+  app.post('/', async (c): Promise<Response> => {
     const raw = await c.req.json().catch(() => null);
     const parsed = ChatRequestSchema.safeParse(raw);
     if (!parsed.success) {

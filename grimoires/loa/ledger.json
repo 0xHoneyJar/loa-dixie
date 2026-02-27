@@ -831,7 +831,13 @@
       "id": "cycle-014",
       "label": "Staging Launch Readiness — From Architecture to Smoke Test",
       "started": "2026-02-26",
-      "status": "active",
+      "completed": "2026-02-27",
+      "status": "archived",
+      "archived": "2026-02-27T13:00:00Z",
+      "archive_path": "grimoires/loa/archive/2026-02-27-staging-launch-readiness",
+      "source_pr": "#50",
+      "bridge_reviews": 4,
+      "bridge_flatline": true,
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
@@ -839,65 +845,83 @@
         {
           "id": "sprint-1",
           "global_id": 101,
-          "local_label": "sprint-1",
           "label": "Foundation & Infrastructure",
           "tasks": 8,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-2",
           "global_id": 102,
-          "local_label": "sprint-2",
           "label": "OTEL Instrumentation & PII Sanitization",
           "tasks": 10,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-3",
           "global_id": 103,
-          "local_label": "sprint-3",
           "label": "E2E Smoke Tests & Deployment Documentation",
           "tasks": 9,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-4",
           "global_id": 104,
-          "local_label": "sprint-4",
           "label": "Bridgebuilder Excellence — Observability Correctness & Staging Hardening",
           "tasks": 9,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-5",
           "global_id": 105,
-          "local_label": "sprint-5",
           "label": "Bridgebuilder Deep Review — Governance Excellence & Architectural Extraction",
           "tasks": 11,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-6",
           "global_id": 106,
-          "local_label": "sprint-6",
           "label": "Final Convergence — Deferred LOWs, Flatline Remainders & Excellence Polish",
           "tasks": 9,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-7",
           "global_id": 107,
-          "local_label": "sprint-7",
           "label": "Pre-Merge Polish — Type Safety, Config Hardening & Test Hygiene",
           "tasks": 5,
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "cycle-015",
+      "label": "Phase 0 — CI Pipeline & Pre-Merge Hygiene",
+      "started": "2026-02-27",
+      "status": "active",
+      "prd": "grimoires/loa/prd.md",
+      "sdd": "grimoires/loa/sdd.md",
+      "sprint_plan": "grimoires/loa/sprint.md",
+      "sprints": [
+        {
+          "id": "sprint-1",
+          "global_id": 108,
+          "label": "CI Workflows & Type Safety",
+          "tasks": 13,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-2",
+          "global_id": 109,
+          "label": "Config & Documentation Hygiene",
+          "tasks": 3,
           "status": "pending"
         }
       ]
     }
   ],
-  "active_cycle": "cycle-014",
+  "active_cycle": "cycle-015",
   "active_bugfix": null,
-  "global_sprint_counter": 107,
+  "global_sprint_counter": 109,
   "bugfix_cycles": [],
   "release_cycles": [
     {
