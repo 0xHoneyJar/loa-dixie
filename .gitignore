@@ -245,6 +245,9 @@ app/node_modules/
 web/dist/
 web/node_modules/
 
+# Terraform provider cache (rebuild on terraform init)
+deploy/terraform/.terraform/
+
 # Deploy secrets (never commit)
 deploy/.env
 deploy/.env.*
