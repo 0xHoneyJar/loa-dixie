@@ -63,7 +63,9 @@ const VALID_RESOURCE_TYPE = /^[a-z][a-z0-9_-]{0,63}$/;
  */
 function assertValidResourceType(resourceType: string): void {
   if (!VALID_RESOURCE_TYPE.test(resourceType)) {
-    throw new Error(`Invalid resourceType format`);
+    throw new Error(
+      `Invalid resourceType format: ${String(resourceType).slice(0, 20)}`,
+    );
   }
 }
 
