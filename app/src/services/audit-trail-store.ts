@@ -10,10 +10,19 @@
  * Cross-chain verification compares the scoring path tracker's tip hash
  * against the audit trail's latest scoring-related entry.
  *
+ * Version-aware hash verification (ADR-006, Sprint 121):
+ * - Legacy entries (domain tag version with dots, e.g., 9.0.0) use the v9
+ *   double-hash algorithm (computeChainBoundHash_v9).
+ * - New entries (domain tag version "v10") use hounfour's canonical
+ *   computeChainBoundHash (direct concatenation + SHA-256).
+ * - Mixed chains are verified entry-by-entry with the creating algorithm.
+ *
  * @since cycle-009 Sprint 2 — Tasks 2.4, 2.5 (FR-3)
+ * @since cycle-019 Sprint 121 — Version-aware hash verification (ADR-006, P3)
  */
 import {
   computeAuditEntryHash,
+  computeChainBoundHash as canonicalChainBoundHash,
   AUDIT_TRAIL_GENESIS_HASH,
   validateAuditTimestamp,
 } from '@0xhoneyjar/loa-hounfour/commons';
@@ -31,24 +40,36 @@ export class AuditTimestampError extends Error {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Domain tag construction
+// ---------------------------------------------------------------------------
+
 /** Domain tag format for Dixie audit entries. */
 const DOMAIN_TAG_PREFIX = 'loa-dixie:audit';
-const CONTRACT_VERSION = '9.0.0';
-
-function buildDomainTag(resourceType: string): string {
-  return `${DOMAIN_TAG_PREFIX}:${resourceType}:${CONTRACT_VERSION}`;
-}
 
 /**
- * Compute chain-bound entry hash: wraps Hounfour's content hash with previous_hash.
- *
- * Hash = sha256(contentHash + ":" + previousHash)
- *
- * This ensures that tampering with chain linkage (previous_hash) invalidates
- * the entry's own hash. Hounfour's computeAuditEntryHash covers content
- * integrity; this wrapper adds chain integrity.
+ * Build domain tag for new entries using canonical-compatible format.
+ * Uses 'v10' (no dots) to pass hounfour's validateDomainTag().
+ * @since cycle-019 Sprint 121 — T6.3
  */
-function computeChainBoundHash(
+function buildDomainTag(resourceType: string): string {
+  return `${DOMAIN_TAG_PREFIX}:${resourceType}:v10`;
+}
+
+// ---------------------------------------------------------------------------
+// Legacy hash algorithm — preserved for verifying existing chain entries
+// ---------------------------------------------------------------------------
+
+/**
+ * Legacy chain-bound hash: double-hash via synthetic 'chain_binding' entry.
+ *
+ * @deprecated Use canonical computeChainBoundHash from hounfour for new entries.
+ *   Preserved for verifying existing chain entries with domain tag version ≤9.x.x.
+ *   See ADR-006 for migration details.
+ * @since cycle-009 Sprint 2 — original implementation
+ * @since cycle-019 Sprint 121 — renamed from computeChainBoundHash, marked deprecated
+ */
+function computeChainBoundHash_v9(
   entry: {
     entry_id: string;
     timestamp: string;
@@ -60,8 +81,7 @@ function computeChainBoundHash(
   previousHash: string,
 ): string {
   const contentHash = computeAuditEntryHash(entry, domainTag);
-  // Chain-bind: include previous_hash in the final hash
-  // Use Hounfour's hash function with a synthetic entry that encodes the chain binding
+  // Chain-bind via synthetic entry (legacy algorithm — see ADR-006)
   const chainHash = computeAuditEntryHash(
     {
       entry_id: contentHash,
@@ -72,6 +92,53 @@ function computeChainBoundHash(
   );
   return chainHash;
 }
+
+// ---------------------------------------------------------------------------
+// Version-aware dispatch
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect whether a domain tag uses the legacy version format (contains dots).
+ *
+ * Legacy format: `loa-dixie:audit:{resourceType}:{semver}` (e.g., 9.0.0)
+ * Canonical format: `loa-dixie:audit:{resourceType}:v10` (no dots)
+ *
+ * @since cycle-019 Sprint 121 — T6.4
+ */
+function isLegacyDomainTag(domainTag: string): boolean {
+  const segments = domainTag.split(':');
+  const version = segments[segments.length - 1];
+  // Legacy tags have dots in version (e.g., "9.0.0")
+  // Canonical tags use dot-free format (e.g., "v10")
+  // Default to legacy if version segment is missing or unclear
+  return version?.includes('.') ?? true;
+}
+
+/**
+ * Compute chain-bound hash using the appropriate algorithm for the domain tag.
+ *
+ * @since cycle-019 Sprint 121 — T6.4
+ */
+function computeChainBoundHashVersionAware(
+  entry: {
+    entry_id: string;
+    timestamp: string;
+    event_type: string;
+    actor_id?: string;
+    payload?: Record<string, unknown>;
+  },
+  domainTag: string,
+  previousHash: string,
+): string {
+  if (isLegacyDomainTag(domainTag)) {
+    return computeChainBoundHash_v9(entry, domainTag, previousHash);
+  }
+  return canonicalChainBoundHash(entry, domainTag, previousHash);
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 export interface AuditEntry {
   readonly entry_id: string;
@@ -106,9 +173,12 @@ export class AuditTrailStore {
    * 4. INSERT entry
    * 5. COMMIT
    *
+   * New entries use canonical computeChainBoundHash with v10 domain tag (Sprint 121).
+   *
    * @since cycle-009 Sprint 2 — Task 2.4 (FR-3)
    * @since bridge-iter1: Fixed HIGH-1 (chain-bound hash) and HIGH-2 (TOCTOU serialization)
    * @since bridge-iter2: Added UNIQUE(resource_type, previous_hash) guard for genesis race
+   * @since cycle-019 Sprint 121: Switched to canonical hash algorithm for new entries
    */
   async append(
     resourceType: string,
@@ -135,8 +205,8 @@ export class AuditTrailStore {
 
       const domainTag = buildDomainTag(resourceType);
 
-      // Chain-bound hash: includes previous_hash in the computation
-      const entryHash = computeChainBoundHash(
+      // Canonical chain-bound hash (v10 — see ADR-006)
+      const entryHash = canonicalChainBoundHash(
         {
           entry_id: entry.entry_id,
           timestamp: entry.timestamp,
@@ -241,9 +311,16 @@ export class AuditTrailStore {
   /**
    * Verify integrity of the audit chain for a resource type.
    *
-   * Two-phase verification:
-   * 1. Re-compute each entry's hash and verify it matches
-   * 2. Verify each entry's previous_hash matches the preceding entry's hash
+   * Version-aware verification (ADR-006):
+   * - Entries with dots in domain tag version (e.g., 9.0.0) use legacy algorithm
+   * - Entries with dot-free version (e.g., v10) use canonical algorithm
+   * - A single chain may contain entries from both eras
+   *
+   * Two-phase verification per entry:
+   * 1. Re-compute chain-bound hash with version-appropriate algorithm
+   * 2. Verify stored previous_hash matches the preceding entry's hash
+   *
+   * @since cycle-019 Sprint 121 — version-aware dispatch (T6.4)
    */
   async verifyIntegrity(
     resourceType: string,
@@ -257,11 +334,11 @@ export class AuditTrailStore {
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
 
-      // Phase 1: Recompute chain-bound hash (content + previous_hash)
+      // Phase 1: Recompute chain-bound hash with version-aware dispatch
       const expectedPrevious =
         i === 0 ? AUDIT_TRAIL_GENESIS_HASH : entries[i - 1].entry_hash;
 
-      const recomputedHash = computeChainBoundHash(
+      const recomputedHash = computeChainBoundHashVersionAware(
         {
           entry_id: entry.entry_id,
           timestamp: entry.timestamp,
@@ -330,3 +407,6 @@ export class AuditTrailStore {
 }
 
 export { AUDIT_TRAIL_GENESIS_HASH };
+
+// Test-only exports for version-aware verification testing
+export { computeChainBoundHash_v9, isLegacyDomainTag, computeChainBoundHashVersionAware };

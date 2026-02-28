@@ -1,20 +1,65 @@
 /**
  * GovernedResource<T> — Unified Governance Protocol Abstraction
  *
- * The Kubernetes CRD moment: every governed resource in the THJ ecosystem
- * shares this structure. Billing, reputation, knowledge, access, and scoring
- * paths are all instances of the same governance primitive.
+ * Type-mapping barrel providing Dixie's governance type shapes with canonical
+ * hounfour backing awareness. Dixie's field names (state, satisfied, invariant_id,
+ * checked_at) remain stable for all existing consumers. Canonical types are
+ * re-exported with `Canonical` prefix for gradual adoption.
+ *
+ * Canonical → Dixie field mapping:
+ *   TransitionResult.newState       → TransitionResult.state
+ *   InvariantResult.holds           → InvariantResult.satisfied
+ *   InvariantResult.invariantId     → InvariantResult.invariant_id
+ *   InvariantResult.detail?         → InvariantResult.detail (required)
+ *   (no checked_at)                 → InvariantResult.checked_at (Dixie-only)
+ *   transition(event, MutationContext) → transition(event, actorId: string)
+ *
+ * GovernedResourceBase abstract class REMOVED (cycle-019, Sprint 120) — no
+ * consumer extended it. All 4 implementors (ReputationService, FleetGovernor,
+ * SovereigntyEngine, ScoringPathTracker) use `implements GovernedResource<...>`.
  *
  * See: Bridgebuilder Meditation Part I (governance isomorphism),
  *      PRD §8.1 (isomorphism formalized), invariants.yaml INV-008
  *
  * @since cycle-008 — FR-10
+ * @since cycle-019 — Sprint 120 (canonical migration P2, GovernedResourceBase removed)
  */
-import type { AuditTrail } from '@0xhoneyjar/loa-hounfour/commons';
-import type { GovernanceMutation } from '@0xhoneyjar/loa-hounfour/commons';
+import type { AuditTrail, GovernanceMutation } from '@0xhoneyjar/loa-hounfour/commons';
+import type { MutationContext } from '@0xhoneyjar/loa-hounfour/commons';
+
+// ---------------------------------------------------------------------------
+// Canonical type re-exports for gradual adoption (Sprint 120)
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical type re-exports for gradual adoption.
+ *
+ * **Naming convention**: Prefer Dixie types (e.g. `TransitionResult`,
+ * `InvariantResult`) for existing consumers. Use `Canonical*`-prefixed types
+ * (e.g. `CanonicalTransitionResult`) for new code targeting hounfour-native
+ * signatures. See the field mapping table in the file header (lines 9-16) for
+ * the exact correspondence between Dixie and canonical field names.
+ */
+export type {
+  TransitionResult as CanonicalTransitionResult,
+  InvariantResult as CanonicalInvariantResult,
+  GovernedResource as CanonicalGovernedResource,
+  MutationContext,
+} from '@0xhoneyjar/loa-hounfour/commons';
+
+// ---------------------------------------------------------------------------
+// Dixie governance types — stable API for existing consumers
+// ---------------------------------------------------------------------------
 
 /**
  * Result of a state transition attempt.
+ *
+ * Dixie uses a discriminated union (success: true → state, success: false →
+ * reason/code). Canonical hounfour uses a flat shape (success: boolean,
+ * newState, version, violations?). This Dixie shape is retained for all
+ * existing consumers until a coordinated migration to canonical field names.
+ *
+ * @see CanonicalTransitionResult for hounfour's shape
  */
 export type TransitionResult<TState> =
   | { readonly success: true; readonly state: TState; readonly version: number }
@@ -22,6 +67,11 @@ export type TransitionResult<TState> =
 
 /**
  * Result of an invariant verification.
+ *
+ * Dixie shape: invariant_id (snake_case), satisfied, detail (required), checked_at.
+ * Canonical shape: invariantId (camelCase), holds, detail (optional), no checked_at.
+ *
+ * @see CanonicalInvariantResult for hounfour's shape
  */
 export interface InvariantResult {
   readonly invariant_id: string;
@@ -33,16 +83,13 @@ export interface InvariantResult {
 /**
  * The unified governance interface.
  *
- * Every governed resource implements this interface, providing:
- * - Identity: resourceId, resourceType
- * - State: current state, version number
- * - Transitions: event-driven state changes with actor attribution
- * - Invariants: verifiable properties that must hold
- * - Audit: tamper-evident trail of all transitions
+ * Dixie shape: transition(event, actorId: string).
+ * Canonical shape: transition(event, context: MutationContext).
  *
  * @typeParam TState - The resource's state type
  * @typeParam TEvent - The event types that can transition state
  * @typeParam TInvariant - The invariant types that can be verified
+ * @see CanonicalGovernedResource for hounfour's interface
  * @since cycle-008 — FR-10
  */
 export interface GovernedResource<TState, TEvent, TInvariant extends string = string> {
@@ -79,29 +126,22 @@ export interface GovernedResource<TState, TEvent, TInvariant extends string = st
   readonly mutationLog: ReadonlyArray<GovernanceMutation>;
 }
 
+// ---------------------------------------------------------------------------
+// Migration helper (Sprint 120)
+// ---------------------------------------------------------------------------
+
 /**
- * Abstract base class with shared wiring for GovernedResource implementations.
- * Provides verifyAll() default implementation.
+ * Convert a Dixie actorId string to a canonical MutationContext.
+ * Useful for consumers incrementally adopting canonical signatures.
  *
- * @since cycle-008 — FR-10
+ * @param actorId - The actor ID string
+ * @param actorType - Actor type (defaults to 'system' for existing Dixie callers)
+ * @returns MutationContext compatible with canonical GovernedResource.transition()
+ * @since cycle-019 — Sprint 120 (migration helper)
  */
-export abstract class GovernedResourceBase<TState, TEvent, TInvariant extends string = string>
-  implements GovernedResource<TState, TEvent, TInvariant>
-{
-  abstract readonly resourceId: string;
-  abstract readonly resourceType: string;
-  abstract readonly current: TState;
-  abstract readonly version: number;
-  abstract readonly auditTrail: Readonly<AuditTrail>;
-  abstract readonly mutationLog: ReadonlyArray<GovernanceMutation>;
-
-  abstract transition(event: TEvent, actorId: string): Promise<TransitionResult<TState>>;
-  abstract verify(invariantId: TInvariant): InvariantResult;
-
-  verifyAll(): InvariantResult[] {
-    return this.invariantIds.map(id => this.verify(id));
-  }
-
-  /** Subclasses declare their invariant IDs. */
-  protected abstract readonly invariantIds: TInvariant[];
+export function toMutationContext(
+  actorId: string,
+  actorType: 'human' | 'system' | 'autonomous' = 'system',
+): MutationContext {
+  return { actorId, actorType };
 }
