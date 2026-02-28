@@ -79,7 +79,7 @@ describe('isLegacyDomainTag', () => {
     expect(isLegacyDomainTag('loa-dixie:audit:scoring-path:v11')).toBe(false);
   });
 
-  it('defaults to legacy for empty/missing version segment', () => {
+  it('returns false for domain tags without a version segment (no dots)', () => {
     // Edge case: domain tag with fewer segments than expected
     expect(isLegacyDomainTag('loa-dixie:audit')).toBe(false);
     // "audit" doesn't contain dots, so it returns false
@@ -402,6 +402,48 @@ describe('AuditTrailStore.verifyIntegrity — mixed chain (ADR-006 transition)',
     const result = await store.verifyIntegrity('scoring-path');
     expect(result.valid).toBe(true);
     expect(result.entries_checked).toBe(5);
+  });
+
+  it('verifies chain with v10→v9 transition (reverse/downgrade scenario)', async () => {
+    // Edge case: 2 canonical (v10) entries followed by 1 legacy (v9) entry.
+    // This documents that the algorithm handles reverse transitions correctly
+    // because chain binding uses stored hashes — each entry's hash is verified
+    // against its own domain tag's algorithm, and linkage uses the stored
+    // previous_hash regardless of version boundary direction.
+    const h1 = expectedCanonicalHash('d1', 'reputation', AUDIT_TRAIL_GENESIS_HASH);
+    const h2 = expectedCanonicalHash('d2', 'reputation', h1);
+    const h3 = expectedV9Hash('d3', 'reputation', h2);
+
+    pool._setResponse('SELECT * FROM audit_entries', {
+      rows: [
+        {
+          entry_id: 'd1', resource_type: 'reputation',
+          timestamp: '2026-02-28T00:00:00Z', event_type: 'governance.reputation.create',
+          actor_id: null, payload: null,
+          entry_hash: h1, previous_hash: AUDIT_TRAIL_GENESIS_HASH,
+          hash_domain_tag: 'loa-dixie:audit:reputation:v10',
+        },
+        {
+          entry_id: 'd2', resource_type: 'reputation',
+          timestamp: '2026-02-28T01:00:00Z', event_type: 'governance.reputation.update',
+          actor_id: null, payload: null,
+          entry_hash: h2, previous_hash: h1,
+          hash_domain_tag: 'loa-dixie:audit:reputation:v10',
+        },
+        {
+          entry_id: 'd3', resource_type: 'reputation',
+          timestamp: '2026-02-28T02:00:00Z', event_type: 'governance.reputation.update',
+          actor_id: null, payload: null,
+          entry_hash: h3, previous_hash: h2,
+          hash_domain_tag: 'loa-dixie:audit:reputation:9.0.0',
+        },
+      ],
+      rowCount: 3,
+    });
+
+    const result = await store.verifyIntegrity('reputation');
+    expect(result.valid).toBe(true);
+    expect(result.entries_checked).toBe(3);
   });
 });
 

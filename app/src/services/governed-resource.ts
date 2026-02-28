@@ -31,7 +31,15 @@ import type { MutationContext } from '@0xhoneyjar/loa-hounfour/commons';
 // Canonical type re-exports for gradual adoption (Sprint 120)
 // ---------------------------------------------------------------------------
 
-/** Canonical types use different field names — see file header for mapping. */
+/**
+ * Canonical type re-exports for gradual adoption.
+ *
+ * **Naming convention**: Prefer Dixie types (e.g. `TransitionResult`,
+ * `InvariantResult`) for existing consumers. Use `Canonical*`-prefixed types
+ * (e.g. `CanonicalTransitionResult`) for new code targeting hounfour-native
+ * signatures. See the field mapping table in the file header (lines 9-16) for
+ * the exact correspondence between Dixie and canonical field names.
+ */
 export type {
   TransitionResult as CanonicalTransitionResult,
   InvariantResult as CanonicalInvariantResult,

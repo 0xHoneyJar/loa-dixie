@@ -66,7 +66,11 @@ describe('Lock ID migration documentation', () => {
    * The change is safe because advisory locks prevent concurrent migrations
    * (single-writer), and blue-green deploy ensures atomic cutover.
    */
-  it('old and new lock IDs differ (expected during migration)', () => {
+  it('old and new lock IDs occupy different key spaces (safe for blue-green advisory lock handoff)', () => {
+    // During blue-green deploy, both lock keys succeed simultaneously (different
+    // key spaces). Safety comes from Route 53 weighted cutover guaranteeing
+    // single-writer semantics at the infrastructure level.
+
     // Reproduce the OLD algorithm (SHA-256 → 31-bit unsigned)
     const oldHash = createHash('sha256').update('dixie-bff:migration').digest();
     const oldLockId = oldHash.readUInt32BE(0) & 0x7FFFFFFF;

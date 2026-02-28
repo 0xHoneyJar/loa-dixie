@@ -602,6 +602,91 @@ lock acquisition succeeds.
 
 ---
 
+## Sprint 8: Bridgebuilder Excellence Polish (PR #69 Review Findings)
+
+**Global ID**: 123
+**Goal**: Address all 5 non-blocking Bridgebuilder findings from PR #69 review
+(BB-069-002, BB-069-004, BB-069-006, BB-069-007, BB-069-009). Pure quality
+improvements — no behavioral changes, no new features. Striving for excellence
+in documentation, test clarity, and boundary coverage.
+
+**Branch**: `feature/hounfour-v830-canonical-migration` (same branch, pre-merge polish)
+**Source**: [Bridgebuilder Review Part I](https://github.com/0xHoneyJar/loa-dixie/pull/69#issuecomment-3976445929)
+
+### Tasks
+
+#### T8.1: Annotate Zombie Implementation Exit Condition (BB-069-002)
+- **Description**: In `app/src/services/reputation-scoring-engine.ts`, the
+  inline ascending alpha computation at lines 122-126 is the only place that
+  still computes the EMA formula directly rather than delegating to hounfour.
+  Add a `@todo` annotation referencing hounfour #40 as the removal trigger.
+  When hounfour ships configurable `rampDirection`, this inline code becomes
+  dead and should be replaced with a canonical delegation.
+- **Acceptance**: `@todo` comment at the inline EMA formula references
+  hounfour #40 and states the exit condition: "Remove when hounfour #40 lands
+  (configurable rampDirection). Replace with canonical delegation."
+- **Effort**: XS
+- **Files**: `app/src/services/reputation-scoring-engine.ts`
+
+#### T8.2: Document Canonical Prefix Naming Convention (BB-069-004)
+- **Description**: In `app/src/services/governed-resource.ts`, the canonical
+  type re-exports use the `Canonical` prefix (`CanonicalTransitionResult`,
+  `CanonicalInvariantResult`, etc.) but this convention isn't documented for
+  consumers. Add a JSDoc note on the re-export block explaining: prefer Dixie
+  types for existing consumers, use `Canonical*` types for new code targeting
+  hounfour-native signatures. Reference the field mapping table in the file header.
+- **Acceptance**: JSDoc on the `Canonical*` re-export block explains when to
+  use each type family. References the field mapping table (lines 9-16).
+- **Effort**: XS
+- **Files**: `app/src/services/governed-resource.ts`
+
+#### T8.3: Add Defensive v10→v9 Downgrade Test (BB-069-006)
+- **Description**: In `app/tests/unit/audit-trail-version-aware.test.ts`, the
+  mixed chain tests only cover v9→v10 transition. Add a test documenting the
+  v10→v9 sequence (canonical entry followed by legacy entry). This shouldn't
+  happen in production (new entries always use v10), but the test should verify
+  that the algorithm handles this edge case correctly — the chain binding uses
+  stored hashes, so algorithm boundary crossings in either direction preserve
+  integrity.
+- **Acceptance**: New test "verifies chain with v10→v9 transition (reverse
+  downgrade)" in the mixed chain describe block. Chain with 2 canonical + 1
+  legacy entry verifies correctly. Test name documents that this is a defensive
+  edge case.
+- **Effort**: S
+- **Files**: `app/tests/unit/audit-trail-version-aware.test.ts`
+
+#### T8.4: Fix Misleading Test Description (BB-069-007)
+- **Description**: In `app/tests/unit/audit-trail-version-aware.test.ts`, the
+  test at line 82 says "defaults to legacy for empty/missing version segment"
+  but the assertion is `false` (canonical, not legacy). Rename to accurately
+  describe the behavior: "returns false for domain tags without a version
+  segment (no dots)".
+- **Acceptance**: Test description accurately matches the assertion. No
+  behavioral change.
+- **Effort**: XS
+- **Files**: `app/tests/unit/audit-trail-version-aware.test.ts`
+
+#### T8.5: Make Blue-Green Safety Argument Explicit in Test Name (BB-069-009)
+- **Description**: In `app/tests/unit/advisory-lock-canonical.test.ts`, the
+  test at line 69 documents that old and new lock IDs differ but not the
+  operational *implication*. Rename to: "old and new lock IDs occupy different
+  key spaces (safe for blue-green advisory lock handoff)". Also add a comment
+  in the test body explaining that during blue-green deploy, both keys succeed
+  simultaneously because they're in different key spaces, and safety comes from
+  Route 53 cutover guaranteeing single-writer semantics.
+- **Acceptance**: Test name includes "safe for blue-green" framing. Comment
+  explains the deployment topology safety argument.
+- **Effort**: XS
+- **Files**: `app/tests/unit/advisory-lock-canonical.test.ts`
+
+#### T8.6: Run Full Test Suite
+- **Description**: Run `npm test` from `app/` directory. All 2430+ tests must pass.
+  Verify no regressions from documentation and test naming changes.
+- **Acceptance**: All tests green.
+- **Effort**: XS
+
+---
+
 ## Summary
 
 | Sprint | Label | Tasks | Effort | Status |
@@ -609,10 +694,11 @@ lock acquisition succeeds.
 | 1 | Finn Docker Rebuild | 6 | ~30min operational | ✅ COMPLETED |
 | 2 | Dixie Hounfour v8.3.0 Upgrade | 8 | ~2h code change | ✅ COMPLETED |
 | 3 | Bridge Iter 1 — validateAuditTimestamp | 4 | ~1h code change | ✅ COMPLETED |
-| 4 | Alpha Ramp ADR & Dampened Score Migration (P1) | 7 | ~4h code + ADR | PENDING |
-| 5 | GovernedResourceBase Canonical Migration (P2) | 7 | ~6h code + tests | PENDING |
-| 6 | Chain-Bound Hash Version-Aware Verification (P3) | 6 | ~6h code + ADR | PENDING |
+| 4 | Alpha Ramp ADR & Dampened Score Migration (P1) | 7 | ~4h code + ADR | ✅ COMPLETED |
+| 5 | GovernedResourceBase Canonical Migration (P2) | 7 | ~6h code + tests | ✅ COMPLETED |
+| 6 | Chain-Bound Hash Version-Aware Verification (P3) | 6 | ~6h code + ADR | ✅ COMPLETED |
 | 7 | Advisory Lock Swap & Cross-Repo Coordination (P4) | 5 | ~2h code + issues | ✅ COMPLETED |
+| 8 | Bridgebuilder Excellence Polish (PR #69 Findings) | 6 | ~1h docs + tests | PENDING |
 
 **Risk Register**:
 
@@ -631,16 +717,16 @@ Sprint 4 (P1: Dampened Score) ──→ Sprint 5 (P2: GovernedResource)
                               Sprint 6 (P3: Chain Hash)
                                          ↓
                               Sprint 7 (P4: Advisory Lock + Finalization)
+                                         ↓
+                              Sprint 8 (Bridgebuilder Excellence Polish)
 ```
 
-Sprint 4 should complete first (smallest behavioral change, validates the pattern).
-Sprint 5 depends on Sprint 4 completing to reduce the governance surface area.
-Sprint 6 is independent of Sprint 5 but sequenced after for focus.
-Sprint 7 bundles the simplest code change with cross-repo coordination.
+Sprint 8 depends on Sprint 7 completing (all code changes landed, review complete).
 
 **Cross-References**:
 - Bridge deep review: PR #64 comment (2026-02-28)
 - Migration roadmap: PR #64 comment (2026-02-28)
-- Existing ADRs: `docs/adr/001-*` through `004-*`
+- Bridgebuilder review: PR #69 comments (2026-02-28)
+- Existing ADRs: `docs/adr/001-*` through `006-*`
 - Finn hounfour upgrade: loa-finn#113
 - Freeside hounfour upgrade: loa-freeside#108

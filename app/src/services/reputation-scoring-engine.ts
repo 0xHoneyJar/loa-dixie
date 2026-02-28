@@ -119,6 +119,9 @@ export function computeDampenedScore(
 
   // Ascending ramp (Dixie default): alpha_min at n=0, alpha_max at n=ramp
   // This is Dixie's original formula — conservative-first.
+  // @todo Remove when hounfour#40 lands (configurable rampDirection).
+  //       Replace ascending alpha computation with canonical delegation to
+  //       canonicalDampenedScore() once it supports ascending ramp natively.
   const rampFraction = Math.min(1, sampleCount / DAMPENING_RAMP_SAMPLES);
   const alpha = FEEDBACK_DAMPENING_ALPHA_MIN
     + (FEEDBACK_DAMPENING_ALPHA_MAX - FEEDBACK_DAMPENING_ALPHA_MIN) * rampFraction;

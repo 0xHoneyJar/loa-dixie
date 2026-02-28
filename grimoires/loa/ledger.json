@@ -1084,13 +1084,21 @@
           "label": "Advisory Lock Canonical Swap & Cross-Repo Coordination (P4)",
           "tasks": 5,
           "status": "completed"
+        },
+        {
+          "id": "sprint-8",
+          "global_id": 123,
+          "local_label": "sprint-8",
+          "label": "Bridgebuilder Excellence Polish (PR #69 Review Findings)",
+          "tasks": 6,
+          "status": "completed"
         }
       ]
     }
   ],
   "active_cycle": "cycle-019",
   "active_bugfix": null,
-  "global_sprint_counter": 122,
+  "global_sprint_counter": 123,
   "bugfix_cycles": [],
   "release_cycles": [
     {
