@@ -22,6 +22,7 @@ import {
   verifyAuditTrailIntegrity,
   AUDIT_TRAIL_GENESIS_HASH,
 } from '@0xhoneyjar/loa-hounfour/commons';
+import { VALID_RESOURCE_TYPE } from '../../src/services/audit-trail-store.js';
 
 // ---------------------------------------------------------------------------
 // 1. buildDomainTag sanitization
@@ -213,6 +214,36 @@ describe('hounfour v8.3.1 — verifyAuditTrailIntegrity (content-hash model)', (
     const result = verifyAuditTrailIntegrity(trail);
     expect(result.valid).toBe(false);
   });
+
+  it('rejects chain-bound hash used as entry_hash (model difference proof)', () => {
+    // Proves hounfour expects content-only hashes, not Dixie's chain-bound hashes.
+    // If this test ever passes, hounfour changed its verification model. (HF831-MED-02)
+    const domainTag = 'loa-dixie:audit:test:v10';
+    const entry1 = {
+      entry_id: 'e1',
+      timestamp: '2026-02-28T12:00:00.000Z',
+      event_type: 'test_event',
+    };
+    const chainBoundHash = computeChainBoundHash(entry1, domainTag, AUDIT_TRAIL_GENESIS_HASH);
+
+    const trail = {
+      domain_tag: domainTag,
+      genesis_hash: AUDIT_TRAIL_GENESIS_HASH,
+      entries: [
+        {
+          ...entry1,
+          entry_hash: chainBoundHash, // chain-bound, NOT content-only
+          previous_hash: AUDIT_TRAIL_GENESIS_HASH,
+          hash_domain_tag: domainTag,
+        },
+      ],
+      checkpoints: [],
+    };
+
+    const result = verifyAuditTrailIntegrity(trail);
+    // hounfour's verifyAuditTrailIntegrity expects content-only hash
+    expect(result.valid).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -220,11 +251,16 @@ describe('hounfour v8.3.1 — verifyAuditTrailIntegrity (content-hash model)', (
 // ---------------------------------------------------------------------------
 
 describe('hounfour v8.3.1 — transitive dependency stability', () => {
+  // INTENTIONAL exact-version pin: @noble/hashes provides the SHA-256
+  // implementation backing all audit chain hashes. A version change could
+  // alter hash output, breaking existing stored chains. This test MUST be
+  // updated manually on any @noble/hashes bump after verifying hash
+  // determinism is preserved. (HF831-MED-04)
   it('@noble/hashes version is 2.0.1 (unchanged from v8.3.0)', () => {
     const lockfilePath = resolve(__dirname, '../../package-lock.json');
     const lockfile = JSON.parse(readFileSync(lockfilePath, 'utf-8'));
 
-    // Check nested @noble/hashes under hounfour
+    // Check nested @noble/hashes under hounfour (npm lockfile v3 structure)
     const nobleVersion =
       lockfile.packages?.['node_modules/@0xhoneyjar/loa-hounfour/node_modules/@noble/hashes']?.version
       ?? lockfile.packages?.['node_modules/@noble/hashes']?.version;
@@ -237,8 +273,8 @@ describe('hounfour v8.3.1 — transitive dependency stability', () => {
 // 6. resourceType validation (Red Team RT-2)
 // ---------------------------------------------------------------------------
 
-describe('resourceType validation pattern', () => {
-  const VALID_RESOURCE_TYPE = /^[a-z][a-z0-9_-]*$/;
+describe('resourceType validation pattern (production regex)', () => {
+  // Tests the ACTUAL production regex exported from audit-trail-store (HF831-MED-01)
 
   it('accepts valid resource types', () => {
     expect(VALID_RESOURCE_TYPE.test('reputation')).toBe(true);
@@ -265,5 +301,13 @@ describe('resourceType validation pattern', () => {
     expect(VALID_RESOURCE_TYPE.test('1test')).toBe(false);
     expect(VALID_RESOURCE_TYPE.test('-test')).toBe(false);
     expect(VALID_RESOURCE_TYPE.test('_test')).toBe(false);
+  });
+
+  it('rejects oversized resource types (>64 chars, HF831-MED-03)', () => {
+    const longType = 'a' + 'b'.repeat(64); // 65 chars
+    expect(VALID_RESOURCE_TYPE.test(longType)).toBe(false);
+    // Max allowed: 64 chars (1 leading + 63 trailing)
+    const maxType = 'a' + 'b'.repeat(63); // 64 chars
+    expect(VALID_RESOURCE_TYPE.test(maxType)).toBe(true);
   });
 });
