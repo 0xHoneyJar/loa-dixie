@@ -1067,7 +1067,7 @@
           "local_label": "sprint-5",
           "label": "GovernedResourceBase Canonical Migration (P2)",
           "tasks": 7,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-6",
