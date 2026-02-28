@@ -1075,7 +1075,7 @@
           "local_label": "sprint-6",
           "label": "Chain-Bound Hash Version-Aware Verification (P3)",
           "tasks": 6,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-7",

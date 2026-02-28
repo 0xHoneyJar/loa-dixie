@@ -1,5 +1,11 @@
 # Sprint Status Index
 
+## Cycle 019: Finn Docker Rebuild & Hounfour v8.3.0 Upgrade
+
+| Sprint | Global ID | Status | Phase |
+|--------|-----------|--------|-------|
+| Sprint 6 | 121 | COMPLETED | Chain-Bound Hash Version-Aware Verification (P3) — audit: APPROVED |
+
 ## Cycle 018: Deploy Dixie to Armitage Ring (arrakis-staging-cluster)
 
 | Sprint | Global ID | Status | Phase |

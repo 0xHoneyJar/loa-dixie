@@ -463,7 +463,7 @@ advertise capabilities, verify with the algorithm that was used to create.
 
 ### Tasks
 
-#### T6.1: Write ADR-006 — Chain-Bound Hash Migration Strategy
+#### T6.1: Write ADR-006 — Chain-Bound Hash Migration Strategy [DONE]
 - **Description**: Create `docs/adr/006-chain-bound-hash-migration.md` documenting:
   - Why in-place swap is unsafe (different algorithms, chain invalidation)
   - Version-aware verification design (dispatch on CONTRACT_VERSION)
@@ -474,7 +474,7 @@ advertise capabilities, verify with the algorithm that was used to create.
   with concrete hash output examples showing divergence.
 - **Effort**: M
 
-#### T6.2: Preserve Legacy Algorithm as `computeChainBoundHash_v9`
+#### T6.2: Preserve Legacy Algorithm as `computeChainBoundHash_v9` [DONE]
 - **Description**: Rename the existing local `computeChainBoundHash` to
   `computeChainBoundHash_v9` in `audit-trail-store.ts`. Mark it as
   `@deprecated` with migration note. This preserves the exact algorithm
@@ -483,7 +483,7 @@ advertise capabilities, verify with the algorithm that was used to create.
   tests pass unchanged (same algorithm, different function name).
 - **Effort**: S
 
-#### T6.3: Add CONTRACT_VERSION to Hash Domain Tags
+#### T6.3: Add CONTRACT_VERSION to Hash Domain Tags [DONE]
 - **Description**: Update the `appendEntry()` method in `AuditTrailStore` to
   include `CONTRACT_VERSION: '10.0.0'` in the hash domain tag for new entries.
   Import and use canonical `computeChainBoundHash` from hounfour for new
@@ -493,7 +493,7 @@ advertise capabilities, verify with the algorithm that was used to create.
   canonical hash algorithm. Existing entries unmodified.
 - **Effort**: M
 
-#### T6.4: Version-Aware `verifyIntegrity()` Dispatch
+#### T6.4: Version-Aware `verifyIntegrity()` Dispatch [DONE]
 - **Description**: Update `verifyIntegrity()` to extract `CONTRACT_VERSION`
   from each entry's `hash_domain_tag`. Dispatch to the correct algorithm:
   - No version or ≤9.x.x → `computeChainBoundHash_v9` (legacy)
@@ -507,7 +507,7 @@ advertise capabilities, verify with the algorithm that was used to create.
   - Chain with transition point (last v9 entry → first v10 entry)
 - **Effort**: L
 
-#### T6.5: Cross-Version Verification Tests
+#### T6.5: Cross-Version Verification Tests [DONE]
 - **Description**: Create comprehensive test suite for version-aware verification.
   Test cases must include:
   - Legacy chain (pre-migration data)
@@ -520,7 +520,7 @@ advertise capabilities, verify with the algorithm that was used to create.
   100% of verification paths covered.
 - **Effort**: L
 
-#### T6.6: Run Full Test Suite
+#### T6.6: Run Full Test Suite [DONE]
 - **Description**: Run `npm test` from `app/` directory. All 2374+ tests must pass.
 - **Acceptance**: All tests green. No chain verification regressions.
   Existing audit trail integration tests pass without modification
