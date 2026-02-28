@@ -19,21 +19,36 @@ import {
 } from '../../src/services/audit-trail-store.js';
 import { createMockPool } from '../fixtures/pg-test.js';
 
-// Mock Hounfour computeAuditEntryHash — deterministic based on entry_id + domain tag
-// The chain-bound hash calls this twice: once for content, once for chain binding.
-// Chain binding call uses contentHash as entry_id and previousHash as timestamp.
+// Mock Hounfour — deterministic hashes for both v9 (legacy) and canonical algorithms.
+// computeAuditEntryHash: used by v9 chain-bound hash (double-hash via synthetic entry)
+// computeChainBoundHash: canonical algorithm (direct concatenation) — Sprint 121
 vi.mock('@0xhoneyjar/loa-hounfour/commons', () => ({
   computeAuditEntryHash: vi.fn(
     (entry: { entry_id: string; timestamp: string; event_type: string }, domainTag: string) => {
       const tag = domainTag.split(':')[2] ?? 'unknown';
       if (entry.event_type === 'chain_binding') {
-        // Chain binding call: entry_id=contentHash, timestamp=previousHash
+        // Chain binding call (v9 only): entry_id=contentHash, timestamp=previousHash
         return `sha256:chain_${entry.entry_id}_${entry.timestamp.slice(0, 20)}`;
       }
       // Content hash call
       return `sha256:content_${entry.entry_id}_${tag}`;
     },
   ),
+  computeChainBoundHash: vi.fn(
+    (entry: { entry_id: string }, domainTag: string, previousHash: string) => {
+      const tag = domainTag.split(':')[2] ?? 'unknown';
+      // Canonical mock: 'canonical_' prefix distinguishes from v9 'chain_' prefix
+      return `sha256:canonical_${entry.entry_id}_${tag}_${previousHash.slice(0, 20)}`;
+    },
+  ),
+  validateAuditTimestamp: vi.fn((input: string) => {
+    // Pass-through validation: accept valid ISO 8601 timestamps used in tests
+    const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(input);
+    if (!iso) return { valid: false, normalized: '', error: 'Timestamp must be strict ISO 8601 format' };
+    const d = new Date(input);
+    if (Number.isNaN(d.getTime())) return { valid: false, normalized: '', error: 'Timestamp is not a valid date' };
+    return { valid: true, normalized: d.toISOString() };
+  }),
   AUDIT_TRAIL_GENESIS_HASH:
     'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 }));
@@ -100,7 +115,7 @@ describe('AuditTrailStore', () => {
       expect(entry.resource_type).toBe('reputation');
       expect(entry.previous_hash).toBe(AUDIT_TRAIL_GENESIS_HASH);
       expect(entry.entry_hash).toContain('sha256:');
-      expect(entry.hash_domain_tag).toBe('loa-dixie:audit:reputation:9.0.0');
+      expect(entry.hash_domain_tag).toBe('loa-dixie:audit:reputation:v10');
     });
 
     it('runs within a transaction (BEGIN/COMMIT)', async () => {
@@ -159,6 +174,16 @@ describe('AuditTrailStore', () => {
       expect(entry.previous_hash).toBe('sha256:previous_entry_hash');
     });
 
+    it('rejects entries with invalid timestamps (hounfour v8.3.0 validation)', async () => {
+      await expect(
+        store.append('reputation', {
+          entry_id: 'entry-bad-ts',
+          timestamp: 'not-a-timestamp',
+          event_type: 'governance.reputation.create',
+        }),
+      ).rejects.toThrow('Invalid audit timestamp');
+    });
+
     it('handles entries without optional fields', async () => {
       pool._setResponse('INSERT INTO audit_entries', {
         rows: [],
@@ -173,7 +198,7 @@ describe('AuditTrailStore', () => {
 
       expect(entry.actor_id).toBeUndefined();
       expect(entry.payload).toBeUndefined();
-      expect(entry.hash_domain_tag).toBe('loa-dixie:audit:knowledge:9.0.0');
+      expect(entry.hash_domain_tag).toBe('loa-dixie:audit:knowledge:v10');
     });
   });
 

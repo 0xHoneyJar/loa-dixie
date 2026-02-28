@@ -1,58 +1,34 @@
 {
   "schema_version": 1,
-  "bridge_id": "bridge-20260226-deep-review",
-  "state": "JACKED_OUT",
+  "bridge_id": "bridge-20260228-c019-canonical-migration",
+  "state": "JACK_IN",
   "config": {
     "depth": 5,
     "mode": "full",
     "flatline_threshold": 0.05,
+    "consecutive_flatline": 2,
     "per_sprint": false,
-    "branch": "feature/dixie-mvp",
-    "repo": "0xHoneyJar/loa-dixie"
+    "branch": "feature/hounfour-v830-canonical-migration",
+    "repo": "0xHoneyJar/loa-dixie",
+    "pr": null,
+    "starting_sprint": 4
   },
   "timestamps": {
-    "started": "2026-02-26T22:00:00Z",
-    "last_activity": "2026-02-26T23:35:00Z"
+    "started": "2026-02-28T06:00:00Z",
+    "last_activity": "2026-02-28T06:00:00Z"
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "sprint": "sprint-105",
-      "findings": { "high": 5, "medium": 8, "low": 5 },
-      "addressed": 8,
-      "commit": "6940613"
-    },
-    {
-      "iteration": 2,
-      "sprint": null,
-      "findings": { "high": 0, "medium": 2, "low": 3 },
-      "addressed": 2,
-      "commit": "69cb7b1"
-    },
-    {
-      "iteration": 3,
-      "sprint": null,
-      "findings": { "high": 0, "medium": 0, "low": 3 },
-      "addressed": 0,
-      "commit": null
-    }
-  ],
+  "iterations": [],
   "flatline": {
-    "initial_score": 18,
-    "last_score": 3,
-    "consecutive_below_threshold": 2,
-    "flatlined": true,
-    "termination_reason": "kaironic_flatline_iteration_3"
+    "initial_score": null,
+    "last_score": null,
+    "consecutive_below_threshold": 0,
+    "ratio": null,
+    "detected": false
   },
   "metrics": {
-    "total_sprints_executed": 1,
-    "total_files_changed": 25,
-    "total_findings_addressed": 10,
+    "total_sprints_executed": 0,
+    "total_files_changed": 0,
+    "total_findings_addressed": 0,
     "total_visions_captured": 0
-  },
-  "finalization": {
-    "ground_truth_updated": false,
-    "rtfm_passed": false,
-    "pr_url": "https://github.com/0xHoneyJar/loa-dixie/pull/50"
   }
 }
