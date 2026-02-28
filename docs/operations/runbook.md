@@ -201,8 +201,8 @@ No authentication required. Returns the current service health status.
     "aggregate_count": 15
   },
   "governance": {
-    "governor_count": 4,
-    "resource_types": ["fleet", "sovereignty", "reputation", "scoring"],
+    "governor_count": 3,
+    "resource_types": ["knowledge_corpus", "knowledge_governor", "fleet"],
     "health": "healthy | degraded"
   },
   "timestamp": "2026-02-28T12:00:00.000Z"

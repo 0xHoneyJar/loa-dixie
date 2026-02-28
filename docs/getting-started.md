@@ -163,14 +163,15 @@ loa-dixie/
 
 The middleware pipeline is not arbitrary -- it encodes governance priorities in a 15-position constitutional ordering. Changing the order changes the governance model.
 
-**Read ADR-001** (`docs/adr/001-middleware-pipeline-ordering.md`) before modifying any middleware registration in `server.ts`. The ordering is:
+**Read ADR-001** (`docs/adr/001-middleware-pipeline-ordering.md`) before modifying any middleware registration in `server.ts`. The pipeline flows through:
 
-1. Request ID generation
-2. Tracing (OpenTelemetry)
-3. CORS
-4. Body limit
-5. Rate limiting
-6. ... (see ADR-001 for the full 15-position sequence)
+- **Request infrastructure** (request ID, tracing, secure headers, protocol version)
+- **Transport limits** (CORS, body limit, response time, logging)
+- **Authentication** (JWT extraction, wallet bridge)
+- **Access control** (rate limiting, allowlist, payment, conviction tier)
+- **Context injection** (memory context, economic metadata)
+
+The critical governance invariant is positions 11-12-13: **allowlist -> payment -> convictionTier**. Community membership gates economic access, which gates capability access. See [Architecture](architecture.md#3-middleware-pipeline) for the full 15-position sequence with source references.
 
 ### Hounfour Protocol Types
 

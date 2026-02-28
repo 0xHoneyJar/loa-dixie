@@ -38,7 +38,10 @@ containing the Hono app, all service instances, and infrastructure clients.
 
 The codebase contains **66 service modules** in `app/src/services/`, organized below by domain.
 Additionally there are 17 middleware modules, 16 route modules, 16 type definition files,
-5 utility modules, 1 proxy module, and 7 core modules (133 source modules total).
+5 utility modules, 1 proxy module, 8 core modules, and 4 database modules (133 source modules total).
+
+> Some services appear in multiple domain sections below to show cross-cutting concerns.
+> The total unique count is 66.
 
 ### 2.1 Core Infrastructure (5 modules)
 
@@ -309,6 +312,25 @@ converts Dixie's `actorId: string` to canonical `MutationContext`.
 | `ScoringPathState` | `{ ... }` | `app/src/services/scoring-path-tracker.ts:154` |
 | `ScoringPathEvent` | union type | `app/src/services/scoring-path-tracker.ts:162` |
 | `ScoringPathInvariant` | `'chain_integrity' \| 'cross_chain_consistency' \| 'checkpoint_coverage'` | `app/src/services/scoring-path-tracker.ts:168` |
+
+### 4.4 Registry vs Implementation
+
+The 4 `GovernedResource` implementations listed in section 4.1 are **interface implementors** —
+classes that conform to the typed state/event/invariant contract. However, only `FleetGovernor`
+is currently registered in the `governorRegistry` for unified health observation
+(`app/src/server.ts:546-551`).
+
+The health endpoint (`GET /api/health/governance`) reports 3 registered governors:
+
+| Governor | Resource Type | Pattern |
+|----------|--------------|---------|
+| `CorpusMeta` | `knowledge_corpus` | Older governor pattern |
+| `KnowledgeGovernor` | `knowledge_governor` | Older governor pattern |
+| `FleetGovernor` | `fleet` | `GovernedResource<FleetState, FleetEvent, FleetInvariant>` |
+
+The remaining 3 GovernedResource implementors (`SovereigntyEngine`, `ReputationService`,
+`ScoringPathTracker`) manage their own state independently but are not yet registered for
+unified health aggregation. The registry is extensible for future registration.
 
 ---
 
