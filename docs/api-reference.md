@@ -34,24 +34,24 @@ Five-tier commons governance model (monotonic expansion):
 
 ## Middleware Pipeline
 
-All `/api/*` routes pass through 15 middleware positions in constitutional order:
+All `/api/*` routes pass through a 15-position middleware pipeline in constitutional order (see [ADR-001](adr/001-middleware-pipeline-ordering.md)):
 
 1. `requestId` -- trace ID generation
 2. `tracing` -- OpenTelemetry spans
 3. `secureHeaders` -- CSP, HSTS, X-Frame-Options
-4. `protocolVersion` -- X-Protocol-Version header
-5. `cors` -- CORS handling
-6. `bodyLimit` -- 100KB payload limit
-7. `responseTime` -- X-Response-Time header
-8. `logger` -- structured logging
-9. `jwt` -- wallet extraction from JWT
-10. `walletBridge` -- wallet to x-wallet-address header
-11. `rateLimit` -- per-wallet/IP rate limiting (Redis-backed when available)
-12. `allowlist` -- wallet/API key gate
-13. `payment` -- x402 micropayment slot
-14. `convictionTier` -- BGT conviction resolution
-15. `memoryContext` -- soul memory injection
-16. `economicMetadata` -- cost tracking headers
+3.5. `protocolVersion` -- X-Protocol-Version header
+4. `cors` -- CORS handling
+5. `bodyLimit` -- 100KB payload limit
+6. `responseTime` -- X-Response-Time header
+7. `logger` -- structured logging
+8. `jwt` -- wallet extraction from JWT
+9. `walletBridge` -- wallet to x-wallet-address header
+10. `rateLimit` -- per-wallet/IP rate limiting (Redis-backed when available)
+11. `allowlist` -- wallet/API key gate
+12. `payment` -- x402 micropayment slot
+13. `convictionTier` -- BGT conviction resolution
+14. `memoryContext` -- soul memory injection
+15. `economicMetadata` -- cost tracking headers
 
 ---
 

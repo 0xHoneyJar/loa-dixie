@@ -33,7 +33,7 @@ It sits between clients and the knowledge infrastructure, enforcing conviction-b
 
 **Dixie** -- Governed BFF. Authentication, authorization, soul memory, scheduling, reputation, agent API. 15 middleware positions enforce community governance before any request reaches downstream services.
 
-**Finn** -- Knowledge enrichment pipeline. Document loading, embedding, model routing via Hounfour provider abstraction. The Oracle's brain.
+**Finn** -- Knowledge enrichment pipeline. Document loading, embedding, model routing via hounfour provider abstraction. The Oracle's brain.
 
 **Hounfour** -- Protocol type definitions. Agent identity (EIP-55), billing entries, conversation sealing, reputation aggregates. Shared contract between all services.
 

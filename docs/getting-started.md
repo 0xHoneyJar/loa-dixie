@@ -118,7 +118,7 @@ loa-dixie/
       config.ts             # Environment variable loading and validation
       index.ts              # Application entry point
       server.ts             # Hono app setup, middleware pipeline, route mounting
-      types.ts              # Core type definitions (Hounfour-aligned)
+      types.ts              # Core type definitions (hounfour-aligned)
       telemetry.ts          # OpenTelemetry initialization
       validation.ts         # Input validation utilities
       errors.ts             # Error type hierarchy
@@ -174,7 +174,7 @@ The middleware pipeline is not arbitrary -- it encodes governance priorities in 
 
 ### Hounfour Protocol Types
 
-Dixie consumes the `@0xhoneyjar/loa-hounfour` package (v8.3.0) for shared governance types, schema validators, and economic conservation laws. All types in `app/src/types.ts` document their alignment with Hounfour protocol types.
+Dixie consumes the `@0xhoneyjar/loa-hounfour` package (v8.3.0) for shared governance types, schema validators, and economic conservation laws. All types in `app/src/types.ts` document their alignment with hounfour protocol types.
 
 ### Circuit Breaker (Finn Connection)
 

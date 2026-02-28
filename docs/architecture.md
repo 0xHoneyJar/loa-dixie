@@ -70,7 +70,7 @@ conformance checking, and conservation laws.
 | access-policy-validator | `app/src/services/access-policy-validator.ts` | 1 | Policy validation for resource access |
 | conformance-signal | `app/src/services/conformance-signal.ts` | 1 | Governance conformance signal emission |
 | conformance-suite | `app/src/services/conformance-suite.ts` | 1 | Conformance test suite for governance rules |
-| state-machine | `app/src/services/state-machine.ts` | 1 | Hounfour L2 state machine validation (4 machines) |
+| state-machine | `app/src/services/state-machine.ts` | 1 | hounfour L2 state machine validation (4 machines) |
 | conservation-laws | `app/src/services/conservation-laws.ts` | 1 | Governance conservation law enforcement |
 | conviction-boundary | `app/src/services/conviction-boundary.ts` | 1 | Conviction tier boundary calculations |
 
@@ -161,7 +161,7 @@ Protocol versioning, diff computation, dynamic contracts, and governance mutatio
 | protocol-version | `app/src/services/protocol-version.ts` | 1 | Version string + middleware + compatibility |
 | protocol-diff-engine | `app/src/services/protocol-diff-engine.ts` | 1 | Protocol version diff computation |
 | migration-proposal | `app/src/services/migration-proposal.ts` | 1 | Governance migration proposal system |
-| dynamic-contract-store | `app/src/services/dynamic-contract-store.ts` | 1 | Hounfour DynamicContract persistence (PG) |
+| dynamic-contract-store | `app/src/services/dynamic-contract-store.ts` | 1 | hounfour DynamicContract persistence (PG) |
 | quality-feedback | `app/src/services/quality-feedback.ts` | 1 | Quality signal feedback collection |
 | freshness-disclaimer | `app/src/services/freshness-disclaimer.ts` | 1 | Knowledge freshness disclaimer generation |
 | governance-mutation | `app/src/services/governance-mutation.ts` | 1 | Mutation creation and logging |
@@ -566,7 +566,7 @@ External package providing canonical governance types and functions.
 | `008_mutation_log.sql` | `mutation_log` | Governance mutation recording | Governance |
 | `009_audit_trail.sql` | `audit_trail` | Hash-chained audit entries | Governance |
 | `010_knowledge_freshness.sql` | `knowledge_freshness` | Knowledge item freshness state | Knowledge |
-| `011_dynamic_contracts.sql` | `dynamic_contracts` | Hounfour DynamicContract JSONB | Protocol |
+| `011_dynamic_contracts.sql` | `dynamic_contracts` | hounfour DynamicContract JSONB | Protocol |
 | `012_audit_chain_uniqueness.sql` | (index) | Prevents audit chain forking | Governance |
 | `013_fleet_orchestration.sql` | `fleet_tasks`, `fleet_notifications`, `fleet_config` | Fleet orchestration with RLS | Fleet |
 | `014_outbox.sql` | `fleet_outbox` | Transactional outbox for durable delivery | Fleet |
