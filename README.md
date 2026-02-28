@@ -48,7 +48,7 @@ cd loa-dixie
 docker compose -f deploy/docker-compose.yml up
 
 # Health check
-curl http://localhost:3000/api/health
+curl http://localhost:3001/api/health
 ```
 
 ### Local Development
@@ -57,7 +57,7 @@ curl http://localhost:3000/api/health
 cd app
 npm install
 cp .env.example .env    # configure FINN_URL, JWT_PRIVATE_KEY, ADMIN_KEY
-npm run dev             # starts on port 3000
+npm run dev             # starts on port 3001
 npm test                # run test suite
 ```
 

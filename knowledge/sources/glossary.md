@@ -35,7 +35,7 @@ The persistent agent runtime built on Pi SDK. Finn is the first production agent
 
 ### Dixie
 **Tags**: technical, architectural
-The experience orchestration layer (BFF gateway) for the Oracle dNFT agent. Named after the Dixie Flatline from Gibson's Neuromancer — a construct that retains personality and memory. Dixie sits between users and loa-finn, handling JWT authentication, WebSocket proxying, soul memory injection, conviction-gated access, tool event streaming, economic metadata, autonomous operation, NL scheduling, agent API (ERC-6551 TBA), and compound learning. 492 tests across 44 test files. Repository: 0xHoneyJar/loa-dixie. Cross-reference: Finn, Hounfour, Freeside, Oracle.
+The experience orchestration layer (BFF gateway) for the Oracle dNFT agent. Named after the Dixie Flatline from Gibson's Neuromancer — a construct that retains personality and memory. Dixie sits between users and loa-finn, handling JWT authentication, WebSocket proxying, soul memory injection, conviction-gated access, tool event streaming, economic metadata, autonomous operation, NL scheduling, agent API (ERC-6551 TBA), and compound learning. 2,431 tests across 128 test files. Repository: 0xHoneyJar/loa-dixie. Cross-reference: Finn, Hounfour, Freeside, Oracle.
 
 ### Freeside (formerly Arrakis)
 **Tags**: architectural, technical
