@@ -171,7 +171,7 @@ The middleware pipeline is not arbitrary -- it encodes governance priorities in 
 - **Access control** (rate limiting, allowlist, payment, conviction tier)
 - **Context injection** (memory context, economic metadata)
 
-The critical governance invariant is positions 11-12-13: **allowlist -> payment -> convictionTier**. Community membership gates economic access, which gates capability access. See [Architecture](architecture.md#3-middleware-pipeline) for the full 15-position sequence with source references.
+The critical governance invariant is positions 11-12-13: **allowlist -> payment -> convictionTier**. Community membership gates economic access, which gates capability access. See [Architecture](architecture.md) (section 3) for the full 15-position sequence with source references.
 
 ### Hounfour Protocol Types
 

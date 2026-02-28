@@ -179,7 +179,7 @@ NATS (pending). Health: `GET /api/health`.
 
 <!-- provenance: CODE-FACTUAL -->
 - Protocol Version: **8.2.0**
-- 492 tests across 44 test files
+- 2,431 tests across 128 test files
 - 4 GovernedResource implementations
 - 6 Architecture Decision Records (ADR-001 through ADR-006)
 - CI/CD: GitHub Actions

@@ -177,7 +177,7 @@ The HoneyJar ecosystem draws from two mythological traditions:
 
 ## Status
 
-Phase 2 (Experience Orchestrator) complete. 13 sprints, 492 tests across 44 test files. Governance layer active with 4 GovernedResource implementations and conviction-gated access across all sensitive endpoints.
+Phase 2 (Experience Orchestrator) complete. 13 sprints, 2,431 tests across 128 test files. Governance layer active with 4 GovernedResource implementations and conviction-gated access across all sensitive endpoints.
 
 ## Maintainer
 
