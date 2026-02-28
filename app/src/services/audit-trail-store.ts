@@ -15,9 +15,21 @@
 import {
   computeAuditEntryHash,
   AUDIT_TRAIL_GENESIS_HASH,
+  validateAuditTimestamp,
 } from '@0xhoneyjar/loa-hounfour/commons';
 import type { DbPool } from '../db/client.js';
 import { withTransaction } from '../db/transaction.js';
+
+/**
+ * Typed error for audit timestamp validation failures.
+ * @since cycle-019 bridge iter 2 — HF830-LOW-05
+ */
+export class AuditTimestampError extends Error {
+  constructor(detail: string) {
+    super(`Invalid audit timestamp: ${detail}`);
+    this.name = 'AuditTimestampError';
+  }
+}
 
 /** Domain tag format for Dixie audit entries. */
 const DOMAIN_TAG_PREFIX = 'loa-dixie:audit';
@@ -103,6 +115,12 @@ export class AuditTrailStore {
     entry: AuditEntryInput,
   ): Promise<AuditEntry> {
     return withTransaction(this.pool, async (client) => {
+      // Validate timestamp format and boundaries (hounfour v8.3.0)
+      const tsResult = validateAuditTimestamp(entry.timestamp);
+      if (!tsResult.valid) {
+        throw new AuditTimestampError(tsResult.error ?? 'unknown');
+      }
+
       // Lock-aware tip read: SELECT ... FOR UPDATE serializes concurrent appends
       const tipResult = await client.query<{ entry_hash: string }>(
         `SELECT entry_hash FROM audit_entries
