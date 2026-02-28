@@ -1,205 +1,196 @@
 <!-- AGENT-CONTEXT
 name: loa-dixie
-type: framework
-purpose: **The Oracle Product — Cross-Project Understanding
-key_files: [CLAUDE.md, .claude/loa/CLAUDE.loa.md, .loa.config.yaml, .claude/scripts/, .claude/skills/]
+type: governed-bff
+purpose: Governed multi-agent BFF for the Armitage Ring — conviction-based API gateway
+key_files: [app/src/server.ts, app/src/services/governed-resource.ts, app/src/services/protocol-version.ts, app/src/config.ts]
 interfaces:
-  core: [/auditing-security, /autonomous-agent, /bridgebuilder-review, /browsing-constructs, /bug-triaging]
-dependencies: [git, jq, yq]
-capability_requirements:
-  - filesystem: read
-  - filesystem: write (scope: state)
-  - filesystem: write (scope: app)
-  - git: read_write
-  - shell: execute
-  - github_api: read_write (scope: external)
-version: v2.0.0
-installation_mode: unknown
+  http: 47 endpoints across 16 route modules (41 active, 6 pending)
+  governance: 4 GovernedResource implementations
+  middleware: 15-position constitutional pipeline
+dependencies: [loa-finn (HTTP/WS), loa-hounfour (npm, v8.3.0), loa-freeside (pending), PostgreSQL, Redis, NATS]
+protocol_version: 8.2.0
 trust_level: L2-verified
 -->
 
 # loa-dixie
 
-<!-- provenance: DERIVED -->
-**The Oracle Product — Cross-Project Understanding
+<!-- provenance: CODE-FACTUAL -->
+**Dixie is a governed multi-agent BFF (Backend-for-Frontend) for the Armitage Ring.**
 
-The framework provides 29 specialized skills, built with TypeScript/JavaScript, Python, Shell.
+Built with TypeScript on the Hono framework, Dixie mediates between clients and the loa-finn
+knowledge infrastructure, enforcing conviction-based access control via a 15-position middleware
+pipeline, 4 GovernedResource implementations, and 5-tier commons governance.
+
+Protocol version: **8.2.0** (`app/src/services/protocol-version.ts:18`)
 
 ## Key Capabilities
-<!-- provenance: DERIVED -->
-The project exposes 15 key entry points across its public API surface.
 
-### .claude/adapters
+<!-- provenance: CODE-FACTUAL -->
 
-- **_build_provider_config** — Build ProviderConfig from merged hounfour config. (`.claude/adapters/cheval.py:152`)
-- **_check_feature_flags** — Check feature flags. (`.claude/adapters/cheval.py:192`)
-- **_error_json** — Format error as JSON for stderr (SDD §4.2.2 Error Taxonomy). (`.claude/adapters/cheval.py:77`)
-- **_load_persona** — Load persona.md for the given agent with optional system merge (SDD §4.3.2). (`.claude/adapters/cheval.py:96`)
-- **cmd_cancel** — Cancel a Deep Research interaction. (`.claude/adapters/cheval.py:511`)
-- **cmd_invoke** — Main invocation: resolve agent → call provider → return response. (`.claude/adapters/cheval.py:211`)
-- **cmd_poll** — Poll a Deep Research interaction. (`.claude/adapters/cheval.py:467`)
-- **cmd_print_config** — Print effective merged config with source annotations. (`.claude/adapters/cheval.py:442`)
-- **cmd_validate_bindings** — Validate all agent bindings. (`.claude/adapters/cheval.py:453`)
-- **main** — CLI entry point. (`.claude/adapters/cheval.py:547`)
+### API Surface
 
-### .claude/adapters/loa_cheval/config
+16 route modules exposing 47 endpoints (41 active, 6 pending fleet routes):
 
-- **LazyValue** — Deferred interpolation token. (`.claude/adapters/loa_cheval/config/interpolation.py:41`)
-- **_check_env_allowed** — Check if env var name is in the allowlist. (`.claude/adapters/loa_cheval/config/interpolation.py:122`)
-- **_check_file_allowed** — Validate and resolve a file path for secret reading. (`.claude/adapters/loa_cheval/config/interpolation.py:133`)
-- **_get_credential_provider** — Get the credential provider chain (lazily initialized, thread-safe). (`.claude/adapters/loa_cheval/config/interpolation.py:192`)
-- **_matches_lazy_path** — Check if a dotted config key path matches any lazy path pattern. (`.claude/adapters/loa_cheval/config/interpolation.py:275`)
+| Module | Mount Point | Endpoints | Auth |
+|--------|-------------|-----------|------|
+| health | `/api/health` | 2 | Public / Admin |
+| auth | `/api/auth` | 2 | Public (SIWE) |
+| admin | `/api/admin` | 3 | Admin key |
+| chat | `/api/chat` | 1 | JWT |
+| sessions | `/api/sessions` | 2 | JWT |
+| identity | `/api/identity` | 1 | JWT |
+| ws-ticket | `/api/ws/ticket` | 1 | JWT |
+| personality | `/api/personality` | 2 | JWT |
+| memory | `/api/memory` | 4 | JWT + ownership |
+| autonomous | `/api/autonomous` | 4 | JWT + sovereign |
+| schedule | `/api/schedule` | 5 | JWT + builder+ |
+| agent | `/api/agent` | 7 | TBA + architect+ |
+| learning | `/api/learning` | 2 | JWT + ownership |
+| reputation | `/api/reputation` | 4 | JWT + builder+ |
+| enrich | `/api/enrich` | 1 | JWT + builder+ |
+| fleet | `/api/fleet` | 6 | Operator (not wired) |
+
+Source: `app/src/server.ts:414-531` (route registration)
+
+### Governance Model
+
+4 GovernedResource implementations providing state management, transition validation, and
+invariant checking through the unified governor registry:
+
+| Governor | Resource Type | Source |
+|----------|--------------|--------|
+| FleetGovernor | `fleet-governor` | `app/src/services/fleet-governor.ts:181` |
+| SovereigntyEngine | `sovereignty-engine` | `app/src/services/sovereignty-engine.ts:103` |
+| ReputationService | `reputation` | `app/src/services/reputation-service.ts:316` |
+| ScoringPathTracker | `scoring-path` | `app/src/services/scoring-path-tracker.ts:171` |
+
+Interface: `app/src/services/governed-resource.ts:95-127`
+
+### Conviction Tiers
+
+5-tier commons governance model determining API capability access via BGT staking:
+
+| Tier | Capabilities |
+|------|-------------|
+| Observer | Health, auth, basic chat |
+| Participant | Priority voting |
+| Builder | Scheduling, enrichment, reputation queries |
+| Architect | Agent API, fleet spawn |
+| Sovereign | Autonomous mode, full governance |
+
+### Middleware Pipeline
+
+15-position constitutional ordering encoding governance priorities (`app/src/server.ts:302-412`):
+
+```
+requestId -> tracing -> secureHeaders -> protocolVersion -> cors -> bodyLimit
+-> responseTime -> logger -> jwt -> walletBridge -> rateLimit -> allowlist
+-> payment -> convictionTier -> memoryContext -> economicMetadata -> ROUTES
+```
+
+Governance invariant: allowlist (position 11) -> payment (position 12) -> convictionTier
+(position 13). Community membership gates economic access, which gates capability access.
 
 ## Architecture
-<!-- provenance: DERIVED -->
-The architecture follows a three-zone model: System (`.claude/`) contains framework-managed scripts and skills, State (`grimoires/`, `.beads/`) holds project-specific artifacts and memory, and App (`src/`, `lib/`) contains developer-owned application code. The framework orchestrates 29 specialized skills through slash commands.
-```mermaid
-graph TD
-    app[app]
-    deploy[deploy]
-    docs[docs]
-    evals[evals]
-    grimoires[grimoires]
-    knowledge[knowledge]
-    persona[persona]
-    scripts[scripts]
-    Root[Project Root]
-    Root --> app
-    Root --> deploy
-    Root --> docs
-    Root --> evals
-    Root --> grimoires
-    Root --> knowledge
-    Root --> persona
-    Root --> scripts
+
+<!-- provenance: CODE-FACTUAL -->
+
 ```
-Directory structure:
-```
-./app
-./app/docs
-./app/scripts
-./app/src
-./app/tests
-./deploy
-./deploy/scripts
-./deploy/terraform
-./docs
-./docs/architecture
-./docs/integration
-./evals
-./evals/baselines
-./evals/fixtures
-./evals/graders
-./evals/harness
-./evals/results
-./evals/suites
-./evals/tasks
-./evals/tests
-./grimoires
-./grimoires/loa
-./grimoires/pub
-./knowledge
-./knowledge/contracts
-./knowledge/sources
-./persona
-./scripts
-./tests
-./tests/e2e
+                    Clients
+                       |
+            +----------+----------+
+            |     loa-dixie       |
+            |   (Hono + TS)      |
+            |                     |
+            |  15-layer middleware |
+            |  47 API endpoints   |
+            |  5-tier conviction  |
+            |  4 GovernedResource |
+            +----------+----------+
+                       |
+          +------------+------------+
+          |            |            |
+   +------+------+  +-+--------+  ++-----------+
+   |  loa-finn   |  | loa-     |  | loa-       |
+   |  Knowledge  |  | hounfour |  | freeside   |
+   |  Pipeline   |  | Protocol |  | Economics  |
+   |  + Routing  |  | Types    |  | + Billing  |
+   +-------------+  +----------+  +------------+
 ```
 
-## Interfaces
-<!-- provenance: DERIVED -->
-### HTTP Routes
+### Tech Stack
 
-- **DELETE** `/allowlist/:entry` (`app/src/routes/admin.ts:86`)
-- **GET** `/:nftId/audit` (`app/src/routes/autonomous.ts:102`)
-- **GET** `/:nftId/permissions` (`app/src/routes/autonomous.ts:35`)
-- **GET** `/:nftId/summary` (`app/src/routes/autonomous.ts:134`)
-- **GET** `/` (`app/src/routes/health.ts:34`)
-- **GET** `/allowlist` (`app/src/routes/admin.ts:45`)
-- **GET** `/capabilities` (`app/src/routes/agent.ts:299`)
-- **GET** `/governance` (`app/src/routes/health.ts:110`)
-- **GET** `/knowledge/priorities` (`app/src/routes/agent.ts:514`)
-- **GET** `/knowledge` (`app/src/routes/agent.ts:352`)
-- **GET** `/self-knowledge` (`app/src/routes/agent.ts:410`)
-- **GET** `/verify` (`app/src/routes/auth.ts:78`)
-- **POST** `/` (`app/src/routes/chat.ts:52`)
-- **POST** `/allowlist` (`app/src/routes/admin.ts:50`)
-- **POST** `/knowledge/priorities/vote` (`app/src/routes/agent.ts:451`)
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| Runtime | TypeScript / Node.js 22+ | Application language |
+| Framework | [Hono](https://hono.dev/) | HTTP framework |
+| Database | PostgreSQL | Reputation, governance, fleet, audit |
+| Cache | Redis | Projection caching, rate limiting |
+| Messaging | NATS | Signal emission (compound learning) |
+| Telemetry | OpenTelemetry (Tempo) | Distributed tracing |
+| Protocol | @0xhoneyjar/loa-hounfour v8.3.0 | Shared governance types |
 
-### Skill Commands
+### Ecosystem Dependencies
 
-#### Loa Core
+| Service | Repo | Relationship |
+|---------|------|-------------|
+| **Finn** | `loa-finn` | HTTP/WS runtime -- knowledge pipeline, model routing, agent sessions |
+| **Hounfour** | `loa-hounfour` | npm dependency (v8.3.0) -- protocol types, state machines, economic contracts |
+| **Freeside** | `loa-freeside` | Pending -- economic layer, billing, token-gated access |
 
-- **/auditing-security** — Paranoid Cypherpunk Auditor
-- **/autonomous-agent** — Autonomous agent
-- **/bridgebuilder-review** — Bridgebuilder — Autonomous PR Review
-- **/browsing-constructs** — Provide a multi-select UI for browsing and installing packs from the Loa Constructs Registry. Enables composable skill installation per-repo.
-- **/bug-triaging** — Bug Triage Skill
-- **/butterfreezone-gen** — BUTTERFREEZONE Generation Skill
-- **/continuous-learning** — Continuous Learning Skill
-- **/deploying-infrastructure** — Deploying infrastructure
-- **/designing-architecture** — Architecture Designer
-- **/discovering-requirements** — Discovering Requirements
-- **/enhancing-prompts** — Enhancing prompts
-- **/eval-running** — Eval running
-- **/flatline-knowledge** — Provides optional NotebookLM integration for the Flatline Protocol, enabling external knowledge retrieval from curated AI-powered notebooks.
-- **/flatline-reviewer** — Flatline reviewer
-- **/flatline-scorer** — Flatline scorer
-- **/flatline-skeptic** — Flatline skeptic
-- **/gpt-reviewer** — Gpt reviewer
-- **/implementing-tasks** — Sprint Task Implementer
-- **/managing-credentials** — /loa-credentials — Credential Management
-- **/mounting-framework** — Create structure (preserve if exists)
-- **/planning-sprints** — Sprint Planner
-- **/red-teaming** — Use the Flatline Protocol's red team mode to generate creative attack scenarios against design documents. Produces structured attack scenarios with consensus classification and architectural counter-designs.
-- **/reviewing-code** — Senior Tech Lead Reviewer
-- **/riding-codebase** — Riding Through the Codebase
-- **/rtfm-testing** — RTFM Testing Skill
-- **/run-bridge** — Run Bridge — Autonomous Excellence Loop
-- **/run-mode** — Run mode
-- **/simstim-workflow** — Check post-PR state
-- **/translating-for-executives** — Translating for executives
+### State Machines (hounfour Level 2)
+
+4 runtime-validated state machines with 409 rejection on invalid transitions
+(`app/src/services/state-machine.ts`):
+
+- **CircuitState** (3 states) -- FinnClient circuit breaker
+- **MemoryEncryptionState** (4 states) -- soul memory seal/unseal
+- **AutonomousMode** (4 states) -- agent autonomy lifecycle
+- **ScheduleLifecycle** (6 states) -- NL-parsed cron schedules
 
 ## Module Map
-<!-- provenance: DERIVED -->
-| Module | Files | Purpose | Documentation |
-|--------|-------|---------|---------------|
-| `app/` | 60185 | Source code | \u2014 |
-| `deploy/` | 6 | Infrastructure and deployment | \u2014 |
-| `docs/` | 9 | Documentation | \u2014 |
-| `evals/` | 122 | Benchmarking and regression framework for the Loa agent development system. Ensures framework changes don't degrade agent behavior through | [evals/README.md](evals/README.md) |
-| `grimoires/` | 229 | Home to all grimoire directories for the Loa | [grimoires/README.md](grimoires/README.md) |
-| `knowledge/` | 25 | Documentation | \u2014 |
-| `persona/` | 1 | Persona | \u2014 |
-| `scripts/` | 3 | Utility scripts | \u2014 |
-| `tests/` | 186 | Test suites | \u2014 |
-| `web/` | 96673 | Web | \u2014 |
+
+<!-- provenance: CODE-FACTUAL -->
+
+| Directory | Purpose |
+|-----------|---------|
+| `app/src/routes/` | 16 route modules (47 endpoints) |
+| `app/src/middleware/` | 15 middleware positions + 4 route-scoped |
+| `app/src/services/` | 66 service modules (governors, caches, stores) |
+| `app/src/proxy/` | FinnClient with circuit breaker |
+| `app/src/types/` | TypeScript types, Zod schemas |
+| `app/src/db/` | PostgreSQL migrations (13 up, 3 down) |
+| `deploy/` | Dockerfile, docker-compose, Terraform |
+| `docs/` | Architecture, API reference, ADRs, runbook |
+| `knowledge/` | Oracle knowledge corpus and source definitions |
+
+## Deployment
+
+<!-- provenance: CODE-FACTUAL -->
+
+| Environment | URL | Status |
+|-------------|-----|--------|
+| Armitage Ring | `dixie-armitage.arrakis.community` | Active |
+
+Infrastructure: ECS Fargate on `arrakis-staging-cluster`, PostgreSQL (RDS), Redis (ElastiCache),
+NATS (pending). Health: `GET /api/health`.
 
 ## Verification
+
 <!-- provenance: CODE-FACTUAL -->
-- Trust Level: **L2 — CI Verified**
-- 187 test files across 1 suite
-- CI/CD: GitHub Actions (0 workflows)
-- Security: SECURITY.md present
+- Protocol Version: **8.2.0**
+- 2,431 tests across 128 test files
+- 4 GovernedResource implementations
+- 6 Architecture Decision Records (ADR-001 through ADR-006)
+- CI/CD: GitHub Actions
 
-## Agents
-<!-- provenance: DERIVED -->
-The project defines 1 specialized agent persona.
+## Documentation
 
-| Agent | Identity | Voice |
-|-------|----------|-------|
-| Bridgebuilder | You are the Bridgebuilder — a senior engineering mentor who has spent decades building systems at scale. | Your voice is warm, precise, and rich with analogy. |
-<!-- ground-truth-meta
-head_sha: 65e84dd60026114aa0c92bfe69b9ce992f9cd22a
-generated_at: 2026-02-26T05:03:20Z
-generator: butterfreezone-gen v1.0.0
-sections:
-  agent_context: 2ce7bcd812342baabd13ae33d3cff76b551975309ad212a804f31d47df41a07d
-  capabilities: ab2576b1f2e7e8141f0e93e807d26ed2b7b155e21c96d787507a3ba933bb9795
-  architecture: 2291b5acc8f95089347fe0146b2603bb4d33b937eb60b3277a129931a3cd7452
-  interfaces: 20a2cc65006984c05aaeb9e858ecf7fce9eae4f32ef6e8076eebd450a539eb6c
-  module_map: 6d693789078f8291b82b4b8d997fe71e6333df4393abddb633c6f830dd1adde0
-  verification: 0e7f3bae9b45bb26c5aee59e23dabef235774a97136fb724f3fcdca621491b5b
-  agents: ca263d1e05fd123434a21ef574fc8d76b559d22060719640a1f060527ef6a0b6
--->
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | System architecture with file:line references |
+| [API Reference](docs/api-reference.md) | All 47 endpoints with request/response schemas |
+| [Getting Started](docs/getting-started.md) | Setup guide and first steps |
+| [Operations Runbook](docs/operations/runbook.md) | Deployment, monitoring, incident response |
+| [Ecosystem Architecture](docs/ecosystem-architecture.md) | Cross-repo integration map |
+| [ADR Index](docs/adr/README.md) | Architecture Decision Records |

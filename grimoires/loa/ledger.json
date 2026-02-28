@@ -1017,88 +1017,11 @@
           "status": "completed"
         }
       ]
-    },
-    {
-      "id": "cycle-019",
-      "label": "Finn Docker Rebuild & Hounfour v8.3.0 Upgrade",
-      "started": "2026-02-28",
-      "status": "active",
-      "prd": "grimoires/loa/prd.md",
-      "sdd": "grimoires/loa/sdd.md",
-      "sprint_plan": "grimoires/loa/sprint.md",
-      "sprints": [
-        {
-          "id": "sprint-1",
-          "global_id": 116,
-          "local_label": "sprint-1",
-          "label": "Finn Docker Rebuild (Cross-Repo Operational)",
-          "tasks": 6,
-          "status": "completed"
-        },
-        {
-          "id": "sprint-2",
-          "global_id": 117,
-          "local_label": "sprint-2",
-          "label": "Dixie Hounfour v8.3.0 Upgrade",
-          "tasks": 8,
-          "status": "completed",
-          "source_pr": "#64",
-          "notes": "Pin upgrade only. T2.3/T2.4/T2.5 deferred — interface/algorithm incompatibilities."
-        },
-        {
-          "id": "sprint-3",
-          "global_id": 118,
-          "local_label": "sprint-3",
-          "label": "Bridge Iter 1 — validateAuditTimestamp Adoption",
-          "tasks": 4,
-          "status": "completed"
-        },
-        {
-          "id": "sprint-4",
-          "global_id": 119,
-          "local_label": "sprint-4",
-          "label": "Alpha Ramp ADR & Dampened Score Canonical Migration (P1)",
-          "tasks": 7,
-          "status": "completed"
-        },
-        {
-          "id": "sprint-5",
-          "global_id": 120,
-          "local_label": "sprint-5",
-          "label": "GovernedResourceBase Canonical Migration (P2)",
-          "tasks": 7,
-          "status": "completed"
-        },
-        {
-          "id": "sprint-6",
-          "global_id": 121,
-          "local_label": "sprint-6",
-          "label": "Chain-Bound Hash Version-Aware Verification (P3)",
-          "tasks": 6,
-          "status": "completed"
-        },
-        {
-          "id": "sprint-7",
-          "global_id": 122,
-          "local_label": "sprint-7",
-          "label": "Advisory Lock Canonical Swap & Cross-Repo Coordination (P4)",
-          "tasks": 5,
-          "status": "completed"
-        },
-        {
-          "id": "sprint-8",
-          "global_id": 123,
-          "local_label": "sprint-8",
-          "label": "Bridgebuilder Excellence Polish (PR #69 Review Findings)",
-          "tasks": 6,
-          "status": "completed"
-        }
-      ]
     }
   ],
-  "active_cycle": "cycle-019",
+  "active_cycle": null,
   "active_bugfix": null,
-  "global_sprint_counter": 123,
+  "global_sprint_counter": 115,
   "bugfix_cycles": [],
   "release_cycles": [
     {

@@ -49,13 +49,13 @@ graph TB
 
 ## The 5-Layer Stack
 
-| Layer | Repo | Role |
-|-------|------|------|
-| 5 — Product | `loa-dixie` | dNFT Oracle — first product customer |
-| 4 — Platform | `loa-freeside` | API, Discord/TG, token-gating, billing, IaC |
-| 3 — Runtime | `loa-finn` | Persistent sessions, tool sandbox, memory |
-| 2 — Protocol | `loa-hounfour` | Schemas, state machines, model routing contracts |
-| 1 — Framework | `loa` | Agent dev framework, skills, Bridgebuilder |
+| Layer | Repo | Role | Status |
+|-------|------|------|--------|
+| 5 — Product | `loa-dixie` | dNFT Oracle — first product customer | **Staging** |
+| 4 — Platform | `loa-freeside` | API, Discord/TG, token-gating, billing, IaC | In progress |
+| 3 — Runtime | `loa-finn` | Persistent sessions, tool sandbox, memory | **Staging** |
+| 2 — Protocol | `loa-hounfour` | Schemas, state machines, model routing contracts | **Published (v8.3.0)** |
+| 1 — Framework | `loa` | Agent dev framework, skills, Bridgebuilder | **Shipping** |
 
 Each layer depends only on layers below it. Protocol contracts flow upward: lower layers define contracts, upper layers consume them.
 
@@ -133,6 +133,139 @@ User asks question on Discord
 
 ---
 
+## Armitage Ring — Deployment Topology
+
+The **Armitage Ring** is the shared staging infrastructure on AWS where ecosystem services run together. Named after Armitage from *Neuromancer*, it is the coordinator that brings the separate services into a unified operational formation.
+
+### Network Topology
+
+```
+Internet --> ALB (arrakis-staging-alb)
+  |---> finn-armitage.arrakis.community  --> Finn  (port 3000)
+  |---> dixie-armitage.arrakis.community --> Dixie (port 3001)
+  \---> [freeside-armitage — pending]
+
+Shared Infrastructure:
+  PG:    arrakis-staging-postgres (RDS PostgreSQL)
+  NATS:  pending deployment
+  Tempo: distributed tracing collector
+
+Per-Service:
+  Redis: dedicated ElastiCache instance per service
+```
+
+```mermaid
+graph LR
+    subgraph "Internet"
+        USER["Client"]
+    end
+
+    subgraph "AWS — arrakis-staging"
+        ALB["ALB<br/>arrakis-staging-alb"]
+
+        subgraph "ECS Cluster: arrakis-staging-cluster"
+            FINN_SVC["Finn<br/>:3000"]
+            DIXIE_SVC["Dixie<br/>:3001"]
+            FREESIDE_SVC["Freeside<br/>(pending)"]
+        end
+
+        subgraph "Data Layer"
+            PG["PostgreSQL<br/>arrakis-staging-postgres"]
+            REDIS_F["Redis<br/>(Finn)"]
+            REDIS_D["Redis<br/>(Dixie)"]
+            NATS["NATS<br/>(pending)"]
+            TEMPO["Tempo"]
+        end
+    end
+
+    USER --> ALB
+    ALB -->|"finn-armitage.arrakis.community"| FINN_SVC
+    ALB -->|"dixie-armitage.arrakis.community"| DIXIE_SVC
+    ALB -.->|"freeside-armitage (pending)"| FREESIDE_SVC
+
+    DIXIE_SVC --> PG
+    DIXIE_SVC --> REDIS_D
+    DIXIE_SVC --> FINN_SVC
+    DIXIE_SVC -.-> NATS
+    DIXIE_SVC --> TEMPO
+
+    FINN_SVC --> PG
+    FINN_SVC --> REDIS_F
+    FINN_SVC --> TEMPO
+
+    style ALB fill:#3498db,stroke:#2980b9,color:#fff
+    style PG fill:#27ae60,stroke:#1e8449,color:#fff
+    style REDIS_F fill:#e74c3c,stroke:#c0392b,color:#fff
+    style REDIS_D fill:#e74c3c,stroke:#c0392b,color:#fff
+    style NATS fill:#95a5a6,stroke:#7f8c8d,color:#fff
+    style TEMPO fill:#8e44ad,stroke:#7d3c98,color:#fff
+    style FREESIDE_SVC fill:#95a5a6,stroke:#7f8c8d,color:#fff
+```
+
+### Service Inventory
+
+| Service | Repo | Host | Port | ECS Service | Status |
+|---------|------|------|------|-------------|--------|
+| **Dixie** | `loa-dixie` | `dixie-armitage.arrakis.community` | 3001 | `dixie-armitage` | Deployed |
+| **Finn** | `loa-finn` | `finn-armitage.arrakis.community` | 3000 | `finn-armitage` | Deployed |
+| **Freeside** | `loa-freeside` | `freeside-armitage.arrakis.community` | TBD | `freeside-armitage` | Pending |
+| **Hounfour** | `loa-hounfour` | N/A (npm package) | N/A | N/A | Published v8.3.0 |
+
+### Service Dependency Matrix
+
+Shows runtime dependencies between services. Read as "row depends on column."
+
+| | Dixie | Finn | Freeside | Hounfour | PostgreSQL | Redis | NATS |
+|---|---|---|---|---|---|---|---|
+| **Dixie** | -- | HTTP/WS (required) | Economic (pending) | npm (build-time) | Read/Write | Cache/Rate-limit | Pub/Sub (pending) |
+| **Finn** | DIXIE_BASE_URL (callbacks) | -- | Routing (pending) | npm (build-time) | Read/Write | Session cache | Pub/Sub (pending) |
+| **Freeside** | API consumer (pending) | Agent routing (pending) | -- | npm (build-time) | Read/Write | TBD | TBD |
+| **Hounfour** | -- | -- | -- | -- | -- | -- | -- |
+
+### Hounfour Migration Status
+
+The `@0xhoneyjar/loa-hounfour` package provides the shared governance type system, schema validators, and economic contracts consumed by all services.
+
+| Service | Target Version | Status | Details |
+|---------|---------------|--------|---------|
+| **hounfour (package)** | v8.3.0 | Published | Source of truth for all protocol types |
+| **Dixie** | v8.3.0 | Complete | PR #64 (initial), #69 (chain-bound-hash). `package.json`: `github:0xHoneyJar/loa-hounfour#v8.3.0` |
+| **Finn** | v8.3.0 | In progress | Runtime contract alignment underway |
+| **Freeside** | v8.3.0 | In progress | Platform integration pending Finn completion |
+
+### Integration Contracts
+
+#### Dixie --> Finn (Runtime)
+
+- **Protocol**: HTTP REST + WebSocket via ALB
+- **Discovery**: `FINN_URL` and `FINN_WS_URL` SSM parameters
+- **Resilience**: Circuit breaker (3 failures, 30s recovery, see ADR-002)
+- **Health**: Dixie checks Finn health via `/health` endpoint, caches for 10s
+- **Endpoints consumed**: `/health`, `/api/chat` (streaming), WebSocket upgrade for real-time sessions
+- **Failure mode**: Circuit opens -> Dixie reports `unhealthy` status, all agent routes return 503
+
+#### Dixie --> Hounfour (Protocol)
+
+- **Protocol**: npm package dependency (build-time)
+- **Version**: `@0xhoneyjar/loa-hounfour#v8.3.0`
+- **Imports**: Core types (AccessPolicy, AgentIdentity, CircuitState), governance types (TaskType, ReputationEvent, ScoringPath), economy types (computeCostMicro, verifyPricingConservation), validators and schemas
+- **Contract surface**: Type validation, economic conservation laws, governance state machines
+
+#### Finn --> Dixie (Callbacks)
+
+- **Protocol**: HTTP via ALB
+- **Discovery**: `DIXIE_BASE_URL` SSM parameter
+- **Purpose**: Schedule callbacks, agent completion notifications
+- **Auth**: HMAC-signed callbacks (`DIXIE_SCHEDULE_CALLBACK_SECRET`)
+
+#### Dixie --> Freeside (Economic, Pending)
+
+- **Protocol**: HTTP REST (planned)
+- **Purpose**: Token-gated access validation, billing integration, conviction tier resolution
+- **Status**: Currently stubbed; conviction tiers computed locally. Full integration pending Freeside deployment.
+
+---
+
 ## Where Constructs Network Fits
 
 Constructs aren't a layer in the stack — they're a **cross-cutting distribution plane** that plugs into multiple layers simultaneously. Think of the 5-layer stack as the *infrastructure* and Constructs Network as the *marketplace* that sits alongside it.
@@ -146,11 +279,11 @@ graph TB
 
     subgraph "Construct Repos"
         OBS["🔬 construct-observer<br/>User Research / Empathy Engine"]
+        CRU["🧪 construct-crucible<br/>Testing / Validation Engine"]
+        ART["🎨 construct-artisan<br/>Design Physics / Taste"]
+        BCN["🔦 construct-beacon<br/>Developer Tools / Integration"]
         GTM["📢 construct-gtm-collective<br/>Go-To-Market"]
-        HRL["📣 construct-herald<br/>Product Comms"]
-        HRD["🛡️ construct-hardening<br/>Security Sentinel"]
-        RUN["🎨 rune<br/>Design Physics"]
-        MEL["💬 melange<br/>Cross-Construct Protocol"]
+        PRO["🔗 construct-protocol<br/>Smart Contract Verification"]
     end
 
     subgraph "Layer 5: Product"
@@ -175,18 +308,18 @@ graph TB
 
     CN -->|"browse + discover"| API
     API -->|"git-sync from<br/>source repos"| OBS
+    API -->|"git-sync"| CRU
+    API -->|"git-sync"| ART
+    API -->|"git-sync"| BCN
     API -->|"git-sync"| GTM
-    API -->|"git-sync"| HRL
-    API -->|"git-sync"| HRD
+    API -->|"git-sync"| PRO
 
     OBS -->|"install into"| LOA
+    CRU -->|"install into"| LOA
+    ART -->|"install into"| LOA
+    BCN -->|"install into"| LOA
     GTM -->|"install into"| LOA
-    HRL -->|"install into"| LOA
-    HRD -->|"install into"| LOA
-    RUN -->|"install into"| LOA
-
-    MEL -.->|"cross-construct<br/>communication"| OBS
-    MEL -.->|"cross-construct<br/>communication"| GTM
+    PRO -->|"install into"| LOA
 
     OBS -->|"emits events via<br/>event envelope schema"| HOUNFOUR
     DIXIE -->|"consumes constructs<br/>as first customer"| LOA
@@ -210,11 +343,11 @@ graph TB
     style FREESIDE fill:#2ecc71,stroke:#27ae60,color:#fff
     style DIXIE fill:#e74c3c,stroke:#c0392b,color:#fff
     style OBS fill:#1abc9c,stroke:#16a085,color:#fff
+    style CRU fill:#1abc9c,stroke:#16a085,color:#fff
+    style ART fill:#1abc9c,stroke:#16a085,color:#fff
+    style BCN fill:#1abc9c,stroke:#16a085,color:#fff
     style GTM fill:#1abc9c,stroke:#16a085,color:#fff
-    style HRL fill:#1abc9c,stroke:#16a085,color:#fff
-    style HRD fill:#1abc9c,stroke:#16a085,color:#fff
-    style RUN fill:#1abc9c,stroke:#16a085,color:#fff
-    style MEL fill:#95a5a6,stroke:#7f8c8d,color:#fff
+    style PRO fill:#1abc9c,stroke:#16a085,color:#fff
 ```
 
 ---
@@ -256,14 +389,21 @@ Agent gains new expertise (user research, gap analysis, etc.)
 
 ### Known Constructs
 
-| Construct | What It Does | Skills |
-|-----------|-------------|--------|
-| **Observer** | Hypothesis-first user research — the empathy engine | 24 (capture, synthesis, analysis, migration) |
-| **GTM Collective** | Turns what engineers build into what markets buy | 8 (positioning, pricing, devrel, partnerships) |
-| **Herald** | Grounded product communication from code evidence | comms, announcements, stakeholder translation |
-| **Hardening** | Transforms incidents into compounding defensive artifacts | security sentinel, incident response |
-| **Rune** | Design physics for AI-generated UI (5 sub-constructs) | Glyph, Sigil, Rigor, Wyrd, Lore |
-| **Melange** | Cross-construct communication protocol | /send, /inbox, /threads |
+| Construct | Repo | What It Does | Skills |
+|-----------|------|-------------|--------|
+| **Observer** | `construct-observer` | Hypothesis-first user research — the empathy engine | 6: observing-users, shaping-journeys, analyzing-gaps, filing-gaps, importing-research, level-3-diagnostic |
+| **Crucible** | `construct-crucible` | Testing and validation engine — ground truth from code | 5: grounding-code, diagramming-states, validating-journeys, walking-through, iterating-feedback |
+| **Artisan** | `construct-artisan` | Design physics and taste — the aesthetic intelligence | 14: inscribing-taste, synthesizing-taste, surveying-patterns, crafting-physics, animating-motion, styling-material, distilling-components, applying-behavior, rams, next-best-practices, decomposing-feel, analyzing-feedback, iterating-visuals, envisioning-direction |
+| **Beacon** | `construct-beacon` | Developer tools and integration — the builder's toolkit | 6: accepting-payments, auditing-content, defining-actions, discovering-endpoints, generating-markdown, optimizing-chunks |
+| **GTM Collective** | `construct-gtm-collective` | Turns what engineers build into what markets buy | 8: positioning-product, pricing-strategist, educating-developers, building-partnerships, analyzing-market, crafting-narratives, reviewing-gtm, translating-for-stakeholders |
+| **Protocol** | `construct-protocol` | Smart contract verification, tx forensics, dApp QA | 10: contract-verify, tx-forensics, abi-audit, proxy-inspect, simulate-flow, dapp-lint, dapp-typecheck, dapp-test, dapp-e2e, gpt-contract-review |
+
+#### Planned Constructs
+
+| Construct | Status | What It Would Do |
+|-----------|--------|-----------------|
+| **Herald** | Planned | Grounded product communication from code evidence |
+| **Hardening** | Planned | Transforms incidents into compounding defensive artifacts |
 
 ---
 
@@ -338,5 +478,3 @@ Gibson himself noted that Vodou is "not concerned with notions of salvation and 
 | **Grimoire** | — | Book of spells and ritual instructions | State directory — accumulated project knowledge |
 | **Beauvoir** | Character who explains Vodou-as-interface (*Count Zero*) | Max Beauvoir, Supreme Chief of Vodou in Haiti | Reviewer persona files that guide code review |
 | **Construct** | ROM construct — preserved consciousness (*Neuromancer*) | — (pure Gibson) | Packaged expert knowledge, installable per-repo |
-| **Melange** | — (cross-reference: the spice from *Dune*) | — | Cross-construct communication protocol |
-| **Rune** | — (magical inscription) | — | Design physics — encoded visual rules |

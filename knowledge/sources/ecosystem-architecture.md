@@ -39,7 +39,7 @@ The ecosystem comprises five interconnected repositories, each with a distinct r
 **Purpose**: Experience orchestration layer (BFF gateway) for the Oracle dNFT agent.
 **Contains**: Hono BFF gateway, 15-position middleware pipeline (constitutional ordering), soul memory service, conviction resolver, autonomous engine with 7-step permission model, compound learning pipeline, agent API routes, NL scheduler, WebSocket proxy with ticket-based auth.
 **Role**: The experience orchestration layer — sits between end users and loa-finn, handling authentication, governance enforcement (5-tier BGT conviction gating), memory injection, economic metadata enrichment, autonomous operation delegation, agent-to-agent communication (ERC-6551 TBA + x402 metering), and compound learning signal aggregation.
-**Key modules**: `app/src/` (middleware, routes, services, websocket), 492 tests across 44 test files.
+**Key modules**: `app/src/` (middleware, routes, services, websocket), 2,431 tests across 128 test files.
 
 ### loa-freeside (0xHoneyJar/loa-freeside)
 **Purpose**: Billing settlement and token-gating infrastructure.

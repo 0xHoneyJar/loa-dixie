@@ -1,6 +1,6 @@
 # ADR-004: Governance Denial Response with evaluationGap Growth Trajectory
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-02-27
 **Author**: Claude (Architecture), Merlin (Direction)
 **Source**: Bridgebuilder Meditation Part II §2.2 (PR #50), Hounfour #32
@@ -65,7 +65,7 @@ Example response:
    rather than quantity-only strategies.
 3. **Observability**: SREs can track which gaps are most common (tier vs.
    reputation vs. concurrent task limits) to tune governance parameters.
-4. **Ecosystem pattern**: This bridges the Hounfour conviction tier system
+4. **Ecosystem pattern**: This bridges the hounfour conviction tier system
    with Dixie's governance enforcement — the ZPD exists at the boundary
    between protocol definition and runtime enforcement.
 
