@@ -18,68 +18,143 @@ import {
   computeBlendedScore,
   computeCrossModelScore,
 } from '@0xhoneyjar/loa-hounfour/governance';
+import {
+  computeDampenedScore as canonicalDampenedScore,
+  FEEDBACK_DAMPENING_ALPHA_MIN,
+  FEEDBACK_DAMPENING_ALPHA_MAX,
+  DAMPENING_RAMP_SAMPLES,
+} from '@0xhoneyjar/loa-hounfour/commons';
 import type { DixieReputationAggregate } from '../types/reputation-evolution.js';
 
+// Re-export canonical constants for backward compatibility.
+// Consumers that imported these from reputation-scoring-engine.ts continue working.
+export { FEEDBACK_DAMPENING_ALPHA_MIN, FEEDBACK_DAMPENING_ALPHA_MAX, DAMPENING_RAMP_SAMPLES };
+
 // ---------------------------------------------------------------------------
-// Feedback Dampening (Bridgebuilder F1 — autopoietic loop safety)
+// Feedback Dampening — Configurable Wrapper (ADR-005, P1 Migration)
 // ---------------------------------------------------------------------------
 
 /**
- * Minimum dampening alpha — applied to cold/new agents with few observations.
- * Low alpha = conservative: new observations have minimal impact on the score.
- * This prevents a single outlier observation from dominating early reputation.
- * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
- */
-export const FEEDBACK_DAMPENING_ALPHA_MIN = 0.1;
-
-/**
- * Maximum dampening alpha — applied to mature agents with many observations.
- * High alpha = responsive: the score tracks recent performance more closely.
- * Mature agents have enough history that individual observations matter more.
- * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
- */
-export const FEEDBACK_DAMPENING_ALPHA_MAX = 0.5;
-
-/**
- * Number of samples needed to ramp alpha from MIN to MAX.
- * At 50 samples, alpha reaches ALPHA_MAX and the agent is fully responsive.
- * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
- */
-export const DAMPENING_RAMP_SAMPLES = 50;
-
-/**
- * Compute a dampened reputation score using exponential moving average.
+ * Dixie-specific dampening configuration.
  *
- * Prevents runaway convergence or death spirals in the autopoietic feedback loop.
- * Alpha grows linearly with sample count:
- *   alpha = ALPHA_MIN + (ALPHA_MAX - ALPHA_MIN) * min(1, sampleCount / RAMP)
- *   dampened = alpha * newScore + (1 - alpha) * oldScore
+ * Extends hounfour's canonical `FeedbackDampeningConfig` with two Dixie-specific
+ * fields that control behavioral divergence points identified in the bridge
+ * deep review (PR #64):
  *
- * On cold start (oldScore === null), returns newScore directly — no dampening
- * applies because there's no running average to blend with.
+ * - `rampDirection`: Controls whether alpha increases (conservative-first) or
+ *   decreases (responsive-first) with sample count. See ADR-005.
+ * - `coldStartStrategy`: Controls first-observation behavior. See ADR-005.
+ *
+ * @since cycle-019 — Sprint 119, Task T4.3 (P1 canonical migration)
+ */
+export interface FeedbackDampeningConfig {
+  /** Alpha ramp direction. 'ascending' = Dixie's conservative-first (default).
+   *  'descending' = hounfour's responsive-first (ML best practice). */
+  readonly rampDirection: 'ascending' | 'descending';
+  /** Cold-start strategy for first observation (oldScore === null).
+   *  'direct' = return newScore (Dixie default). 'bayesian' = pseudo-count prior.
+   *  'dual-track' = Bayesian for governance, direct for display (see DualTrackScoreResult). */
+  readonly coldStartStrategy: 'direct' | 'bayesian' | 'dual-track';
+}
+
+/**
+ * Default config: preserves exact current Dixie behavior.
+ * ascending ramp (0.1→0.5) + direct cold-start (trust first observation).
+ * @since cycle-019 — Sprint 119, Task T4.3
+ */
+export const DIXIE_DAMPENING_DEFAULTS: Readonly<FeedbackDampeningConfig> = {
+  rampDirection: 'ascending',
+  coldStartStrategy: 'direct',
+} as const;
+
+/**
+ * Result of dual-track cold-start scoring.
+ * Provides both the governance score (Bayesian prior) and the display score
+ * (direct observed) with observation count for UI consumption.
+ * @since cycle-019 — Sprint 119, Task T4.4
+ */
+export interface DualTrackScoreResult {
+  /** Internal score for governance decisions (Bayesian prior, ≈0.541 for first obs). */
+  readonly internalScore: number;
+  /** Display score for human-facing UI (direct observed value). */
+  readonly displayScore: number;
+  /** Number of observations (for "N observations" badge in UI). */
+  readonly observationCount: number;
+}
+
+/**
+ * Compute a dampened reputation score using hounfour's canonical EMA with
+ * Dixie-specific ramp direction and cold-start strategy.
+ *
+ * With default config ({ascending, direct}), produces output identical to the
+ * pre-migration local implementation — verified by shadow comparison tests.
  *
  * @param oldScore - Current personal score (null for first observation)
- * @param newScore - New observation score from quality signal or model performance
+ * @param newScore - New observation score
  * @param sampleCount - Current sample count (before this observation)
+ * @param config - Dixie dampening config (defaults to DIXIE_DAMPENING_DEFAULTS)
  * @returns Dampened score in [0, 1]
- * @since cycle-007 — Sprint 78, Task S1-T1 (Bridgebuilder F1)
+ * @since cycle-019 — Sprint 119, Task T4.3 (replaces local computeDampenedScore)
  */
 export function computeDampenedScore(
   oldScore: number | null,
   newScore: number,
   sampleCount: number,
+  config: FeedbackDampeningConfig = DIXIE_DAMPENING_DEFAULTS,
 ): number {
-  // Cold start: no previous score to blend with
-  if (oldScore === null) return newScore;
+  // Cold start: apply configured strategy
+  if (oldScore === null) {
+    if (config.coldStartStrategy === 'direct') {
+      return newScore;
+    }
+    // 'bayesian' and 'dual-track' both use canonical Bayesian prior for governance score
+    return canonicalDampenedScore(null, newScore, sampleCount);
+  }
 
-  // Trust assumption: inputs are in [0, 1] — validated at event ingestion boundary.
-  // This function does not clamp to avoid masking upstream bugs.
+  // Steady state: apply configured ramp direction
+  if (config.rampDirection === 'descending') {
+    // Canonical behavior: alpha_max at n=0, alpha_min at n=ramp
+    return canonicalDampenedScore(oldScore, newScore, sampleCount);
+  }
 
+  // Ascending ramp (Dixie default): alpha_min at n=0, alpha_max at n=ramp
+  // This is Dixie's original formula — conservative-first.
   const rampFraction = Math.min(1, sampleCount / DAMPENING_RAMP_SAMPLES);
   const alpha = FEEDBACK_DAMPENING_ALPHA_MIN
     + (FEEDBACK_DAMPENING_ALPHA_MAX - FEEDBACK_DAMPENING_ALPHA_MIN) * rampFraction;
 
-  return alpha * newScore + (1 - alpha) * oldScore;
+  return oldScore + alpha * (newScore - oldScore);
+}
+
+/**
+ * Compute dual-track scores for cold-start scenarios.
+ *
+ * Returns both the Bayesian internal score (for governance decisions like
+ * admission and task routing) and the direct display score (for human-facing
+ * UI with observation count). After warm-up, both strategies converge.
+ *
+ * @param oldScore - Current personal score (null for first observation)
+ * @param newScore - New observation score
+ * @param sampleCount - Current sample count (before this observation)
+ * @returns Dual-track result with internal, display, and observation count
+ * @since cycle-019 — Sprint 119, Task T4.4
+ */
+export function computeDualTrackScore(
+  oldScore: number | null,
+  newScore: number,
+  sampleCount: number,
+): DualTrackScoreResult {
+  return {
+    internalScore: computeDampenedScore(oldScore, newScore, sampleCount, {
+      rampDirection: 'ascending',
+      coldStartStrategy: 'bayesian',
+    }),
+    displayScore: computeDampenedScore(oldScore, newScore, sampleCount, {
+      rampDirection: 'ascending',
+      coldStartStrategy: 'direct',
+    }),
+    observationCount: sampleCount + 1,
+  };
 }
 
 // ---------------------------------------------------------------------------

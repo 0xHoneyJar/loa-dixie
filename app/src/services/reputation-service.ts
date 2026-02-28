@@ -54,6 +54,7 @@ import { startSanitizedSpan, addSanitizedAttributes } from '../utils/span-saniti
  */
 export {
   computeDampenedScore,
+  computeDualTrackScore,
   computeDimensionalBlended,
   computeTaskAwareCrossModelScore,
   CollectionScoreAggregator,
@@ -63,9 +64,10 @@ export {
   DEFAULT_PSEUDO_COUNT,
   DEFAULT_COLLECTION_SCORE,
   TASK_MATCH_WEIGHT_MULTIPLIER,
+  DIXIE_DAMPENING_DEFAULTS,
 } from './reputation-scoring-engine.js';
 /** @deprecated Import directly from `reputation-scoring-engine.ts`. Removal: cycle-016. */
-export type { ReliabilityResult, BlendedScoreInput } from './reputation-scoring-engine.js';
+export type { ReliabilityResult, BlendedScoreInput, FeedbackDampeningConfig, DualTrackScoreResult } from './reputation-scoring-engine.js';
 
 /**
  * @deprecated Import directly from `reputation-event-store.ts` instead.

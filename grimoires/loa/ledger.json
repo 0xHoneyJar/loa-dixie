@@ -1059,7 +1059,7 @@
           "local_label": "sprint-4",
           "label": "Alpha Ramp ADR & Dampened Score Canonical Migration (P1)",
           "tasks": 7,
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "sprint-5",
