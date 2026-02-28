@@ -1083,7 +1083,7 @@
           "local_label": "sprint-7",
           "label": "Advisory Lock Canonical Swap & Cross-Repo Coordination (P4)",
           "tasks": 5,
-          "status": "pending"
+          "status": "completed"
         }
       ]
     }

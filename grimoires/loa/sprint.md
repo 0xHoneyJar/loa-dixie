@@ -555,7 +555,7 @@ lock acquisition succeeds.
 
 ### Tasks
 
-#### T7.1: Replace `computeLockId` with Canonical `computeAdvisoryLockKey`
+#### T7.1: Replace `computeLockId` with Canonical `computeAdvisoryLockKey` ✅
 - **Description**: In `app/src/db/migrate.ts`, replace the local `computeLockId`
   function (SHA-256→31-bit unsigned) with hounfour's canonical
   `computeAdvisoryLockKey` (FNV-1a 32-bit signed). Import from
@@ -566,7 +566,7 @@ lock acquisition succeeds.
   usage). Migration still acquires advisory lock successfully.
 - **Effort**: S
 
-#### T7.2: Advisory Lock Migration Tests
+#### T7.2: Advisory Lock Migration Tests ✅
 - **Description**: Add/update tests for migration advisory lock behavior.
   Verify that `computeAdvisoryLockKey('dixie')` returns a valid 32-bit signed
   integer. Verify that `pg_advisory_lock()` accepts the canonical key.
@@ -576,7 +576,7 @@ lock acquisition succeeds.
   Comment in code documents the lock ID change.
 - **Effort**: S
 
-#### T7.3: File Hounfour Upstream Issue — Configurable Ramp Direction
+#### T7.3: File Hounfour Upstream Issue — Configurable Ramp Direction ✅
 - **Description**: Create issue on `0xHoneyJar/loa-hounfour` proposing
   `rampDirection: 'ascending' | 'descending'` config field for
   `computeDampenedScore`. Include ecosystem context: Dixie uses ascending
@@ -586,7 +586,7 @@ lock acquisition succeeds.
   API design sketch, ecosystem justification, and backward compatibility note.
 - **Effort**: S
 
-#### T7.4: Update Cross-Repo Coordination Checklist
+#### T7.4: Update Cross-Repo Coordination Checklist ✅
 - **Description**: Update PR #64 (or new PR) with the completed migration
   status. Check off completed items in the cross-repo coordination checklist.
   Update dixie #63 with migration completion status. Cross-reference all
@@ -595,7 +595,7 @@ lock acquisition succeeds.
   includes per-sprint migration summary. Checklist reflects actual state.
 - **Effort**: S
 
-#### T7.5: Run Full Test Suite
+#### T7.5: Run Full Test Suite ✅
 - **Description**: Run `npm test` from `app/` directory. All 2374+ tests must pass.
 - **Acceptance**: All tests green. Complete migration verified.
 - **Effort**: S
@@ -612,7 +612,7 @@ lock acquisition succeeds.
 | 4 | Alpha Ramp ADR & Dampened Score Migration (P1) | 7 | ~4h code + ADR | PENDING |
 | 5 | GovernedResourceBase Canonical Migration (P2) | 7 | ~6h code + tests | PENDING |
 | 6 | Chain-Bound Hash Version-Aware Verification (P3) | 6 | ~6h code + ADR | PENDING |
-| 7 | Advisory Lock Swap & Cross-Repo Coordination (P4) | 5 | ~2h code + issues | PENDING |
+| 7 | Advisory Lock Swap & Cross-Repo Coordination (P4) | 5 | ~2h code + issues | ✅ COMPLETED |
 
 **Risk Register**:
 
