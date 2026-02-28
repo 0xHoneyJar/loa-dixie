@@ -34,6 +34,14 @@ vi.mock('@0xhoneyjar/loa-hounfour/commons', () => ({
       return `sha256:content_${entry.entry_id}_${tag}`;
     },
   ),
+  validateAuditTimestamp: vi.fn((input: string) => {
+    // Pass-through validation: accept valid ISO 8601 timestamps used in tests
+    const iso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(input);
+    if (!iso) return { valid: false, normalized: '', error: 'Timestamp must be strict ISO 8601 format' };
+    const d = new Date(input);
+    if (Number.isNaN(d.getTime())) return { valid: false, normalized: '', error: 'Timestamp is not a valid date' };
+    return { valid: true, normalized: d.toISOString() };
+  }),
   AUDIT_TRAIL_GENESIS_HASH:
     'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 }));
@@ -157,6 +165,16 @@ describe('AuditTrailStore', () => {
       });
 
       expect(entry.previous_hash).toBe('sha256:previous_entry_hash');
+    });
+
+    it('rejects entries with invalid timestamps (hounfour v8.3.0 validation)', async () => {
+      await expect(
+        store.append('reputation', {
+          entry_id: 'entry-bad-ts',
+          timestamp: 'not-a-timestamp',
+          event_type: 'governance.reputation.create',
+        }),
+      ).rejects.toThrow('Invalid audit timestamp');
     });
 
     it('handles entries without optional fields', async () => {

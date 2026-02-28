@@ -15,6 +15,7 @@
 import {
   computeAuditEntryHash,
   AUDIT_TRAIL_GENESIS_HASH,
+  validateAuditTimestamp,
 } from '@0xhoneyjar/loa-hounfour/commons';
 import type { DbPool } from '../db/client.js';
 import { withTransaction } from '../db/transaction.js';
@@ -103,6 +104,12 @@ export class AuditTrailStore {
     entry: AuditEntryInput,
   ): Promise<AuditEntry> {
     return withTransaction(this.pool, async (client) => {
+      // Validate timestamp format and boundaries (hounfour v8.3.0)
+      const tsResult = validateAuditTimestamp(entry.timestamp);
+      if (!tsResult.valid) {
+        throw new Error(`Invalid audit timestamp: ${tsResult.error}`);
+      }
+
       // Lock-aware tip read: SELECT ... FOR UPDATE serializes concurrent appends
       const tipResult = await client.query<{ entry_hash: string }>(
         `SELECT entry_hash FROM audit_entries
