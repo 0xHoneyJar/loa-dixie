@@ -1,34 +1,81 @@
 {
   "schema_version": 1,
-  "bridge_id": "bridge-20260228-c019-canonical-migration",
-  "state": "JACK_IN",
+  "bridge_id": "bridge-20260228-c020-doc-excellence",
+  "state": "JACKED_OUT",
   "config": {
     "depth": 5,
     "mode": "full",
     "flatline_threshold": 0.05,
     "consecutive_flatline": 2,
     "per_sprint": false,
-    "branch": "feature/hounfour-v830-canonical-migration",
+    "branch": "feature/dixie-mvp",
     "repo": "0xHoneyJar/loa-dixie",
-    "pr": null,
-    "starting_sprint": 4
+    "pr": 72,
+    "starting_sprint": 107
   },
   "timestamps": {
-    "started": "2026-02-28T06:00:00Z",
-    "last_activity": "2026-02-28T06:00:00Z"
+    "started": "2026-02-28T11:00:00Z",
+    "last_activity": "2026-02-28T22:45:00Z",
+    "completed": "2026-02-28T22:45:00Z"
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "sprint_id": "sprint-107",
+      "findings": { "high": 3, "medium": 3, "low": 1, "praise": 4 },
+      "files_changed": 3,
+      "commit": "6ba9cea",
+      "score": 0.70,
+      "timestamp": "2026-02-28T11:30:00Z"
+    },
+    {
+      "iteration": 2,
+      "sprint_id": "sprint-107",
+      "findings": { "high": 1, "medium": 1, "low": 0, "praise": 1 },
+      "files_changed": 3,
+      "commit": "9bcaa1f",
+      "score": 0.20,
+      "timestamp": "2026-02-28T12:00:00Z"
+    },
+    {
+      "iteration": 3,
+      "sprint_id": "sprint-107",
+      "findings": { "high": 0, "medium": 1, "low": 1, "praise": 1 },
+      "files_changed": 3,
+      "commit": "d8169ea",
+      "score": 0.10,
+      "timestamp": "2026-02-28T22:00:00Z"
+    },
+    {
+      "iteration": 4,
+      "sprint_id": "sprint-107",
+      "findings": { "high": 0, "medium": 0, "low": 0, "praise": 1 },
+      "files_changed": 0,
+      "commit": "d8169ea",
+      "score": 0.00,
+      "timestamp": "2026-02-28T22:15:00Z"
+    },
+    {
+      "iteration": 5,
+      "sprint_id": "sprint-107",
+      "findings": { "high": 0, "medium": 0, "low": 0, "praise": 0 },
+      "files_changed": 0,
+      "commit": "d8169ea",
+      "score": 0.00,
+      "timestamp": "2026-02-28T22:30:00Z"
+    }
+  ],
   "flatline": {
-    "initial_score": null,
-    "last_score": null,
-    "consecutive_below_threshold": 0,
-    "ratio": null,
-    "detected": false
+    "initial_score": 0.70,
+    "last_score": 0.00,
+    "consecutive_below_threshold": 2,
+    "ratio": 0.00,
+    "detected": true
   },
   "metrics": {
-    "total_sprints_executed": 0,
-    "total_files_changed": 0,
-    "total_findings_addressed": 0,
+    "total_sprints_executed": 5,
+    "total_files_changed": 9,
+    "total_findings_addressed": 9,
     "total_visions_captured": 0
   }
 }

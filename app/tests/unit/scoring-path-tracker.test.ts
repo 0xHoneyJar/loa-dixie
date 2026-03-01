@@ -271,8 +271,8 @@ describe('ScoringPathTracker — AuditTrail composition', () => {
     expect(entry.payload).toBeDefined();
     expect(entry.entry_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(entry.previous_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(entry.hash_domain_tag).toContain('ScoringPathLog');
-    expect(entry.hash_domain_tag).toContain('8.2.0');
+    expect(entry.hash_domain_tag).toContain('scoringpathlog');
+    expect(entry.hash_domain_tag).toContain('8-2-0');
   });
 
   it('audit trail entries chain correctly', () => {
@@ -320,12 +320,13 @@ describe('ScoringPathTracker — AuditTrail composition', () => {
     expect(tracker.auditTrail.entries).toHaveLength(5);
   });
 
-  it('domain tag format matches ScoringPathLog:8.2.0', () => {
+  it('domain tag format matches sanitized scoringpathlog:8-2-0 (v8.3.1)', () => {
     tracker.record({ path: 'tier_default' });
 
     const entry = tracker.auditTrail.entries[0];
     // Domain tag built by buildDomainTag('ScoringPathLog', '8.2.0')
-    expect(entry.hash_domain_tag).toContain('ScoringPathLog');
-    expect(entry.hash_domain_tag).toContain('8.2.0');
+    // v8.3.1 sanitizes: lowercase + dots→hyphens
+    expect(entry.hash_domain_tag).toContain('scoringpathlog');
+    expect(entry.hash_domain_tag).toContain('8-2-0');
   });
 });

@@ -1,358 +1,235 @@
-# PRD: Deploy Dixie to Armitage Ring (arrakis-staging-cluster)
+# PRD: Hounfour v8.3.1 Bump — Domain Tag Sanitization Fix & Docker Redeploy
 
-**Version**: 18.0.0
+**Version**: 21.0.0
 **Date**: 2026-02-28
 **Author**: Merlin (Direction), Claude (Synthesis)
-**Cycle**: cycle-018
-**Status**: Approved
-**Issue**: https://github.com/0xHoneyJar/loa-dixie/issues/59
-**Predecessor**: cycle-017 PRD v17.0.0 (Hounfour v9 Extraction — delivered as PR comment)
+**Cycle**: cycle-021
+**Source Issue**: [#71](https://github.com/0xHoneyJar/loa-dixie/issues/71)
 
-> Sources: loa-dixie#59 (issue), loa-finn terraform reference (`infrastructure/terraform/`),
-> AWS CLI discovery (account 891376933289), existing `deploy/terraform/dixie.tf` (583 lines),
-> STAGING.md operational docs, Finn armitage.tfvars, Bridgebuilder reviews from cycles 014-016
-> (staging infrastructure + Docker build fixes)
+> *"Patch the protocol, verify the chain, redeploy the ring."*
 
 ---
 
 ## 1. Problem Statement
 
-Dixie has a working Docker image (PR #58 merged, bridge-reviewed) and a healthy local staging
-stack (postgres, redis, nats, dixie-bff all verified). But Dixie is NOT deployed to the shared
-cloud staging environment. Finn is deployed and healthy at `finn-armitage.arrakis.community`.
-The **autopoietic feedback loop cannot close** until Finn and Dixie are wired together on the
-same network — Finn needs Dixie's reputation API to route scoring decisions, and Dixie needs
-Finn's inference engine for chat completions.
+Hounfour v8.3.1 has been released ([PR #42](https://github.com/0xHoneyJar/loa-hounfour/pull/42)) with a fix for the `buildDomainTag()` → `validateDomainTag()` impedance mismatch ([Issue #41](https://github.com/0xHoneyJar/loa-hounfour/issues/41)). Dixie is currently pinned to v8.3.0.
 
-### What Exists Today
+The fix introduces a deterministic sanitization pipeline in `buildDomainTag()`:
+- Input grammar validation (`SCHEMA_ID_RE`, `CONTRACT_VERSION_RE`)
+- Sanitization: `toLowerCase()` → strip colons → dots/plus to hyphens → strip non-`[a-z0-9_-]`
+- Length bounds: `MAX_SEGMENT_LENGTH = 256`
+- Error truncation: 50-char echo limit on rejected input
+- Backward compatible: `verifyAuditTrailIntegrity()` reads stored `hash_domain_tag`, never re-derives
 
-| Component | Status |
-|-----------|--------|
-| Docker image | Working (multi-stage, `npm ci`, health check, PR #58) |
-| Local staging | Healthy (docker compose, 4 services, postgres+redis+nats+dixie-bff) |
-| Terraform (`dixie.tf`) | 583 lines, **hardcoded to production** (`dixie.thj.dev`, freeside EFS) |
-| ECS cluster | `arrakis-staging-cluster` ACTIVE (9 services, 7 tasks) |
-| Finn on Armitage | Deployed, healthy at `finn-armitage.arrakis.community` |
-| RDS | `arrakis-staging-postgres` AVAILABLE |
-| NATS | `arrakis-staging-nats` running in cluster |
-| Tempo | `arrakis-staging-tempo` running in cluster |
-| Dixie ECR repo | **DOES NOT EXIST** |
-| Dixie SSM params | **DO NOT EXIST** |
-| Dixie ALB rule | **DOES NOT EXIST** |
+Dixie independently worked around the impedance mismatch in cycle-003 by using `v10` (no dots) in its local `buildDomainTag()` in `audit-trail-store.ts`. The canonical `buildDomainTag` in `scoring-path-tracker.ts` passes `'8.2.0'` which will now produce hyphens instead of dots — this is the fix working as intended.
 
-### Three-Ring Deployment Model
-
-| Ring | Name | Purpose | Gate to Next |
-|------|------|---------|-------------|
-| 1 | **Armitage** | Dev staging, integration testing | Manual promote |
-| 2 | **Chiba** | Pre-production, load testing | Automated canary |
-| 3 | **Production** | Live traffic | — |
-
-**This PRD covers Ring 1 (Armitage) only.**
+> Sources: Issue #71, loa-hounfour PR #42, `app/package.json:23`, `app/src/services/audit-trail-store.ts:55-57`, `app/src/services/scoring-path-tracker.ts:102`
 
 ---
 
-## 2. Goals & Success Criteria
+## 2. Vision & Mission
 
-| Criterion | Metric |
-|-----------|--------|
-| `dixie-armitage.arrakis.community` returns 200 | Health endpoint responds |
-| Finn can reach Dixie | Finn's health shows `dixie: healthy` |
-| Dixie can reach Finn | Dixie's health shows `loa_finn: healthy, circuit_state: closed` |
-| Dixie can reach PostgreSQL | Health shows `postgresql: healthy` |
-| Dixie can reach Redis | Health shows `redis: healthy` |
-| Dixie can reach NATS | Health shows `nats: healthy` |
-| Terraform is environment-aware | `armitage.tfvars` + workspace isolation |
-| Zero hardcoded production values | All values from vars/SSM |
-| OTEL traces flow to Tempo | Spans visible in staging Tempo |
+### Vision
+Keep Dixie's protocol layer current with upstream hounfour, preserving audit trail integrity across the version boundary while removing the need for local workarounds.
+
+### Mission
+- Bump the dependency pin from v8.3.0 to v8.3.1
+- Evaluate and optionally clean up local `buildDomainTag` workaround
+- Verify all audit chain integrity (12 migrations, version-aware hash dispatch)
+- Rebuild and verify Docker images
+- Redeploy to Armitage Ring staging
 
 ---
 
-## 3. Shared Infrastructure Discovery
+## 3. Goals & Success Metrics
 
-### Available on arrakis-staging-cluster (from AWS CLI)
-
-| Resource | Value | Notes |
-|----------|-------|-------|
-| ECS Cluster | `arrakis-staging-cluster` | ACTIVE, 9 services |
-| VPC | `vpc-0d08ce69dba7485da` | 10.1.0.0/16 |
-| Private Subnets | `subnet-0a08a8fce7004ee11`, `subnet-07973b30fe8f675e7` | From Finn's tfvars |
-| ALB | `arrakis-staging-alb` | HTTPS listener active |
-| ALB Listener ARN | `arn:aws:elasticloadbalancing:us-east-1:891376933289:listener/app/arrakis-staging-alb/0d434b50265789c1/e6ff22557f66633c` | |
-| ALB SG | `sg-007cdd539bcc3360c` | |
-| ALB DNS | `arrakis-staging-alb-616899391.us-east-1.elb.amazonaws.com` | |
-| ALB Zone ID | `Z35SXDOTRQ7X7K` | |
-| Route53 Zone | `Z01194812Z6NUWBWMFB7T` | `arrakis.community` |
-| RDS | `arrakis-staging-postgres.cho404os6nnb.us-east-1.rds.amazonaws.com` | PostgreSQL, AVAILABLE |
-| NATS | `arrakis-staging-nats` service | Running in cluster |
-| Tempo | `arrakis-staging-tempo` service | OTLP on 4317 |
-| PgBouncer | `arrakis-staging-pgbouncer` | Desired=1, running=0 (unhealthy) |
-| Finn | `loa-finn-armitage` | Running, priority 210 |
-| Account | `891376933289` | arrakis-deployer |
-
-### Finn's ALB Routing (current state)
-
-| Priority | Host | Target |
-|----------|------|--------|
-| 210 | `finn-armitage.arrakis.community` | `loa-finn-armitage` TG |
-| default | * | `arrakis-staging-api-tg` |
-
-Dixie will add **priority 220**: `dixie-armitage.arrakis.community` → dixie TG.
+| Goal | Metric | Target |
+|------|--------|--------|
+| G1: Dependency current | hounfour version in package.json | v8.3.1 |
+| G2: Type safety | `npm run typecheck` | 0 errors |
+| G3: Test suite green | `npm run test` | All pass |
+| G4: Audit chain integrity | Version-aware hash verification across v9/v10 boundary | All chains verify |
+| G5: Docker build | `docker build` succeeds | Clean build |
+| G6: Staging health | `/api/health` returns healthy after redeploy | 200 OK |
 
 ---
 
 ## 4. Functional Requirements
 
-### F1: Terraform Refactoring
+### FR-1: Dependency Bump (P0)
 
-Refactor `deploy/terraform/dixie.tf` from monolithic production config to environment-aware
-multi-environment setup following Finn's patterns:
-
-**F1.1: Backend Configuration**
-- S3 backend: `honeyjar-terraform-state` bucket
-- Key: `loa-dixie/terraform.tfstate`
-- DynamoDB lock: `terraform-locks`
-- Workspace isolation: `env:/{workspace}/loa-dixie/terraform.tfstate`
-
-**F1.2: Environment-Aware Locals**
-```hcl
-locals {
-  is_production = var.environment == "production"
-  service_name  = local.is_production ? "dixie-bff" : "dixie-${var.environment}"
-  hostname      = local.is_production ? "dixie.thj.dev" : "dixie-${var.environment}.arrakis.community"
-  ssm_prefix    = "/dixie/${var.environment}"
-  log_group     = "/ecs/${local.service_name}"
-}
+Update `app/package.json` line 23:
+```
+FROM: "@0xhoneyjar/loa-hounfour": "github:0xHoneyJar/loa-hounfour#v8.3.0"
+TO:   "@0xhoneyjar/loa-hounfour": "github:0xHoneyJar/loa-hounfour#v8.3.1"
 ```
 
-**F1.3: Split Into Files** (following Finn pattern)
-- `variables.tf` — all variable definitions + backend
-- `dixie-ecs.tf` — task definition, service, IAM roles
-- `dixie-alb.tf` — target group, listener rule, Route53
-- `dixie-env.tf` — SSM Parameter Store definitions
-- `dixie-monitoring.tf` — CloudWatch alarms, SNS
-- `environments/armitage.tfvars` — staging overrides
+Run `npm install` to regenerate lockfile. The `postinstall` script (`rebuild-hounfour-dist.sh`) handles the dist rebuild.
 
-### F2: ECR Repository
+**Acceptance**: `package.json` and `package-lock.json` both reference v8.3.1. `npm ci` succeeds.
 
-Create `dixie-armitage` ECR repository:
-- Image scanning: enabled on push
-- Tag immutability: enabled (like Finn)
-- Lifecycle policy: keep last 10 images
+### FR-2: Evaluate Local buildDomainTag Workaround (P1)
 
-### F3: ECS Service Configuration
+`audit-trail-store.ts:55-57` has a local `buildDomainTag()` that uses `v10` instead of semver to avoid the impedance mismatch. With v8.3.1, the canonical version now handles dots natively.
 
-**Task Definition:**
-- Family: `dixie-armitage` (environment-aware)
-- CPU: 256, Memory: 512 (staging sizing)
-- Port: 3001 (Dixie's port, not 3000 like Finn)
-- Health check: `/api/health`
-- Network mode: awsvpc
+**Decision**: Keep the local workaround (Option A from issue #71). Rationale:
+- Dixie's local tags use `loa-dixie:audit:` prefix, intentionally different from hounfour's `loa-commons:audit:`
+- `v10` is already working and stored in 12 migrations worth of audit entries
+- Migrating would change domain tags mid-chain, adding complexity for no functional benefit
+- `verifyAuditTrailIntegrity()` already handles mixed-format chains via stored tags
 
-**Environment Variables (from env + SSM):**
+**Acceptance**: Local `buildDomainTag` unchanged. Add a comment noting v8.3.1 makes this workaround optional.
 
-| Variable | Source | Value |
-|----------|--------|-------|
-| `NODE_ENV` | env | `production` |
-| `DIXIE_PORT` | env | `3001` |
-| `DIXIE_ENVIRONMENT` | env | `armitage` |
-| `FINN_URL` | SSM | `http://<finn-service-discovery>:3000` |
-| `FINN_WS_URL` | SSM | `ws://<finn-service-discovery>:3000` |
-| `DATABASE_URL` | SSM (SecureString) | `postgresql://dixie:<pw>@arrakis-staging-postgres...:5432/dixie` |
-| `REDIS_URL` | SSM (SecureString) | `redis://<elasticache-endpoint>:6379` |
-| `NATS_URL` | SSM | `nats://<nats-service-discovery>:4222` |
-| `DIXIE_JWT_PRIVATE_KEY` | SSM (SecureString) | (generated) |
-| `DIXIE_ADMIN_KEY` | SSM (SecureString) | (generated) |
-| `DIXIE_CORS_ORIGINS` | SSM | `https://dixie-armitage.arrakis.community` |
-| `DIXIE_ALLOWLIST_PATH` | env | `/app/allowlist.json` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | env | `http://tempo.arrakis.local:4317` |
+### FR-3: Verify Scoring Path Compatibility (P0)
 
-**Service Configuration:**
-- Desired count: 1
-- Deployment: stop-before-start (100% max, 0% min) — like Finn
-- Circuit breaker: enabled with rollback
-- Private subnets only, no public IP
+`scoring-path-tracker.ts:102` calls canonical `buildDomainTag('ScoringPathLog', '8.2.0')`. After v8.3.1, output changes:
+- Before: potentially unsanitized or failing
+- After: `loa-commons:audit:scoringpathlog:8-2-0` (dots → hyphens)
 
-### F4: ALB Integration
+This is an epoch boundary — new entries use the v8.3.1 format, existing entries retain their stored domain tags.
 
-- Target group: `dixie-armitage`, port 3001, HTTP, IP target type
-- Health check: `/api/health`, 30s interval, 2 healthy / 3 unhealthy
-- Listener rule: priority 220, host `dixie-armitage.arrakis.community`
-- Route53: A record alias to ALB
+**Acceptance**: Scoring path tests pass. Version-aware hash dispatch handles mixed chains correctly.
 
-### F5: Security Groups
+### FR-4: Full Test Suite Verification (P0)
 
-```
-ALB (sg-007cdd539bcc3360c)
-  └─→ Dixie SG: port 3001 (HTTP)
+Run the complete test suite to catch any behavioral changes:
+1. `npm run typecheck` — type compatibility
+2. `npm run test` — unit tests (audit trail, scoring path, reputation, governance)
+3. `npm run build` — TypeScript compilation
 
-Dixie SG egress:
-  ├─→ Finn: port 3000 (10.0.0.0/8) — inference requests
-  ├─→ PostgreSQL: port 5432 (RDS endpoint)
-  ├─→ Redis: port 6379 (ElastiCache)
-  ├─→ NATS: port 4222 (staging NATS)
-  ├─→ Tempo: port 4317 (OTLP)
-  └─→ HTTPS: port 443 (0.0.0.0/0) — external APIs
+**Acceptance**: All three commands succeed with 0 errors.
 
-Finn SG ingress addition:
-  └─→ From Dixie SG: port 3000 (service-to-service, not via ALB)
-```
+### FR-4.1: Hounfour Integration Test (P0) — *Flatline Finding*
 
-### F6: Database Setup
+Create `app/tests/integration/hounfour-v831-compat.test.ts` that exercises the REAL hounfour module (not mocks):
+1. Import real `buildDomainTag` and `computeChainBoundHash` from `@0xhoneyjar/loa-hounfour/commons`
+2. Verify `buildDomainTag('ScoringPathLog', '8.2.0')` produces expected sanitized format
+3. Verify `computeChainBoundHash` produces valid SHA-256 output
+4. Verify version-aware dispatch chooses correct algorithm for legacy (9.0.0) and canonical (v10) domain tags
+5. Verify `@noble/hashes` transitive dependency version matches v8.3.0 (no silent drift)
 
-- Create database `dixie` on `arrakis-staging-postgres` RDS instance
-- Create user `dixie` with password in SSM
-- Migrations run automatically on ECS task startup (advisory lock pattern)
-- PgBouncer connection optional (direct RDS endpoint for now since PgBouncer is unhealthy)
+**Acceptance**: Integration test passes with real hounfour v8.3.1 (no mocks).
 
-### F7: Redis (ElastiCache)
+### FR-4.2: Preflight Tag Verification (P0) — *Flatline Finding*
 
-Option A: **Dedicated ElastiCache** (like Finn) — `cache.t4g.micro`, single node, Redis 7.1
-Option B: **Shared Redis** if one exists in the cluster
-
-Recommendation: **Dedicated** (Finn pattern) — isolation, independent lifecycle, `noeviction` policy.
-
-### F8: Finn↔Dixie Connectivity
-
-After Dixie deploys:
-1. Update Finn's SSM: `/loa-finn/armitage/DIXIE_BASE_URL` → `http://<dixie-service>:3001`
-2. Force Finn ECS service redeployment
-3. Verify bidirectional health
-
-Service discovery options:
-- **Option A**: ECS Service Connect (AWS Cloud Map) — automatic DNS
-- **Option B**: Internal ALB routing — `dixie-armitage.arrakis.community` via ALB
-- **Option C**: Direct IP/task discovery — fragile, not recommended
-
-Recommendation: **Option B** (ALB routing) — simplest, already proven with Finn, works for both
-internal and external traffic. Dixie's ALB hostname resolves inside the VPC too.
-
-### F9: Docker Image Build & Push
-
+Before running `npm install`, verify the v8.3.1 tag exists:
 ```bash
-# 1. Build from repo root
-docker build -f deploy/Dockerfile -t dixie-armitage .
-
-# 2. Tag with git SHA
-docker tag dixie-armitage:latest 891376933289.dkr.ecr.us-east-1.amazonaws.com/dixie-armitage:$(git rev-parse --short HEAD)
-
-# 3. Auth + Push
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 891376933289.dkr.ecr.us-east-1.amazonaws.com
-docker push 891376933289.dkr.ecr.us-east-1.amazonaws.com/dixie-armitage:$(git rev-parse --short HEAD)
+git ls-remote https://github.com/0xHoneyJar/loa-hounfour.git refs/tags/v8.3.1
 ```
 
-### F10: Monitoring & Alarms
+**Acceptance**: Tag is reachable. If not, halt the bump.
 
-Following Finn's pattern:
-1. **Health check failure** — HealthyHostCount < 1 for 3 evaluations
-2. **Finn latency** — p95 response time > 5s for 5 minutes
-3. **Circuit breaker open** — log metric filter on `circuit_state = "open"`
-4. **Allowlist denied spike** — > 50 denied in 5 minutes
-5. **CPU/Memory high** — > 80% for 15 minutes
+### FR-5: Docker Build Verification (P1)
 
----
+Rebuild Docker image to verify the dependency resolves correctly in containerized environment:
+```bash
+docker build -f deploy/Dockerfile .
+```
 
-## 5. Technical Constraints
+**Acceptance**: Docker build completes successfully. Image runs and responds to health check.
 
-| Constraint | Rationale |
-|-----------|-----------|
-| Single writer (desired_count=1) | PostgreSQL migrations use advisory locks |
-| Stop-before-start deployment | Prevents dual-writer WAL corruption |
-| Port 3001 (not 3000) | Dixie convention, distinct from Finn |
-| SSM Parameter Store (not Secrets Manager) | Align with Finn; SSM has native ECS integration |
-| Immutable ECR tags | Prevents tag mutation; use git SHA |
-| Private subnets only | Public access via ALB, tasks never directly exposed |
-| Region-conditioned IAM | All policies condition on `us-east-1` |
+### FR-6: Staging Redeploy (P1)
 
----
+After successful verification, redeploy to Armitage Ring:
+- Build new Docker image
+- Push to ECR (`arrakis-staging-loa-dixie`)
+- Update ECS task definition
+- Force new deployment
+- Verify health endpoint
 
-## 6. Implementation Sequence
-
-| Step | Description | Prereq | AWS Resources Created |
-|------|-------------|--------|----------------------|
-| 1 | Create ECR repository | None | ECR repo |
-| 2 | Build & push Docker image | ECR repo | ECR image |
-| 3 | Create database on RDS | None | PG database + user |
-| 4 | Refactor terraform (split files, env-aware) | None | No AWS resources |
-| 5 | Create `armitage.tfvars` | Terraform refactor | No AWS resources |
-| 6 | Seed SSM parameters | None | SSM params |
-| 7 | `terraform apply` | Steps 1-6 | ECS service, TG, listener rule, SG, IAM, Route53, Redis, CW |
-| 8 | Verify Dixie health | Terraform apply | None |
-| 9 | Wire Finn↔Dixie | Dixie healthy | SSM update + Finn redeploy |
-| 10 | Verify bidirectional connectivity | Wire complete | None |
+**Acceptance**: `/api/health` returns 200 with healthy status on Armitage Ring.
 
 ---
 
-## 7. Scope
+### FR-6.1: Completion Gates — *Flatline Finding*
 
-### In Scope (this cycle)
-- Terraform refactoring for multi-environment support
-- ECR repository creation
-- Docker image build and push
-- ECS service deployment on Armitage ring
-- ALB routing + Route53 DNS
-- SSM parameter seeding
-- Security group configuration
-- Dedicated ElastiCache Redis
-- Database creation on shared RDS
-- NATS connectivity
-- Finn↔Dixie wiring
-- Basic CloudWatch monitoring
+Separate merge-readiness from deploy-readiness:
+
+| Gate | Criteria | Blocks |
+|------|----------|--------|
+| GATE-LOCAL | Dep bump + typecheck + tests + Docker build pass locally | Merge to main |
+| GATE-STAGING | Health endpoint returns 200 with protocol version on Armitage Ring | Production deploy |
+
+FR-6 (staging redeploy) is GATE-STAGING — required before production but NOT blocking merge.
+
+---
+
+## 5. Technical & Non-Functional Requirements
+
+### NFR-1: Backward Compatibility
+Existing audit trail entries MUST continue to verify correctly. The version-aware hash dispatch (`computeChainBoundHashVersionAware`) handles this by checking `isLegacyDomainTag()` on each entry.
+
+### NFR-2: No Data Migration
+No database migration required. `verifyAuditTrailIntegrity()` reads stored `hash_domain_tag`, never re-derives.
+
+### NFR-3: Epoch Boundary
+New audit entries created after the bump will use v8.3.1 semantics. This is handled by the existing version-aware architecture (ADR-006).
+
+---
+
+## 6. Scope & Prioritization
+
+### In Scope (This Cycle)
+- Hounfour dependency bump v8.3.0 → v8.3.1
+- Test suite verification
+- Docker rebuild
+- Staging redeploy (if infrastructure access available)
+- Comment updates for the local workaround
 
 ### Out of Scope
-- Ring 2 (Chiba) deployment
-- Production deployment
-- CI/CD pipeline automation (GitHub Actions → ECR → ECS)
-- Blue-green or canary deployment strategy
-- Auto-scaling beyond basic CPU tracking
-- Custom domain (production `dixie.thj.dev`)
-- Disaster recovery / backup strategy
-- Cost monitoring / budget alerts
+- Issue #68 (Terraform migration to Freeside) — blocked on Freeside import runbook
+- Issue #70 (OpenClaw/OpenRouter analysis) — feature work, separate cycle
+- Issue #48 (OpenCode Go) — feature work, separate cycle
+- Any application code changes beyond the dependency bump and comments
+
+### Priority Order
+1. **P0**: FR-1 (Bump), FR-3 (Scoring path), FR-4 (Tests)
+2. **P1**: FR-2 (Workaround eval), FR-5 (Docker), FR-6 (Redeploy)
 
 ---
 
-## 8. Risks & Mitigations
+## 7. Risks & Dependencies
 
-| Risk | Impact | Probability | Mitigation |
-|------|--------|------------|------------|
-| PgBouncer unhealthy (running=0) | LOW | CONFIRMED | Use direct RDS endpoint; investigate PgBouncer separately |
-| Finn SG doesn't allow Dixie ingress | HIGH | MEDIUM | Add SG rule; may need Finn terraform change |
-| SSM parameter naming conflicts | MEDIUM | LOW | Follow `/dixie/armitage/*` convention |
-| NATS service discovery DNS unknown | MEDIUM | MEDIUM | Discover via ECS service describe or Cloud Map |
-| Docker image larger than Finn's (different deps) | LOW | LOW | Multi-stage build already optimized |
-| Migration lock timeout on first deploy | MEDIUM | LOW | Advisory lock has timeout; task will retry |
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| R1: Scoring path test failures from domain tag format change | Medium | Medium | Version-aware hash dispatch handles epoch boundary; update test expectations if needed |
+| R2: Transitive dependency conflict (@noble/hashes) | Low | High | v8.3.1 is a patch release; @noble/hashes should be unchanged |
+| R3: ECR/ECS access not available | Medium | Low | Docker build can be verified locally; deploy deferred |
+| R4: loa-finn v3.2.0 incompatibility | Low | Medium | Finn uses its own hounfour pin; cross-service protocol is via HTTP, not shared memory |
 
----
-
-## 9. Cross-Repo Coordination
-
-### Finn Changes Required
-1. **SSM Parameter**: `/loa-finn/armitage/DIXIE_BASE_URL` must be set/updated
-2. **Security Group**: May need ingress rule from Dixie's SG on port 3000
-3. **ECS Redeploy**: Force new deployment to pick up DIXIE_BASE_URL
-
-### Hounfour
-- No changes needed — Dixie already pins `github:0xHoneyJar/loa-hounfour#b6e0027a`
-- Docker image includes hounfour via npm ci (verified in PR #58)
-
-### Local Repos Available
-- `/home/merlin/Documents/thj/code/loa-finn/` — reference terraform
-- `/home/merlin/Documents/thj/code/loa-hounfour/` — protocol library
-- `/home/merlin/Documents/thj/code/loa-freeside/` — arrakis infrastructure reference
-- `/home/merlin/Documents/thj/code/loa-beauvoir/` — personality engine
-- `/home/merlin/Documents/thj/code/loa-constructs/` — Loa framework
+| Dependency | Status | Impact if Delayed |
+|-----------|--------|-------------------|
+| Hounfour v8.3.1 release | Complete | None |
+| Armitage Ring access | Available | Deploy step deferred |
+| Freeside deploy pipeline | Available but not required | Can deploy manually via ECS |
 
 ---
 
-## 10. References
+## 8. Constraints
 
-| Reference | Location |
-|-----------|----------|
-| Issue #59 | `https://github.com/0xHoneyJar/loa-dixie/issues/59` |
-| Finn terraform | `/home/merlin/Documents/thj/code/loa-finn/infrastructure/terraform/` |
-| Finn armitage.tfvars | `loa-finn/infrastructure/terraform/environments/armitage.tfvars` |
-| Dixie existing terraform | `deploy/terraform/dixie.tf` (583 lines, production-only) |
-| Dixie Dockerfile | `deploy/Dockerfile` (38 lines, multi-stage) |
-| Dixie STAGING.md | `STAGING.md` (375 lines, operational docs) |
-| PR #58 (Docker fixes) | `https://github.com/0xHoneyJar/loa-dixie/pull/58` |
-| Finn staging | `https://finn-armitage.arrakis.community` |
+- **C-BUMP-001**: No application logic changes beyond the dependency bump and documentation comments.
+- **C-BUMP-002**: Existing audit trail integrity MUST be preserved across the version boundary.
+- **C-BUMP-003**: The local `buildDomainTag` in `audit-trail-store.ts` is kept as-is (no migration).
+
+---
+
+## 9. Failure Modes & Recovery — *Flatline Finding*
+
+| Failure | Detection | Recovery |
+|---------|-----------|----------|
+| `npm run typecheck` fails after bump | CI or local typecheck | Revert `package.json` to v8.3.0; file follow-up issue |
+| Audit trail verification fails in staging | `/api/health` returns 500; logs show `verifyAuditTrailIntegrity` error | Rollback Docker image to previous tag; preserve logs for post-mortem |
+| ScoringPathLog hash mismatch | Unit tests fail or production audit shows integrity error | Check domain tag format; verify `@noble/hashes` version unchanged |
+| Docker build fails (tag unreachable) | `npm ci` fails during `docker build` | Verify tag exists with `git ls-remote`; check network |
+| Staging deploy fails | ECS task fails to start | Roll back ECS task definition to previous revision |
+
+---
+
+## 10. Known Issues & Technical Debt — *Flatline Finding*
+
+- **KI-001**: Local `buildDomainTag('v10')` workaround retained for backward compatibility.
+  - Can be revisited after 3+ months of v10-only entries.
+  - Removal requires: (1) query to confirm no legacy domain tags remain, (2) removal of v9 hash algorithm, (3) test cleanup.
+- **KI-002**: Mixed audit chains (v9 + v10 domain tags) may accumulate over time.
+  - Monitor via: `SELECT DISTINCT domain_tag FROM audit_entries ORDER BY created_at DESC LIMIT 100`
+  - If >90% are v10, consider dropping v9 support in next major version.

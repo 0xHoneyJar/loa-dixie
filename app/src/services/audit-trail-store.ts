@@ -48,9 +48,41 @@ export class AuditTimestampError extends Error {
 const DOMAIN_TAG_PREFIX = 'loa-dixie:audit';
 
 /**
- * Build domain tag for new entries using canonical-compatible format.
- * Uses 'v10' (no dots) to pass hounfour's validateDomainTag().
- * @since cycle-019 Sprint 121 — T6.3
+ * Valid resource type pattern: lowercase alphanumeric with hyphens/underscores, max 64 chars.
+ * Rejects colons (domain tag injection — Red Team RT-2), dots (legacy format confusion),
+ * and other special characters. Length cap prevents DoS via oversized domain tags.
+ * @since cycle-021 — Red Team RT-2 mitigation (ATTACK-3: Domain Tag Collision)
+ * @since cycle-021 bridge iter 1 — HF831-MED-03 length cap, HF831-HIGH-01 defense-in-depth
+ */
+const VALID_RESOURCE_TYPE = /^[a-z][a-z0-9_-]{0,63}$/;
+
+/**
+ * Validate resourceType at every public entry point (defense-in-depth).
+ * @throws {Error} if resourceType fails pattern or length validation
+ * @since cycle-021 bridge iter 1 — HF831-HIGH-01
+ */
+function assertValidResourceType(resourceType: string): void {
+  if (!VALID_RESOURCE_TYPE.test(resourceType)) {
+    throw new Error(
+      `Invalid resourceType format: ${String(resourceType).slice(0, 20)}`,
+    );
+  }
+}
+
+/**
+ * Local buildDomainTag — intentionally retained post-hounfour v8.3.1.
+ *
+ * Hounfour v8.3.1 introduces deterministic sanitization (dots → hyphens),
+ * making this workaround technically optional. However, we keep it because:
+ * - 12 migrations store entries with 'v10' domain tags (loa-dixie:audit:*:v10)
+ * - Canonical hounfour would produce a different prefix ('loa-commons:audit:')
+ * - Changing mid-chain would require re-hashing all stored entries
+ * - verifyAuditTrailIntegrity() already handles mixed chains via stored tags
+ *
+ * Decision: cycle-021, Issue #71, Option A (keep local workaround).
+ * @see ADR-006, computeChainBoundHashVersionAware()
+ * @since cycle-019 Sprint 121 — T6.3 (original impedance mismatch workaround)
+ * @since cycle-021 — Decision to retain post-v8.3.1
  */
 function buildDomainTag(resourceType: string): string {
   return `${DOMAIN_TAG_PREFIX}:${resourceType}:v10`;
@@ -185,6 +217,9 @@ export class AuditTrailStore {
     entry: AuditEntryInput,
   ): Promise<AuditEntry> {
     return withTransaction(this.pool, async (client) => {
+      // Validate resourceType against strict pattern (Red Team RT-2, cycle-021)
+      assertValidResourceType(resourceType);
+
       // Validate timestamp format and boundaries (hounfour v8.3.0)
       const tsResult = validateAuditTimestamp(entry.timestamp);
       if (!tsResult.valid) {
@@ -257,6 +292,7 @@ export class AuditTrailStore {
    * Returns AUDIT_TRAIL_GENESIS_HASH if the chain is empty.
    */
   async getTipHash(resourceType: string): Promise<string> {
+    assertValidResourceType(resourceType);
     const result = await this.pool.query<{ entry_hash: string }>(
       `SELECT entry_hash FROM audit_entries
        WHERE resource_type = $1
@@ -274,6 +310,7 @@ export class AuditTrailStore {
     resourceType: string,
     limit?: number,
   ): Promise<AuditEntry[]> {
+    assertValidResourceType(resourceType);
     const query = limit
       ? `SELECT * FROM audit_entries WHERE resource_type = $1 ORDER BY created_at ASC LIMIT $2`
       : `SELECT * FROM audit_entries WHERE resource_type = $1 ORDER BY created_at ASC`;
@@ -409,4 +446,4 @@ export class AuditTrailStore {
 export { AUDIT_TRAIL_GENESIS_HASH };
 
 // Test-only exports for version-aware verification testing
-export { computeChainBoundHash_v9, isLegacyDomainTag, computeChainBoundHashVersionAware };
+export { computeChainBoundHash_v9, isLegacyDomainTag, computeChainBoundHashVersionAware, VALID_RESOURCE_TYPE };
