@@ -34,7 +34,7 @@ This skill manages its own 8-phase workflow. DO NOT use Claude Code's native Pla
 
 ## Constraint Rules
 
-<!-- @constraint-generated: start simstim_constraints | hash:852a0b4eccaea5a8 -->
+<!-- @constraint-generated: start simstim_constraints | hash:fa9331a75525a8d5 -->
 <!-- DO NOT EDIT — generated from .claude/data/constraints.json -->
 1. NEVER call `EnterPlanMode` — simstim phases ARE the plan
 2. NEVER jump to implementation after any user confirmation
@@ -78,19 +78,62 @@ Display: `[0/8] PREFLIGHT - Validating configuration...`
    result=$(.claude/scripts/simstim-orchestrator.sh --preflight ${DRY_RUN:+--dry-run} ${FROM:+--from "$FROM"} ${RESUME:+--resume} ${ABORT:+--abort})
    ```
 
-2. Handle preflight result:
+2. **Flatline Readiness Validation** (FR-3, cycle-048):
+
+   Run fresh-per-cycle validation to verify Flatline Protocol can operate:
+   ```bash
+   flatline_result=$(.claude/scripts/flatline-readiness.sh --json)
+   flatline_exit=$?
+   ```
+
+   Handle exit codes:
+   - **0 (READY)**: All configured providers have API keys. Continue normally.
+   - **1 (DISABLED)**: `flatline_protocol.enabled` is `false` in `.loa.config.yaml`.
+     Flatline phases (2, 4, 6) will be skipped. Display warning:
+     `"Flatline Protocol is disabled — review phases will be skipped."`
+   - **2 (NO_API_KEYS)**: Zero provider keys are present. Flatline phases will be
+     skipped. Display warning with recommendations from JSON output:
+     `"No API keys found for Flatline providers. Set the required env vars."`
+   - **3 (DEGRADED)**: Some but not all provider keys are present. This is a
+     **warning, not blocking** — simstim continues but Flatline may use fewer
+     models than configured. Display:
+     `"Flatline running in degraded mode — some providers unavailable."`
+     Include the `recommendations` array from JSON output so the user knows
+     which env vars to set.
+
+   **Fresh-per-cycle requirement**: This check MUST run at the start of each
+   new simstim cycle, not be cached from a previous session. Provider keys
+   can change between sessions (expired, rotated, newly set). The
+   `flatline-readiness.sh` script is stateless and fast (~100ms) — it reads
+   config and checks env vars without making API calls.
+
+3. Handle preflight result:
    - Exit code 0: Continue to appropriate phase
    - Exit code 1: Display error, stop
    - Exit code 2: State conflict - ask user: [R]esume / [F]resh / [A]bort
    - Exit code 3: Missing prerequisite - display what's needed
 
-3. If --dry-run: Display planned phases and exit
+4. If --dry-run: Display planned phases and exit
 
-4. If --abort: Confirm cleanup and exit
+5. If --abort: Confirm cleanup and exit
 
-5. If --resume: Jump to <resume_support> section
+6. If --resume: Jump to <resume_support> section
 
-6. Otherwise: Continue to Phase 1 or specified --from phase
+7. Otherwise: Continue to Phase 1 or specified --from phase
+
+8. **Compute total phases** for progress display (cycle-045):
+   Base phases: 8. Check config gates to count enabled sub-phases:
+   - `simstim.bridgebuilder_design_review: true` → +1 (Phase 3.5)
+   - `red_team.enabled: true` AND `red_team.simstim.auto_trigger: true` → +1 (Phase 4.5)
+   - beads installed AND `simstim.flatline.beads_loop: true` → +1 (Phase 6.5)
+
+   Store computed `total_phases` in simstim state:
+   ```bash
+   .claude/scripts/simstim-state.sh update total_phases "$total_phases"
+   ```
+
+   Use `[N/$total_phases]` in all subsequent phase progress displays instead of hardcoded `[N/8]`.
+   Example: `[0/11] PREFLIGHT` when all 3 sub-phases enabled, `[0/8] PREFLIGHT` when none.
 </preflight>
 
 ---
@@ -474,6 +517,34 @@ Display: `[4.5/8] RED TEAM SDD - Generative adversarial security design...`
 
 Proceed to Phase 5.
 </phase_4_5_red_team_sdd>
+
+---
+
+#### Red Team Integration Status (cycle-047)
+
+Phase 4.5 is **off by default** (`red_team.simstim.auto_trigger: false`). This is a
+deliberate progressive rollout — the Red Team gate was introduced in cycle-044 and
+runs as a standalone skill (`/red-team`). Integration into simstim is opt-in until the
+gate has proven stable across multiple cycles.
+
+**To enable Red Team in simstim:**
+
+```yaml
+# .loa.config.yaml
+red_team:
+  enabled: true
+  simstim:
+    auto_trigger: true   # Enable Phase 4.5
+```
+
+**What Phase 4.5 reviews:**
+- SDD security sections against known attack patterns
+- Architecture decisions that may introduce OWASP Top 10 vulnerabilities
+- Trust boundary crossings and privilege escalation paths
+
+**Evidence of execution:** When active, Phase 4.5 logs to `.run/simstim-state.json`
+under `phases.red_team_sdd` and produces attack findings in the Flatline output
+directory (`grimoires/loa/a2a/flatline/`).
 
 ---
 

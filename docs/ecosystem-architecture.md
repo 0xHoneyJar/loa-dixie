@@ -54,7 +54,7 @@ graph TB
 | 5 — Product | `loa-dixie` | dNFT Oracle — first product customer | **Staging** |
 | 4 — Platform | `loa-freeside` | API, Discord/TG, token-gating, billing, IaC | In progress |
 | 3 — Runtime | `loa-finn` | Persistent sessions, tool sandbox, memory | **Staging** |
-| 2 — Protocol | `loa-hounfour` | Schemas, state machines, model routing contracts | **Published (v8.3.0)** |
+| 2 — Protocol | `loa-hounfour` | Schemas, state machines, model routing contracts | **Shipping** (v8.3.1) |
 | 1 — Framework | `loa` | Agent dev framework, skills, Bridgebuilder | **Shipping** |
 
 Each layer depends only on layers below it. Protocol contracts flow upward: lower layers define contracts, upper layers consume them.
