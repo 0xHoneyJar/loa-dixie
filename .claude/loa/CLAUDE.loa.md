@@ -33,27 +33,17 @@ Agent-driven development framework. Skills auto-load their SKILL.md when invoked
 
 ## Three-Zone Model
 
-| Zone | Path | Permission |
-|------|------|------------|
-| System | `.claude/` | NEVER edit |
-| State | `grimoires/`, `.beads/`, `.ck/`, `.run/` | Read/Write |
-| App | `src/`, `lib/`, `app/` | Confirm writes |
+| Zone | Path | Permission | Rules |
+|------|------|------------|-------|
+| System | `.claude/` | NEVER edit | `.claude/rules/zone-system.md` |
+| State | `grimoires/`, `.beads/`, `.ck/`, `.run/` | Read/Write | `.claude/rules/zone-state.md` |
+| App | `src/`, `lib/`, `app/` | Confirm writes | — |
 
 **Critical**: Never edit `.claude/` - use `.claude/overrides/` or `.loa.config.yaml`.
 
 ## File Creation Safety
 
-**CRITICAL**: Bash heredocs silently corrupt source files containing `${...}` template literals.
-
-| Method | Shell Expansion | When to Use |
-|--------|-----------------|-------------|
-| **Write tool** | None | Source files (.tsx, .jsx, .ts, .js, etc.) - PREFERRED |
-| `<<'EOF'` (quoted) | None | Shell content with literal `${...}` |
-| `<< EOF` (unquoted) | Yes | Shell scripts needing variable expansion only |
-
-**Rule**: For source files, ALWAYS use Write tool. If heredoc required, ALWAYS quote the delimiter.
-
-**Protocol**: `.claude/protocols/safe-file-creation.md`
+See `.claude/rules/shell-conventions.md` for heredoc expansion rules. **Rule**: For source files, ALWAYS use Write tool.
 
 ## Configurable Paths (v1.27.0)
 
