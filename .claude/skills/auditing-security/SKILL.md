@@ -1,4 +1,9 @@
 ---
+name: audit
+description: Security and quality audit of application codebase
+allowed-tools: Read, Grep, Glob, WebFetch, WebSearch
+context: fork
+agent: Explore
 parallel_threshold: 2000
 audit_categories: 5
 timeout_minutes: 60

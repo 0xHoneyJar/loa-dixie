@@ -1,4 +1,7 @@
 ---
+name: review-sprint
+description: Validate sprint implementation against acceptance criteria
+allowed-tools: Read, Grep, Glob, WebFetch, Bash(git diff *), Bash(git log *)
 parallel_threshold: 3000
 timeout_minutes: 60
 zones:

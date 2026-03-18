@@ -1,4 +1,8 @@
 ---
+name: sprint-plan
+description: Create comprehensive sprint plan based on PRD and SDD
+context: fork
+agent: Plan
 parallel_threshold: null
 timeout_minutes: 60
 zones:

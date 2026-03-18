@@ -1,4 +1,7 @@
 ---
+name: loa-credentials
+description: Credential management and audit for API keys and secrets
+allowed-tools: Read, Grep, Glob, Bash(printenv LOA_*)
 parallel_threshold: 1000
 timeout_minutes: 10
 zones:

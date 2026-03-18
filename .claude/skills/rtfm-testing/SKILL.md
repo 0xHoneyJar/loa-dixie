@@ -1,4 +1,7 @@
 ---
+name: rtfm
+description: Run documentation-driven testing against Ground Truth and protocols
+allowed-tools: Read, Grep, Glob, Bash(bats tests/*), Bash(npm test *), Bash(.claude/scripts/rtfm-*)
 parallel_threshold: 3000
 timeout_minutes: 15
 zones:

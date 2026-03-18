@@ -1,3 +1,9 @@
+---
+name: enhance
+description: Enhance a prompt for better outputs with analysis and optimization
+allowed-tools: Read, Grep, Glob
+---
+
 # Enhancing Prompts
 
 <objective>

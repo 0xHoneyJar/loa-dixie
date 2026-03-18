@@ -1,4 +1,8 @@
 ---
+name: architect
+description: Create comprehensive Software Design Document based on PRD
+context: fork
+agent: Plan
 parallel_threshold: null
 timeout_minutes: 60
 zones:

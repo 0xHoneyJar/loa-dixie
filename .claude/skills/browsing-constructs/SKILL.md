@@ -1,3 +1,9 @@
+---
+name: constructs
+description: Browse and install construct packs from the Loa Constructs Registry
+allowed-tools: Read, Grep, Glob, WebFetch, Bash(gh repo *), Bash(gh release *)
+---
+
 # Browsing Constructs Skill
 
 ## Purpose

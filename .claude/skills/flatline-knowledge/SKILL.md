@@ -1,3 +1,9 @@
+---
+name: flatline-knowledge
+description: Query Flatline protocol knowledge base via NotebookLM integration
+allowed-tools: Read, Grep, Glob
+---
+
 # Flatline Knowledge Skill
 
 ## Purpose

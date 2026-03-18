@@ -1,3 +1,9 @@
+---
+name: translate
+description: Translate technical documentation into executive-ready communications
+allowed-tools: Read, Grep, Glob, Write
+---
+
 <prompt_enhancement_prelude>
 ## Invisible Prompt Enhancement
 

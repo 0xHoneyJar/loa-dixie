@@ -1,3 +1,9 @@
+---
+name: eval
+description: Run evaluation suites against the Loa framework
+allowed-tools: Read, Grep, Glob, Bash(evals/harness/*), Bash(bats tests/*)
+---
+
 # Eval Running Skill
 
 Run evaluation suites against the Loa framework to detect regressions and benchmark skill quality.

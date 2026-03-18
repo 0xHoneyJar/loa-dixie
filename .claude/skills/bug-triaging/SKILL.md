@@ -1,4 +1,8 @@
 ---
+name: bug
+description: Triage a bug report through structured phases and create micro-sprint
+context: fork
+agent: general-purpose
 parallel_threshold: 3000
 timeout_minutes: 60
 zones:

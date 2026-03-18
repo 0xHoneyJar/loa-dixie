@@ -1,4 +1,7 @@
 ---
+name: plan-and-analyze
+description: Launch PRD discovery with codebase grounding and context ingestion
+allowed-tools: Read, Grep, Glob, AskUserQuestion, WebFetch, Write, Bash(git log *), Bash(wc *)
 parallel_threshold: 2000
 timeout_minutes: 90
 zones:
