@@ -219,7 +219,7 @@ Pre-execution validation. PII filtering (blocking), injection detection (blockin
 
 ## Persistent Memory (v1.28.0)
 
-Session-spanning observations in `grimoires/loa/memory/observations.jsonl`. Query via `.claude/scripts/memory-query.sh`.
+Session-spanning observations in `grimoires/loa/memory/observations.jsonl`. Query via `.claude/scripts/memory-query.sh`. Ownership boundary: auto-memory owns user preferences/working style; observations.jsonl owns framework patterns/debugging discoveries. See reference for full table.
 
 **Reference**: `.claude/loa/reference/memory-reference.md`
 
