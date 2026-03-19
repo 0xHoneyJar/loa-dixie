@@ -2,6 +2,7 @@
 paths:
   - "grimoires/**"
   - ".beads/**"
+  - ".ck/**"
   - ".run/**"
 ---
 

@@ -69,11 +69,13 @@ check_implementation_active() {
         fi
 
         # Integrity: check staleness (24h = 86400s)
+        # Portable date-to-epoch: try GNU date -d, then macOS date -jf, then skip
         last_activity=$(jq -r '.timestamps.last_activity // empty' "$RUN_DIR/sprint-plan-state.json" 2>/dev/null) || true
         if [[ -n "$last_activity" ]]; then
             local now last_epoch
             now=$(date +%s 2>/dev/null) || now=0
-            last_epoch=$(date -d "$last_activity" +%s 2>/dev/null) || last_epoch=0
+            last_epoch=$(date -d "$last_activity" +%s 2>/dev/null ||
+                         date -jf '%Y-%m-%dT%H:%M:%SZ' "$last_activity" +%s 2>/dev/null) || last_epoch=0
             if [[ $now -gt 0 && $last_epoch -gt 0 ]]; then
                 local age=$((now - last_epoch))
                 if [[ $age -gt 86400 ]]; then
