@@ -15,6 +15,17 @@ zones:
   app:
     paths: [src, lib, app]
     permission: read
+capabilities:
+  schema_version: 1
+  read_files: true
+  search_code: true
+  write_files: true
+  execute_commands: true
+  web_access: false
+  user_interaction: true
+  agent_spawn: true
+  task_management: false
+cost-profile: heavy
 ---
 
 <input_guardrails>

@@ -2,6 +2,17 @@
 name: translate
 description: Translate technical documentation into executive-ready communications
 allowed-tools: Read, Grep, Glob, Write
+capabilities:
+  schema_version: 1
+  read_files: true
+  search_code: true
+  write_files: true
+  execute_commands: false
+  web_access: false
+  user_interaction: false
+  agent_spawn: false
+  task_management: false
+cost-profile: moderate
 ---
 
 <prompt_enhancement_prelude>
