@@ -167,3 +167,100 @@ Rule files use lifecycle metadata matching `ConstraintOrigin`:
 2. `version: N` (monotonically increasing integer)
 3. `enacted_by: cycle-NNN`
 4. Reference: [loa-dixie #80](https://github.com/0xHoneyJar/loa-dixie/issues/80)
+
+## Cross-Repo Permission Propagation (Mount Merge Semantics)
+
+When Loa mounts onto a project via `/mount`, the project may already have `.claude/rules/` files. This section defines how conflicts are detected and resolved.
+
+### Precedence Model (CSS Specificity)
+
+1. **Project-specific rules** (highest priority) — the project's own governance
+2. **Loa framework rules** — Loa's zone enforcement
+3. **Claude Code defaults** (lowest) — platform behavior without rules
+
+Project rules always win. This mirrors CSS specificity: more specific selectors override less specific ones.
+
+### Conflict Detection
+
+Run `mount-conflict-detect.sh` to analyze overlaps:
+
+```bash
+.claude/scripts/mount-conflict-detect.sh \
+  --loa-rules .claude/rules \
+  --project-rules /target/project/.claude/rules
+
+# JSON output for automation
+.claude/scripts/mount-conflict-detect.sh \
+  --loa-rules .claude/rules \
+  --project-rules /target/project/.claude/rules \
+  --json
+```
+
+### Conflict Classification
+
+| Type | Condition | Action |
+|------|-----------|--------|
+| `NO_CONFLICT` | Path patterns don't overlap | Both rule sets apply independently |
+| `CONFLICT` | Same path pattern in both | Project rule wins; Loa rule superseded |
+| `MULTI_FILE_OVERLAP` | 3+ files claim same path | Hard-fail; require manual resolution |
+
+### Tie-Breaking Rules
+
+| Scenario | Resolution |
+|----------|------------|
+| Same path, different directives | Project rule wins |
+| Same path, same directive | Keep project version, log Loa version as superseded |
+| Multi-file overlap (3+ files) | Hard-fail — require explicit manual resolution |
+| Transitive mount (project already has Loa rules from older version) | Version check; warn on downgrades |
+
+### Merge Behavior
+
+- **Non-conflicting rules**: Merged automatically with provenance comment
+- **Conflicting rules**: Reported with dry-run output; require explicit user confirmation
+- **Hard failures**: Block merge entirely; list all conflicting files
+
+### Dry-Run Output
+
+The conflict detector always shows what would happen before making changes:
+
+```
+Rule Conflict Detection
+========================
+
+  OVERLAP: grimoires/**
+    Loa rule:     zone-state.md
+    Project rule:  custom-state.md
+    Resolution:    Project wins
+
+  NO CONFLICT: .claude/**
+    Loa only:     zone-system.md
+
+  NO CONFLICT: data/**
+    Project only:  data-rules.md
+
+Merge safe: YES (1 conflict, project-wins resolution)
+Action: Merge non-conflicting rules? [Y/n]
+```
+
+### Examples
+
+**Clean mount** (no existing project rules):
+```
+No existing .claude/rules/ in target project.
+All Loa rules will be installed.
+```
+
+**Non-overlapping rules**:
+```
+Loa rules: zone-system.md (.claude/**), zone-state.md (grimoires/**)
+Project rules: lint-rules.md (src/**), test-rules.md (tests/**)
+Result: All rules merged, no conflicts.
+```
+
+**Conflicting rules**:
+```
+Loa zone-state.md claims: grimoires/**
+Project custom.md claims: grimoires/**
+Resolution: Project custom.md wins for grimoires/**
+Loa zone-state.md retained for non-overlapping paths (.beads/**, .ck/**, .run/**)
+```
