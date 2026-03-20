@@ -1,6 +1,9 @@
 ---
 paths:
   - ".claude/**"
+origin: genesis
+version: 1
+enacted_by: cycle-049
 ---
 
 # System Zone Rules

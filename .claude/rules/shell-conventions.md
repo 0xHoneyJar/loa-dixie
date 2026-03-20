@@ -2,6 +2,9 @@
 paths:
   - "*.sh"
   - "*.bats"
+origin: enacted
+version: 1
+enacted_by: cycle-049
 ---
 
 # Shell File Creation Safety

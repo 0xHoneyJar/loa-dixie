@@ -4,6 +4,9 @@ paths:
   - ".beads/**"
   - ".ck/**"
   - ".run/**"
+origin: genesis
+version: 1
+enacted_by: cycle-049
 ---
 
 # State Zone Rules
