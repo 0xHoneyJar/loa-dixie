@@ -1018,6 +1018,11 @@ do_preload() {
     local output=""
     output=$(validate_skill "$skill_dir" 2>&1) || exit_code=$?
 
+    # Check pack staleness (warn if >7 days old) — Issue #449
+    if type check_pack_staleness &>/dev/null; then
+        check_pack_staleness "$skill_name" 7 || true  # Warning only, don't block
+    fi
+
     case "$exit_code" in
         0)
             # Valid - silent success
