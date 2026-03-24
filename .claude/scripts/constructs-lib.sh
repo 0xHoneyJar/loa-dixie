@@ -583,7 +583,7 @@ find_local_source() {
     fi
 
     for path in "${search_paths[@]}"; do
-        if [[ -d "$path" && -f "$path/construct.yaml" ]]; then
+        if [[ -d "$path" && ( -f "$path/construct.yaml" || -f "$path/manifest.json" ) ]]; then
             echo "$path"
             return 0
         fi

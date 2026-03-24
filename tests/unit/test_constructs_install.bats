@@ -589,6 +589,29 @@ EOF
     [[ "$output" == *"construct-local-test"* ]]
 }
 
+@test "find_local_source finds pack with manifest.json (no construct.yaml)" {
+    skip_if_not_implemented
+
+    # Create mock local source with only manifest.json (like gtm-collective)
+    local local_dir="$BATS_TMPDIR/manifest-only-$$"
+    mkdir -p "$local_dir"
+    echo '{"name":"Test","slug":"manifest-test"}' > "$local_dir/manifest.json"
+
+    local orig_home="$HOME"
+    export HOME="$BATS_TMPDIR"
+    mkdir -p "$BATS_TMPDIR/Documents/GitHub"
+    ln -sf "$local_dir" "$BATS_TMPDIR/Documents/GitHub/construct-manifest-test"
+
+    source "$PROJECT_ROOT/.claude/scripts/constructs-lib.sh"
+    run find_local_source "manifest-test"
+
+    export HOME="$orig_home"
+    rm -rf "$local_dir" "$BATS_TMPDIR/Documents/GitHub/construct-manifest-test"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"manifest-test"* ]]
+}
+
 @test "check_pack_staleness returns 1 when pack not in meta" {
     skip_if_not_implemented
 

@@ -441,13 +441,8 @@ do_install_pack() {
             local installed_at
             installed_at=$(jq -r --arg s "$pack_slug" '.installed_packs[$s].installed_at // empty' "$meta_file" 2>/dev/null) || installed_at=""
             if [[ -n "$installed_at" ]]; then
-                local local_mtime
-                if stat -c %Y "$local_source/construct.yaml" &>/dev/null; then
-                    local_mtime=$(stat -c %Y "$local_source/construct.yaml" 2>/dev/null)
-                else
-                    local_mtime=$(stat -f %m "$local_source/construct.yaml" 2>/dev/null)
-                fi
-
+                # Check if ANY file in local source is newer than install time
+                # (not just construct.yaml — the P0 bug was in dig-search.ts)
                 local installed_epoch
                 if type _date_to_epoch &>/dev/null; then
                     installed_epoch=$(_date_to_epoch "$installed_at" 2>/dev/null) || installed_epoch=0
@@ -455,9 +450,14 @@ do_install_pack() {
                     installed_epoch=$(date -d "$installed_at" +%s 2>/dev/null) || installed_epoch=0
                 fi
 
-                if [[ $local_mtime -gt $installed_epoch ]]; then
-                    should_use_local=true
-                    echo "  Local source at $local_source is newer than installed copy"
+                if [[ $installed_epoch -gt 0 ]]; then
+                    # Find any file newer than install time
+                    local newer_file
+                    newer_file=$(find "$local_source" -type f -newer "$packs_dir/$pack_slug" -print -quit 2>/dev/null) || newer_file=""
+                    if [[ -n "$newer_file" ]]; then
+                        should_use_local=true
+                        echo "  Local source at $local_source has changes since last install"
+                    fi
                 fi
             fi
         fi
