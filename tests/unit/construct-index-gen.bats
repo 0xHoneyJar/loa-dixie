@@ -155,8 +155,9 @@ SECOND_MANIFEST='{
     # Verify quick_start (first command name)
     [ "$(jq -r '.constructs[0].quick_start' "$TEST_OUTPUT")" = "test-cmd" ]
 
-    # Verify generated_at is present
-    [ "$(jq -r '.generated_at' "$TEST_OUTPUT")" != "null" ]
+    # Verify metadata is present
+    [ "$(jq -r '.metadata.generated_at' "$TEST_OUTPUT")" != "null" ]
+    [ "$(jq -r '.metadata.generator_version' "$TEST_OUTPUT")" = "1.0.0" ]
 }
 
 # =============================================================================

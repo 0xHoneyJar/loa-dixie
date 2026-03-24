@@ -54,17 +54,20 @@ DEFAULT_OUTPUT="$PROJECT_ROOT/.run/construct-index.yaml"
 OUTPUT_PATH=""
 JSON_OUTPUT=false
 QUIET=false
+VALIDATE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --json) JSON_OUTPUT=true; shift ;;
         --output) OUTPUT_PATH="$2"; shift 2 ;;
         --quiet) QUIET=true; shift ;;
+        --validate) VALIDATE=true; shift ;;
         -h|--help)
-            echo "Usage: construct-index-gen.sh [--json] [--output PATH] [--quiet]"
-            echo "  --json     Output JSON instead of YAML"
-            echo "  --output   Write to custom path (default: .run/construct-index.yaml)"
-            echo "  --quiet    Suppress log output"
+            echo "Usage: construct-index-gen.sh [--json] [--output PATH] [--quiet] [--validate]"
+            echo "  --json       Output JSON instead of YAML"
+            echo "  --output     Write to custom path (default: .run/construct-index.yaml)"
+            echo "  --quiet      Suppress log output"
+            echo "  --validate   Validate generated index (check required fields, schema integrity)"
             exit 0
             ;;
         *) echo "Unknown arg: $1" >&2; exit 2 ;;
@@ -452,7 +455,8 @@ main() {
         exit 1
     fi
 
-    log "Found ${#pack_dirs[@]} pack(s)"
+    local pack_count=${#pack_dirs[@]}
+    log "Found $pack_count pack(s)"
 
     # Process each pack
     local constructs_json="[]"
@@ -476,8 +480,13 @@ main() {
     index_json=$(jq -n \
         --argjson constructs "$constructs_json" \
         --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --argjson pack_count "$pack_count" \
         '{
-            generated_at: $generated_at,
+            metadata: {
+                generated_at: $generated_at,
+                generator_version: "1.0.0",
+                pack_count: $pack_count
+            },
             constructs: $constructs
         }')
 
@@ -499,6 +508,105 @@ main() {
     fi
 
     log "Index written to $OUTPUT_PATH"
+
+    # Validate if requested
+    if [[ "$VALIDATE" == "true" ]]; then
+        validate_index "$OUTPUT_PATH"
+        return $?
+    fi
+
+    return 0
+}
+
+# =============================================================================
+# Index Validation (--validate flag)
+# =============================================================================
+# Checks that the generated index has valid structure and required fields.
+# Catches malformed manifests before downstream consumers choke on the index.
+
+validate_index() {
+    local index_file="$1"
+    local errors=0
+
+    if [[ ! -f "$index_file" ]]; then
+        echo "VALIDATE ERROR: Index file not found: $index_file" >&2
+        return 1
+    fi
+
+    # Check valid YAML/JSON
+    if ! jq empty "$index_file" 2>/dev/null && ! yq eval '.' "$index_file" &>/dev/null; then
+        echo "VALIDATE ERROR: Index is not valid YAML or JSON" >&2
+        return 1
+    fi
+
+    # Parse as JSON (convert YAML if needed)
+    local index_json
+    if jq empty "$index_file" 2>/dev/null; then
+        index_json=$(cat "$index_file")
+    else
+        index_json=$(yq eval -o=json '.' "$index_file" 2>/dev/null) || {
+            echo "VALIDATE ERROR: Cannot parse index" >&2
+            return 1
+        }
+    fi
+
+    # Check metadata
+    local gen_at
+    gen_at=$(echo "$index_json" | jq -r '.metadata.generated_at // empty') || true
+    if [[ -z "$gen_at" ]]; then
+        echo "VALIDATE WARN: Missing metadata.generated_at" >&2
+        errors=$((errors + 1))
+    fi
+
+    # Check each construct has required fields
+    local count
+    count=$(echo "$index_json" | jq '.constructs | length') || count=0
+
+    local i=0
+    while [[ $i -lt $count ]]; do
+        local slug name version
+        slug=$(echo "$index_json" | jq -r ".constructs[$i].slug // empty")
+        name=$(echo "$index_json" | jq -r ".constructs[$i].name // empty")
+        version=$(echo "$index_json" | jq -r ".constructs[$i].version // empty")
+
+        if [[ -z "$slug" ]]; then
+            echo "VALIDATE ERROR: Construct at index $i missing slug" >&2
+            errors=$((errors + 1))
+        fi
+        if [[ -z "$name" ]]; then
+            echo "VALIDATE WARN: Construct '$slug' missing name" >&2
+        fi
+        if [[ -z "$version" ]]; then
+            echo "VALIDATE WARN: Construct '$slug' missing version" >&2
+        fi
+
+        # Check skills is an array
+        local skills_type
+        skills_type=$(echo "$index_json" | jq -r ".constructs[$i].skills | type") || skills_type="null"
+        if [[ "$skills_type" != "array" && "$skills_type" != "null" ]]; then
+            echo "VALIDATE ERROR: Construct '$slug' skills is $skills_type, expected array" >&2
+            errors=$((errors + 1))
+        fi
+
+        # Check commands is an array
+        local cmds_type
+        cmds_type=$(echo "$index_json" | jq -r ".constructs[$i].commands | type") || cmds_type="null"
+        if [[ "$cmds_type" != "array" && "$cmds_type" != "null" ]]; then
+            echo "VALIDATE ERROR: Construct '$slug' commands is $cmds_type, expected array" >&2
+            errors=$((errors + 1))
+        fi
+
+        i=$((i + 1))
+    done
+
+    if [[ $errors -gt 0 ]]; then
+        echo "VALIDATE: $count constructs checked, $errors errors" >&2
+        return 1
+    fi
+
+    if [[ "$QUIET" != "true" ]]; then
+        echo "VALIDATE: $count constructs checked, all valid"
+    fi
     return 0
 }
 
