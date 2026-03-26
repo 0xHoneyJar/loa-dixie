@@ -3,14 +3,17 @@ import { z } from 'zod';
 import { SiweMessage } from 'siwe';
 import * as jose from 'jose';
 import type { AllowlistStore } from '../middleware/allowlist.js';
+import { getJwks } from '../middleware/jwt.js';
 
 export interface AuthConfig {
   jwtPrivateKey: string;
   jwtAlgorithm: 'ES256' | 'HS256';
+  /** Legacy HS256 secret for dual-algorithm transition */
+  jwtLegacyHs256Secret?: string | null;
   issuer: string;
   expiresIn: string;
-  /** Key ID for ES256 JWKS rotation support */
-  kid?: string;
+  /** Lazy getter for Key ID — resolved after initJwtKeys completes */
+  getKid?: () => string | null;
 }
 
 // ARCH-002: Runtime body validation — TypeScript generics are erased at compile time.
@@ -89,31 +92,39 @@ export function createAuthRoutes(
 
     const token = authHeader.slice(7);
     try {
-      // Dual-algorithm verification: try ES256 first if configured, fallback to HS256
       let payload: jose.JWTPayload;
+      const verifyOpts = { issuer: config.issuer, audience: 'dixie-bff' };
+
       if (config.jwtAlgorithm === 'ES256') {
-        try {
-          if (!_cachedSigningKey) {
-            _cachedSigningKey = await jose.importPKCS8(config.jwtPrivateKey, 'ES256', { extractable: true }) as CryptoKey;
+        // Use cached public key from JWKS (set by initJwtKeys at startup)
+        const jwks = getJwks();
+        if (jwks.keys.length > 0) {
+          try {
+            const pubKey = await jose.importJWK(jwks.keys[0], 'ES256');
+            ({ payload } = await jose.jwtVerify(token, pubKey, {
+              ...verifyOpts,
+              algorithms: ['ES256'],
+            }));
+          } catch {
+            // Fallback to legacy HS256 secret during transition
+            if (config.jwtLegacyHs256Secret) {
+              const secret = new TextEncoder().encode(config.jwtLegacyHs256Secret);
+              ({ payload } = await jose.jwtVerify(token, secret, {
+                ...verifyOpts,
+                algorithms: ['HS256'],
+              }));
+            } else {
+              throw new Error('ES256 verification failed, no legacy HS256 secret');
+            }
           }
-          const publicKey = await jose.exportSPKI(_cachedSigningKey as unknown as Parameters<typeof jose.exportSPKI>[0]);
-          const pubKey = await jose.importSPKI(publicKey, 'ES256');
-          ({ payload } = await jose.jwtVerify(token, pubKey, {
-            issuer: config.issuer,
-            algorithms: ['ES256'],
-          }));
-        } catch {
-          // Fallback to HS256 for in-flight tokens during transition
-          const secret = new TextEncoder().encode(config.jwtPrivateKey);
-          ({ payload } = await jose.jwtVerify(token, secret, {
-            issuer: config.issuer,
-            algorithms: ['HS256'],
-          }));
+        } else {
+          throw new Error('JWKS not initialized');
         }
       } else {
         const secret = new TextEncoder().encode(config.jwtPrivateKey);
         ({ payload } = await jose.jwtVerify(token, secret, {
-          issuer: config.issuer,
+          ...verifyOpts,
+          algorithms: ['HS256'],
         }));
       }
       return c.json({
@@ -151,7 +162,8 @@ async function issueJwt(
       _cachedSigningKey = await jose.importPKCS8(config.jwtPrivateKey, 'ES256', { extractable: true }) as CryptoKey;
     }
     const header: jose.JWTHeaderParameters = { alg: 'ES256' };
-    if (config.kid) header.kid = config.kid;
+    const kid = config.getKid?.();
+    if (kid) header.kid = kid;
     return builder.setProtectedHeader(header).sign(_cachedSigningKey);
   }
 

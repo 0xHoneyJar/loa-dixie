@@ -39,25 +39,27 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 async function signEs256Token(
-  overrides: Partial<{ sub: string; iss: string; exp: string }> = {},
+  overrides: Partial<{ sub: string; iss: string; aud: string; exp: string }> = {},
 ) {
   return new jose.SignJWT({ role: 'team' })
     .setProtectedHeader({ alg: 'ES256' })
     .setSubject(overrides.sub ?? '0xTestWallet')
     .setIssuer(overrides.iss ?? 'dixie-bff')
+    .setAudience(overrides.aud ?? 'dixie-bff')
     .setIssuedAt()
     .setExpirationTime(overrides.exp ?? '5m')
     .sign(privateKey);
 }
 
 async function signHs256Token(
-  overrides: Partial<{ sub: string; iss: string; exp: string }> = {},
+  overrides: Partial<{ sub: string; iss: string; aud: string; exp: string }> = {},
 ) {
   const secret = new TextEncoder().encode(HS256_SECRET);
   return new jose.SignJWT({ role: 'team' })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(overrides.sub ?? '0xTestWallet')
     .setIssuer(overrides.iss ?? 'dixie-bff')
+    .setAudience(overrides.aud ?? 'dixie-bff')
     .setIssuedAt()
     .setExpirationTime(overrides.exp ?? '5m')
     .sign(secret);

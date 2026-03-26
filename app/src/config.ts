@@ -20,6 +20,8 @@ export interface DixieConfig {
   jwtPrivateKey: string;
   /** Derived JWT algorithm — 'ES256' for asymmetric (PEM key), 'HS256' for symmetric */
   jwtAlgorithm: 'ES256' | 'HS256';
+  /** Legacy HS256 secret for dual-algorithm transition window. Only used when jwtAlgorithm='ES256'. */
+  jwtLegacyHs256Secret: string | null;
   nodeEnv: string;
   logLevel: string;
   rateLimitRpm: number;
@@ -76,6 +78,7 @@ export interface DixieConfig {
  * DIXIE_PORT            (optional) — HTTP listen port; default 3001
  * DIXIE_JWT_PRIVATE_KEY (required) — JWT signing key; HS256 raw secret (min 32 chars) or EC P-256 PEM for ES256
  * DIXIE_JWT_ALG         (optional) — explicit algorithm override: 'ES256' or 'HS256'; auto-detected from key format if not set
+ * DIXIE_JWT_LEGACY_HS256_SECRET (optional) — old HS256 secret for dual-algorithm transition; only used when JWT_ALG=ES256
  * DIXIE_CORS_ORIGINS    (optional) — comma-separated allowed origins; default http://localhost:{port}
  * DIXIE_ALLOWLIST_PATH  (optional) — path to allowlist JSON file; default /data/allowlist.json
  * DIXIE_ADMIN_KEY       (optional) — admin API key for /api/admin endpoints
@@ -178,6 +181,7 @@ export function loadConfig(): DixieConfig {
     adminKey,
     jwtPrivateKey,
     jwtAlgorithm,
+    jwtLegacyHs256Secret: process.env.DIXIE_JWT_LEGACY_HS256_SECRET ?? null,
     nodeEnv,
     logLevel: process.env.LOG_LEVEL ?? 'info',
     rateLimitRpm: safeParseInt(process.env.DIXIE_RATE_LIMIT_RPM, 100, 10_000),

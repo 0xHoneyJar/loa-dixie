@@ -80,6 +80,7 @@ describe('JWKS endpoint', () => {
       .setProtectedHeader({ alg: 'ES256', kid: jwk.kid })
       .setSubject('0xVerifyWallet')
       .setIssuer('dixie-bff')
+      .setAudience('dixie-bff')
       .setIssuedAt()
       .setExpirationTime('5m')
       .sign(privKey);

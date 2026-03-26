@@ -5,6 +5,8 @@ import { startSanitizedSpan, hashForSpan } from '../utils/span-sanitizer.js';
 export interface JwtMiddlewareConfig {
   jwtPrivateKey: string;
   jwtAlgorithm: 'ES256' | 'HS256';
+  /** Legacy HS256 secret for dual-algorithm transition. Only used when jwtAlgorithm='ES256'. */
+  jwtLegacyHs256Secret?: string | null;
   issuer: string;
 }
 
@@ -12,8 +14,6 @@ export interface JwtMiddlewareConfig {
 let _es256PublicKey: CryptoKey | Uint8Array | null = null;
 let _hs256Secret: Uint8Array | null = null;
 
-/** ES256 public key in SPKI PEM format — for JWKS endpoint */
-let _publicKeySpki: string | null = null;
 /** ES256 public key as JWK — for JWKS endpoint */
 let _publicKeyJwk: jose.JWK | null = null;
 /** Key ID (SHA-256 thumbprint of JWK) */
@@ -36,9 +36,15 @@ export async function initJwtKeys(config: JwtMiddlewareConfig): Promise<void> {
     _publicKeyJwk = publicJwk;
     // Import public JWK as CryptoKey for verification
     _es256PublicKey = await jose.importJWK(publicJwk, 'ES256');
-    _publicKeySpki = await jose.exportSPKI(_es256PublicKey as unknown as Parameters<typeof jose.exportSPKI>[0]);
   }
-  _hs256Secret = new TextEncoder().encode(config.jwtPrivateKey);
+  // In ES256 mode, HS256 fallback uses the legacy secret (not the PEM key)
+  // In HS256 mode, use the primary key directly
+  if (config.jwtAlgorithm === 'ES256' && config.jwtLegacyHs256Secret) {
+    _hs256Secret = new TextEncoder().encode(config.jwtLegacyHs256Secret);
+  } else if (config.jwtAlgorithm === 'HS256') {
+    _hs256Secret = new TextEncoder().encode(config.jwtPrivateKey);
+  }
+  // If ES256 mode with no legacy secret: _hs256Secret stays null (no fallback)
 }
 
 /** Get the ES256 public key as JWK Set for the JWKS endpoint */
@@ -56,7 +62,6 @@ export function getKid(): string | null {
 export function _resetJwtKeys(): void {
   _es256PublicKey = null;
   _hs256Secret = null;
-  _publicKeySpki = null;
   _publicKeyJwk = null;
   _kid = null;
 }
@@ -82,31 +87,40 @@ export function createJwtMiddleware(config: JwtMiddlewareConfig) {
           try {
             let payload: jose.JWTPayload;
 
-            // Lazy init: if initJwtKeys hasn't been called yet, init HS256 inline
-            if (!_hs256Secret) {
+            // Lazy init for HS256-only mode (integration tests that skip initJwtKeys)
+            if (!_hs256Secret && config.jwtAlgorithm === 'HS256') {
               _hs256Secret = new TextEncoder().encode(config.jwtPrivateKey);
             }
+
+            const verifyOpts = { issuer: config.issuer, audience: 'dixie-bff' };
 
             if (config.jwtAlgorithm === 'ES256' && _es256PublicKey) {
               try {
                 ({ payload } = await jose.jwtVerify(token, _es256PublicKey, {
-                  issuer: config.issuer,
+                  ...verifyOpts,
                   algorithms: ['ES256'],
                 }));
                 span.setAttribute('jwt_alg', 'ES256');
               } catch {
-                // Dual-algorithm fallback: accept HS256 during transition
-                ({ payload } = await jose.jwtVerify(token, _hs256Secret, {
-                  issuer: config.issuer,
-                  algorithms: ['HS256'],
-                }));
-                span.setAttribute('jwt_alg', 'HS256_fallback');
+                // Dual-algorithm fallback using legacy HS256 secret (not the PEM key)
+                if (_hs256Secret) {
+                  ({ payload } = await jose.jwtVerify(token, _hs256Secret, {
+                    ...verifyOpts,
+                    algorithms: ['HS256'],
+                  }));
+                  span.setAttribute('jwt_alg', 'HS256_fallback');
+                } else {
+                  throw new Error('ES256 verification failed and no legacy HS256 secret configured');
+                }
               }
-            } else {
+            } else if (_hs256Secret) {
               ({ payload } = await jose.jwtVerify(token, _hs256Secret, {
-                issuer: config.issuer,
+                ...verifyOpts,
+                algorithms: ['HS256'],
               }));
               span.setAttribute('jwt_alg', 'HS256');
+            } else {
+              throw new Error('No verification key available');
             }
 
             if (payload.sub) {

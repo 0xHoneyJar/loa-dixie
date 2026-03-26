@@ -247,6 +247,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     await initJwtKeys({
       jwtPrivateKey: config.jwtPrivateKey,
       jwtAlgorithm: config.jwtAlgorithm,
+      jwtLegacyHs256Secret: config.jwtLegacyHs256Secret,
       issuer: 'dixie-bff',
     });
     if (dbPool) {
@@ -372,6 +373,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.use('/api/*', createJwtMiddleware({
     jwtPrivateKey: config.jwtPrivateKey,
     jwtAlgorithm: config.jwtAlgorithm,
+    jwtLegacyHs256Secret: config.jwtLegacyHs256Secret,
     issuer: 'dixie-bff',
   }));
 
@@ -432,9 +434,10 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.route('/api/auth', createAuthRoutes(allowlistStore, {
     jwtPrivateKey: config.jwtPrivateKey,
     jwtAlgorithm: config.jwtAlgorithm,
+    jwtLegacyHs256Secret: config.jwtLegacyHs256Secret ?? undefined,
     issuer: 'dixie-bff',
     expiresIn: '1h',
-    kid: getKid() ?? undefined,
+    getKid: () => getKid(),
   }));
   app.route('/api/admin', createAdminRoutes(allowlistStore, config.adminKey));
   app.route('/api/ws/ticket', createWsTicketRoutes(ticketStore));

@@ -12,18 +12,15 @@ export interface PaymentGateConfig {
   nodeEnv: string;
 }
 
-/** Routes that require payment when x402 is enabled */
-const PROTECTED_PREFIXES = ['/api/chat', '/api/agent/query', '/api/fleet/spawn'];
-
-/** Routes that are always free (default-deny: anything not listed here is protected) */
+/** Routes that are always free — everything else is protected (default-deny) */
 const FREE_PREFIXES = [
   '/api/health', '/api/auth/', '/.well-known/', '/api/admin/',
   '/api/reputation/', '/api/identity/',
 ];
 
 function isProtectedRoute(path: string): boolean {
-  if (FREE_PREFIXES.some(prefix => path.startsWith(prefix))) return false;
-  return PROTECTED_PREFIXES.some(prefix => path.startsWith(prefix));
+  // Default-deny: only routes in FREE_PREFIXES are exempt from payment
+  return !FREE_PREFIXES.some(prefix => path.startsWith(prefix));
 }
 
 /**
@@ -48,6 +45,16 @@ export function createPaymentGate(config?: PaymentGateConfig) {
     });
   }
 
+  // SEC-2: Block production enablement until facilitator URL is configured.
+  // Without a facilitator, we cannot validate payment headers — any non-empty
+  // header would bypass the gate, which is worse than no gate at all.
+  if (config.nodeEnv === 'production' && !config.x402FacilitatorUrl) {
+    throw new Error(
+      'DIXIE_X402_ENABLED=true in production requires DIXIE_X402_FACILITATOR_URL. ' +
+      'Payment enforcement without validation is fail-open in disguise.',
+    );
+  }
+
   return createMiddleware(async (c, next) => {
     const path = c.req.path;
 
@@ -68,9 +75,9 @@ export function createPaymentGate(config?: PaymentGateConfig) {
       }, 402);
     }
 
-    // TODO: When @x402/hono is available, validate payment header here.
-    // For now, accept any non-empty payment header as valid.
-    // Flatline SEC-3: Add idempotency key validation when settlement is wired.
+    // TODO: When @x402/hono is available, validate payment header against facilitator.
+    // Current state: accepts any non-empty header in non-production environments.
+    // Production gate above ensures this path only runs when facilitator is configured.
 
     await next();
   });

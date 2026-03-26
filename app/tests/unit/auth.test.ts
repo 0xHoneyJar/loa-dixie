@@ -74,6 +74,7 @@ describe('auth routes', () => {
         .setProtectedHeader({ alg: 'HS256' })
         .setSubject('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045')
         .setIssuer('dixie-bff')
+        .setAudience('dixie-bff')
         .setExpirationTime('1h')
         .sign(secret);
 
@@ -92,6 +93,7 @@ describe('auth routes', () => {
         .setProtectedHeader({ alg: 'HS256' })
         .setSubject('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045')
         .setIssuer('dixie-bff')
+        .setAudience('dixie-bff')
         .setExpirationTime(0) // already expired
         .sign(secret);
 

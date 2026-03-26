@@ -115,6 +115,7 @@ describe('jwt-exchange: Dixie-issued JWT accepted by loa-finn', () => {
       .setIssuedAt()
       .setExpirationTime('1h')
       .setIssuer('dixie-bff')
+      .setAudience('dixie-bff')
       .sign(secret);
 
     // Add the wallet to allowlist first (must be valid Ethereum address for viem)
@@ -144,6 +145,7 @@ describe('jwt-exchange: Dixie-issued JWT accepted by loa-finn', () => {
       .setIssuedAt(Math.floor(Date.now() / 1000) - 7200) // 2 hours ago
       .setExpirationTime(Math.floor(Date.now() / 1000) - 3600) // expired 1 hour ago
       .setIssuer('dixie-bff')
+      .setAudience('dixie-bff')
       .sign(secret);
 
     const res = await makeRequest('/api/chat', {

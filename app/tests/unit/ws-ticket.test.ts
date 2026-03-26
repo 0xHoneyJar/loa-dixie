@@ -14,6 +14,7 @@ async function makeJwt(wallet: string): Promise<string> {
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(wallet)
     .setIssuer('dixie-bff')
+    .setAudience('dixie-bff')
     .setExpirationTime('1h')
     .sign(secret);
 }
