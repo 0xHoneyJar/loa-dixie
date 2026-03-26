@@ -4,6 +4,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { requestId } from './middleware/request-id.js';
 import { createCors } from './middleware/cors.js';
 import { createJwtMiddleware, initJwtKeys, getKid } from './middleware/jwt.js';
+import { NftOwnershipResolver } from './services/nft-ownership-resolver.js';
 import { AllowlistStore, createAllowlistMiddleware } from './middleware/allowlist.js';
 import { createRateLimit } from './middleware/rate-limit.js';
 import { createTracing } from './middleware/tracing.js';
@@ -113,6 +114,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     (config.logLevel || 'info') as LogLevel,
   );
   const finnClient = new FinnClient(config.finnUrl, { log });
+  const nftOwnershipResolver = new NftOwnershipResolver(finnClient);
   const allowlistStore = new AllowlistStore(config.allowlistPath, {
     watch: config.nodeEnv !== 'test',
   });
@@ -402,17 +404,8 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.use('/api/*', createMemoryContext({
     memoryStore,
     resolveNftId: async (wallet: string) => {
-      // Resolve nftId from wallet via loa-finn identity graph
-      // Returns null if wallet has no associated dNFT
-      try {
-        const result = await finnClient.request<{ nftId: string }>(
-          'GET',
-          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
-        );
-        return result.nftId;
-      } catch {
-        return null;
-      }
+      const ownership = await nftOwnershipResolver.resolvePrimary(wallet);
+      return ownership?.nftId ?? null;
     },
   }));
 
@@ -450,20 +443,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     scheduleStore,
     convictionResolver,
     callbackSecret: config.scheduleCallbackSecret,
-    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
-    // resolve the primary. Multi-NFT support tracked in loa-finn issue
-    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
-    resolveNftOwnership: async (wallet: string) => {
-      try {
-        const result = await finnClient.request<{ nftId: string }>(
-          'GET',
-          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
-        );
-        return result;
-      } catch {
-        return null;
-      }
-    },
+    resolveNftOwnership: (wallet: string) => nftOwnershipResolver.resolvePrimary(wallet),
   }));
 
   // --- Phase 2: Enrichment API — autopoietic loop activation (Sprint 11) ---
@@ -510,37 +490,18 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   }));
   app.route('/api/learning', createLearningRoutes({
     learningEngine,
-    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
-    // resolve the primary. Multi-NFT support tracked in loa-finn issue
-    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
-    resolveNftOwnership: async (wallet: string) => {
-      try {
-        const result = await finnClient.request<{ nftId: string }>(
-          'GET',
-          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
-        );
-        return result;
-      } catch {
-        return null;
-      }
-    },
+    resolveNftOwnership: (wallet: string) => nftOwnershipResolver.resolvePrimary(wallet),
   }));
   app.route('/api/memory', createMemoryRoutes({
     memoryStore,
-    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
-    // resolve the primary. Multi-NFT support tracked in loa-finn issue
-    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
     resolveNftOwnership: async (wallet: string) => {
-      try {
-        const result = await finnClient.request<{
-          nftId: string;
-          ownerWallet: string;
-          delegatedWallets: string[];
-        }>('GET', `/api/identity/wallet/${encodeURIComponent(wallet)}/ownership`);
-        return result;
-      } catch {
-        return null;
-      }
+      const result = await nftOwnershipResolver.resolveOwnership(wallet);
+      if (!result || !result.ownerWallet) return null;
+      return {
+        nftId: result.nftId,
+        ownerWallet: result.ownerWallet,
+        delegatedWallets: result.delegatedWallets ?? [],
+      };
     },
   }));
 
