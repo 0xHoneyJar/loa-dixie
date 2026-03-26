@@ -22,6 +22,7 @@ describe('auth routes', () => {
       '/api/auth',
       createAuthRoutes(store, {
         jwtPrivateKey: JWT_SECRET,
+        jwtAlgorithm: 'HS256',
         issuer: 'dixie-bff',
         expiresIn: '1h',
       }),

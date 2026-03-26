@@ -26,7 +26,7 @@ describe('ws-ticket routes', () => {
     store = new TicketStore();
     app = new Hono();
     // Wire JWT middleware to set wallet on context + forward via header
-    app.use('/api/*', createJwtMiddleware(JWT_SECRET, 'dixie-bff'));
+    app.use('/api/*', createJwtMiddleware({ jwtPrivateKey: JWT_SECRET, jwtAlgorithm: 'HS256', issuer: 'dixie-bff' }));
     app.use('/api/*', async (c, next) => {
       const wallet = c.get('wallet');
       if (wallet) c.req.raw.headers.set('x-wallet-address', wallet);
@@ -85,7 +85,7 @@ describe('ws-ticket routes', () => {
     // Create a store with cap of 1
     const capStore = new TicketStore(30_000, 999_999, 1);
     const capApp = new Hono();
-    capApp.use('/api/*', createJwtMiddleware(JWT_SECRET, 'dixie-bff'));
+    capApp.use('/api/*', createJwtMiddleware({ jwtPrivateKey: JWT_SECRET, jwtAlgorithm: 'HS256', issuer: 'dixie-bff' }));
     capApp.use('/api/*', async (c, next) => {
       const wallet = c.get('wallet');
       if (wallet) c.req.raw.headers.set('x-wallet-address', wallet);

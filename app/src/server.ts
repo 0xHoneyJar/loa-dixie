@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { requestId } from './middleware/request-id.js';
 import { createCors } from './middleware/cors.js';
-import { createJwtMiddleware } from './middleware/jwt.js';
+import { createJwtMiddleware, initJwtKeys, getKid } from './middleware/jwt.js';
 import { AllowlistStore, createAllowlistMiddleware } from './middleware/allowlist.js';
 import { createRateLimit } from './middleware/rate-limit.js';
 import { createTracing } from './middleware/tracing.js';
@@ -13,6 +13,7 @@ import { createPaymentGate } from './middleware/payment.js';
 import { createWalletBridge } from './middleware/wallet-bridge.js';
 import { createHealthRoutes } from './routes/health.js';
 import { createAuthRoutes } from './routes/auth.js';
+import { createJwksRoutes } from './routes/jwks.js';
 import { createAdminRoutes } from './routes/admin.js';
 import { createChatRoutes } from './routes/chat.js';
 import { createSessionRoutes } from './routes/sessions.js';
@@ -240,6 +241,12 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Migration failure propagates (rejects the promise) so callers know the system
   // is not fully initialized. Log the error for diagnostics, then re-throw.
   const ready = (async () => {
+    // cycle-022: Initialize JWT keys (ES256 public key derivation + caching)
+    await initJwtKeys({
+      jwtPrivateKey: config.jwtPrivateKey,
+      jwtAlgorithm: config.jwtAlgorithm,
+      issuer: 'dixie-bff',
+    });
     if (dbPool) {
       try {
         await migrate(dbPool);
@@ -360,7 +367,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.use('*', loggerMiddleware);
 
   // --- Auth middleware (extract wallet from JWT, set on context) ---
-  app.use('/api/*', createJwtMiddleware(config.jwtPrivateKey, 'dixie-bff'));
+  app.use('/api/*', createJwtMiddleware({
+    jwtPrivateKey: config.jwtPrivateKey,
+    jwtAlgorithm: config.jwtAlgorithm,
+    issuer: 'dixie-bff',
+  }));
 
   // --- Wallet bridge (SEC-003: copy wallet from context to request header) ---
   // JWT middleware stores wallet via c.set('wallet'), but Hono sub-app boundaries
@@ -420,10 +431,13 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     adminKey: config.adminKey,
     reputationService,
   }));
+  app.route('/api/auth', createJwksRoutes());
   app.route('/api/auth', createAuthRoutes(allowlistStore, {
     jwtPrivateKey: config.jwtPrivateKey,
+    jwtAlgorithm: config.jwtAlgorithm,
     issuer: 'dixie-bff',
     expiresIn: '1h',
+    kid: getKid() ?? undefined,
   }));
   app.route('/api/admin', createAdminRoutes(allowlistStore, config.adminKey));
   app.route('/api/ws/ticket', createWsTicketRoutes(ticketStore));

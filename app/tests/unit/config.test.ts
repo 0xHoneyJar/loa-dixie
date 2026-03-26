@@ -62,14 +62,14 @@ describe('loadConfig', () => {
     process.env.FINN_URL = 'http://finn:4000';
     process.env.NODE_ENV = 'production';
     process.env.DIXIE_JWT_PRIVATE_KEY = 'short';
-    expect(() => loadConfig()).toThrow('DIXIE_JWT_PRIVATE_KEY must be at least 32 characters (got 5)');
+    expect(() => loadConfig()).toThrow('DIXIE_JWT_PRIVATE_KEY must be at least 32 characters for HS256 (got 5)');
   });
 
   it('throws when JWT key is empty in production', () => {
     process.env.FINN_URL = 'http://finn:4000';
     process.env.NODE_ENV = 'production';
     process.env.DIXIE_JWT_PRIVATE_KEY = '';
-    expect(() => loadConfig()).toThrow('DIXIE_JWT_PRIVATE_KEY must be at least 32 characters (got 0)');
+    expect(() => loadConfig()).toThrow('DIXIE_JWT_PRIVATE_KEY must be at least 32 characters for HS256 (got 0)');
   });
 
   it('accepts a valid JWT key in production', () => {

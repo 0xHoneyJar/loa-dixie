@@ -1022,7 +1022,7 @@
       "id": "cycle-021",
       "label": "Hounfour v8.3.1 Bump — Domain Tag Sanitization Fix & Docker Redeploy",
       "started": "2026-02-28",
-      "status": "active",
+      "status": "completed",
       "prd": "grimoires/loa/prd.md",
       "sdd": "grimoires/loa/sdd.md",
       "sprint_plan": "grimoires/loa/sprint.md",
@@ -1032,14 +1032,54 @@
           "global_id": 116,
           "label": "Hounfour v8.3.1 — Bump, Test, Build, Deploy",
           "tasks": 9,
+          "status": "completed"
+        }
+      ],
+      "completed": "2026-03-01"
+    },
+    {
+      "id": "cycle-022",
+      "label": "Dixie Phase 3 — Full Production Launch",
+      "started": "2026-03-26",
+      "status": "active",
+      "prd": "grimoires/loa/prd.md",
+      "sdd": "grimoires/loa/sdd.md",
+      "sprint_plan": "grimoires/loa/sprint.md",
+      "sprints": [
+        {
+          "id": "sprint-1",
+          "global_id": 117,
+          "label": "Authentication Hardening (Track A)",
+          "tasks": 7,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-2",
+          "global_id": 118,
+          "label": "API Consolidation (Track C)",
+          "tasks": 6,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-3",
+          "global_id": 119,
+          "label": "Payment Activation (Track B)",
+          "tasks": 9,
+          "status": "pending"
+        },
+        {
+          "id": "sprint-4",
+          "global_id": 120,
+          "label": "Deploy & Validation (Track D)",
+          "tasks": 7,
           "status": "pending"
         }
       ]
     }
   ],
-  "active_cycle": "cycle-021",
+  "active_cycle": "cycle-022",
   "active_bugfix": null,
-  "global_sprint_counter": 116,
+  "global_sprint_counter": 120,
   "bugfix_cycles": [],
   "release_cycles": [
     {
