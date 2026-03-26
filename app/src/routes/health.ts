@@ -26,6 +26,10 @@ export interface HealthDependencies {
   adminKey?: string;
   /** Reputation service for aggregate health reporting. @since Sprint 6 — Task 6.2 */
   reputationService?: ReputationService | null;
+  /** cycle-022: Pricing client for source observability */
+  pricingSource?: () => 'api' | 'fallback';
+  /** cycle-022: x402 payment enabled status */
+  x402Enabled?: boolean;
 }
 
 export function createHealthRoutes(deps: HealthDependencies): Hono {
@@ -88,6 +92,7 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
     const response: HealthResponse & {
       reputation_service?: { initialized: boolean; aggregate_count: number };
       governance?: { governor_count: number; resource_types: string[]; health: 'healthy' | 'degraded' };
+      economics?: { x402_enabled: boolean; pricing_source: 'api' | 'fallback' };
     } = {
       status: overallStatus,
       version: VERSION,
@@ -96,6 +101,10 @@ export function createHealthRoutes(deps: HealthDependencies): Hono {
       infrastructure: Object.keys(infraServices).length > 0 ? infraServices : undefined,
       reputation_service: reputationStatus,
       governance: governanceSummary,
+      economics: {
+        x402_enabled: deps.x402Enabled ?? false,
+        pricing_source: deps.pricingSource?.() ?? 'fallback',
+      },
       timestamp: new Date().toISOString(),
     };
 

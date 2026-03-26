@@ -18,6 +18,8 @@ export interface ModelPricing {
 export interface PricingClientConfig {
   pricingApiUrl: string | null;
   ttlMs: number;
+  /** Request timeout in milliseconds. Default: 3000 */
+  timeoutMs?: number;
 }
 
 /** Hardcoded fallback pricing (matches existing formula in agent.ts) */
@@ -62,7 +64,12 @@ export class PricingClient {
     // Try API
     if (this.config.pricingApiUrl) {
       try {
-        const res = await fetch(`${this.config.pricingApiUrl}/api/pricing/models`);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 3_000);
+        const res = await fetch(`${this.config.pricingApiUrl}/api/pricing/models`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
         if (res.ok) {
           const data = await res.json() as { models: ModelPricing[] };
           const pricing: Record<string, ModelPricing> = { ...FALLBACK_PRICING };

@@ -5,6 +5,8 @@ import { requestId } from './middleware/request-id.js';
 import { createCors } from './middleware/cors.js';
 import { createJwtMiddleware, initJwtKeys, getKid } from './middleware/jwt.js';
 import { NftOwnershipResolver } from './services/nft-ownership-resolver.js';
+import { SettlementClient } from './services/settlement-client.js';
+import { PricingClient } from './services/pricing-client.js';
 import { AllowlistStore, createAllowlistMiddleware } from './middleware/allowlist.js';
 import { createRateLimit } from './middleware/rate-limit.js';
 import { createTracing } from './middleware/tracing.js';
@@ -115,6 +117,14 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   );
   const finnClient = new FinnClient(config.finnUrl, { log });
   const nftOwnershipResolver = new NftOwnershipResolver(finnClient);
+  const settlementClient = new SettlementClient({
+    facilitatorUrl: config.x402FacilitatorUrl,
+    enabled: config.x402Enabled,
+  });
+  const pricingClient = new PricingClient({
+    pricingApiUrl: config.pricingApiUrl,
+    ttlMs: config.pricingTtlSec * 1000,
+  });
   const allowlistStore = new AllowlistStore(config.allowlistPath, {
     watch: config.nodeEnv !== 'test',
   });
@@ -429,6 +439,8 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     signalEmitter,
     adminKey: config.adminKey,
     reputationService,
+    pricingSource: () => pricingClient.getPricingSource(),
+    x402Enabled: config.x402Enabled,
   }));
   app.route('/api/auth', createJwksRoutes());
   app.route('/api/auth', createAuthRoutes(allowlistStore, {
@@ -494,6 +506,8 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     convictionResolver,
     memoryStore,
     priorityStore,
+    settlementClient,
+    pricingClient,
   }));
   app.route('/api/learning', createLearningRoutes({
     learningEngine,

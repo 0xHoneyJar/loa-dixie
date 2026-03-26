@@ -36,6 +36,10 @@ export interface SettlementReceipt {
 export interface SettlementClientConfig {
   facilitatorUrl: string | null;
   enabled: boolean;
+  /** S2S JWT token provider — returns a signed service JWT for freeside auth */
+  getServiceToken?: () => Promise<string>;
+  /** Request timeout in milliseconds. Default: 5000 */
+  timeoutMs?: number;
 }
 
 export class SettlementClient {
@@ -44,8 +48,11 @@ export class SettlementClient {
   private circuitResetAt = 0;
   private readonly maxFailures = 5;
   private readonly resetWindowMs = 30_000;
+  private readonly timeoutMs: number;
 
-  constructor(private config: SettlementClientConfig) {}
+  constructor(private config: SettlementClientConfig) {
+    this.timeoutMs = config.timeoutMs ?? 5_000;
+  }
 
   async quote(request: QuoteRequest): Promise<QuoteResponse> {
     if (!this.config.enabled || !this.config.facilitatorUrl) {
@@ -57,11 +64,10 @@ export class SettlementClient {
     }
 
     try {
-      const res = await fetch(`${this.config.facilitatorUrl}/api/settlement/quote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      });
+      const res = await this.authenticatedFetch(
+        `${this.config.facilitatorUrl}/api/settlement/quote`,
+        request,
+      );
       if (!res.ok) throw new Error(`Quote failed: ${res.status}`);
       this.resetCircuit();
       return await res.json() as QuoteResponse;
@@ -81,17 +87,37 @@ export class SettlementClient {
     }
 
     try {
-      const res = await fetch(`${this.config.facilitatorUrl}/api/settlement/settle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      });
+      const res = await this.authenticatedFetch(
+        `${this.config.facilitatorUrl}/api/settlement/settle`,
+        request,
+      );
       if (!res.ok) throw new Error(`Settlement failed: ${res.status}`);
       this.resetCircuit();
       return await res.json() as SettlementReceipt;
     } catch (err) {
       this.recordFailure();
       throw err;
+    }
+  }
+
+  /** Fetch with S2S JWT auth header and timeout */
+  private async authenticatedFetch(url: string, body: unknown): Promise<Response> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.config.getServiceToken) {
+      const token = await this.config.getServiceToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      return await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
     }
   }
 

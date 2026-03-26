@@ -25,6 +25,8 @@ import type {
 import { DEFAULT_AGENT_RATE_LIMITS } from '../types/agent-api.js';
 import type { KnowledgePriorityStore } from '../services/knowledge-priority-store.js';
 import { computeCost } from '../types/economic.js';
+import type { SettlementClient } from '../services/settlement-client.js';
+import type { PricingClient } from '../services/pricing-client.js';
 
 export interface AgentRouteDeps {
   finnClient: FinnClient;
@@ -33,6 +35,10 @@ export interface AgentRouteDeps {
   rateLimits?: AgentRateLimitConfig;
   /** Task 21.4: Conviction-weighted knowledge priority voting store */
   priorityStore?: KnowledgePriorityStore;
+  /** cycle-022: Settlement client for x402 payment receipts */
+  settlementClient?: SettlementClient;
+  /** cycle-022: Dynamic pricing client */
+  pricingClient?: PricingClient;
 }
 
 /**
@@ -237,25 +243,54 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
         },
       });
 
-      // Calculate cost using model-specific pricing table (Bridge iter2-medium-2)
-      const costMicroUsd = computeCost(finnResponse.model, finnResponse.input_tokens, finnResponse.output_tokens);
+      // Calculate cost: use dynamic pricing if available, else static table
+      const costMicroUsd = deps.pricingClient
+        ? await deps.pricingClient.computeCost(finnResponse.model, finnResponse.input_tokens, finnResponse.output_tokens)
+        : computeCost(finnResponse.model, finnResponse.input_tokens, finnResponse.output_tokens);
 
       // Post-request budget check — warn if actual exceeds max (Bridge medium-8)
-      // Pre-flight already rejected clearly over-budget requests;
-      // this catches cases where actual cost exceeded the estimate
       let budgetWarning: string | null = null;
       if (body.maxCostMicroUsd && costMicroUsd > body.maxCostMicroUsd) {
         budgetWarning = `Actual cost ${costMicroUsd}μUSD exceeded max ${body.maxCostMicroUsd}μUSD`;
       }
 
-      // Generate x402 receipt (mock — in production, settle via freeside)
-      const receipt: X402Receipt = {
-        receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        payer: agentTba,
-        payee: 'dixie-oracle',
-        amountMicroUsd: costMicroUsd,
-        timestamp: new Date().toISOString(),
-      };
+      // Settle via freeside if available, else generate mock receipt
+      let receipt: X402Receipt;
+      if (deps.settlementClient) {
+        try {
+          const settlementResult = await deps.settlementClient.settle({
+            quoteId: `quote-${Date.now()}`,
+            idempotencyKey: `${agentTba}-${Date.now()}`,
+            actualInputTokens: finnResponse.input_tokens,
+            actualOutputTokens: finnResponse.output_tokens,
+          });
+          receipt = {
+            receiptId: settlementResult.receiptId,
+            payer: agentTba,
+            payee: 'dixie-oracle',
+            amountMicroUsd: settlementResult.amountMicroUsd || costMicroUsd,
+            timestamp: settlementResult.settledAt,
+            transactionHash: settlementResult.transactionHash,
+          };
+        } catch {
+          // Settlement failed — fall back to mock receipt
+          receipt = {
+            receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            payer: agentTba,
+            payee: 'dixie-oracle',
+            amountMicroUsd: costMicroUsd,
+            timestamp: new Date().toISOString(),
+          };
+        }
+      } else {
+        receipt = {
+          receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          payer: agentTba,
+          payee: 'dixie-oracle',
+          amountMicroUsd: costMicroUsd,
+          timestamp: new Date().toISOString(),
+        };
+      }
 
       const response: AgentQueryResponse = {
         response: finnResponse.response,
