@@ -58,6 +58,14 @@ export interface DixieConfig {
 
   // Phase 2: Schedule callback HMAC secret (Bridge high-2)
   scheduleCallbackSecret: string;
+
+  // Phase 3: x402 payment activation
+  x402Enabled: boolean;
+  x402FacilitatorUrl: string | null;
+
+  // Phase 3: Dynamic pricing
+  pricingApiUrl: string | null;
+  pricingTtlSec: number;
 }
 
 /**
@@ -89,6 +97,12 @@ export interface DixieConfig {
  * DATABASE_POOL_SIZE          (optional) — max connections in PostgreSQL pool; default 10
  * DIXIE_RATE_LIMIT_BACKEND    (optional) — 'memory' or 'redis'; default 'memory' (auto-upgrades to 'redis' when REDIS_URL set)
  * DIXIE_SCHEDULE_CALLBACK_SECRET (optional) — HMAC secret for schedule callback verification; default '' (rejects all callbacks in production)
+ *
+ * Phase 3 additions:
+ * DIXIE_X402_ENABLED           (optional) — enable x402 payment enforcement; default 'false'
+ * DIXIE_X402_FACILITATOR_URL   (optional) — freeside x402 facilitator URL; null disables settlement
+ * DIXIE_PRICING_API_URL        (optional) — freeside dynamic pricing API URL; null uses hardcoded rates
+ * DIXIE_PRICING_TTL            (optional) — pricing cache TTL in seconds; default 300
  */
 export function loadConfig(): DixieConfig {
   const finnUrl = process.env.FINN_URL;
@@ -196,5 +210,13 @@ export function loadConfig(): DixieConfig {
 
     // Phase 2: Schedule callback HMAC
     scheduleCallbackSecret: process.env.DIXIE_SCHEDULE_CALLBACK_SECRET ?? '',
+
+    // Phase 3: x402 payment
+    x402Enabled: process.env.DIXIE_X402_ENABLED === 'true',
+    x402FacilitatorUrl: process.env.DIXIE_X402_FACILITATOR_URL ?? null,
+
+    // Phase 3: Dynamic pricing
+    pricingApiUrl: process.env.DIXIE_PRICING_API_URL ?? null,
+    pricingTtlSec: safeParseInt(process.env.DIXIE_PRICING_TTL, 300, 86_400),
   };
 }

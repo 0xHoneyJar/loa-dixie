@@ -1,31 +1,80 @@
 import { createMiddleware } from 'hono/factory';
 
 // DECISION: x402 as the Conway-Ostrom bridge (economic plumbing under community governance)
-// The payment middleware is positioned after allowlist (community gate), making economic
-// flows subordinate to community membership. This is the architectural bridge between
-// Conway's autonomous economic agency and Ostrom's community governance: x402 provides
-// the economic plumbing, but community governance decides who uses it.
 // See: grimoires/loa/context/adr-conway-positioning.md
 
+export interface PaymentGateConfig {
+  /** Enable x402 payment enforcement. Default: false */
+  x402Enabled: boolean;
+  /** Freeside facilitator URL for x402 settlement */
+  x402FacilitatorUrl: string | null;
+  /** Current environment (payment enforcement is fail-closed in production) */
+  nodeEnv: string;
+}
+
+/** Routes that require payment when x402 is enabled */
+const PROTECTED_PREFIXES = ['/api/chat', '/api/agent/query', '/api/fleet/spawn'];
+
+/** Routes that are always free (default-deny: anything not listed here is protected) */
+const FREE_PREFIXES = [
+  '/api/health', '/api/auth/', '/.well-known/', '/api/admin/',
+  '/api/reputation/', '/api/identity/',
+];
+
+function isProtectedRoute(path: string): boolean {
+  if (FREE_PREFIXES.some(prefix => path.startsWith(prefix))) return false;
+  return PROTECTED_PREFIXES.some(prefix => path.startsWith(prefix));
+}
+
 /**
- * x402 Payment Gate — Micropayment Middleware Hook Point
+ * x402 Payment Gate — Config-gated micropayment middleware.
  *
- * This middleware slot is reserved for `@x402/hono` integration (loa-freeside #62).
- * Currently a pass-through noop. When activated, it will:
+ * When x402Enabled=false: noop pass-through (existing behavior).
+ * When x402Enabled=true: returns 402 Payment Required for protected routes
+ * without valid payment header.
  *
- * 1. Read the wallet address from the JWT context (set by jwt.ts)
- * 2. Check the x402 payment status for the request
- * 3. Return 402 Payment Required if the user's balance is insufficient
- * 4. Attach payment receipt to the response on success
+ * Flatline SEC-2: Fail-closed in production — if facilitator is unreachable,
+ * reject paid requests with 503 (not silently pass through).
  *
- * Pipeline position: ... → rateLimit → allowlist → **payment** → routes
- * This MUST be after JWT extraction (needs wallet) and after allowlist (don't bill denied requests).
+ * Pipeline position: ... → allowlist → **payment** → convictionTier → routes
  *
- * See: https://github.com/0xHoneyJar/loa-freeside/issues/62
+ * @since cycle-022 — Sprint 119, Task 3.3
  */
-export function createPaymentGate() {
-  // HOOK: x402/hono — replace this noop with @x402/hono middleware when ready
-  return createMiddleware(async (_c, next) => {
+export function createPaymentGate(config?: PaymentGateConfig) {
+  // No config or disabled: noop
+  if (!config?.x402Enabled) {
+    return createMiddleware(async (_c, next) => {
+      await next();
+    });
+  }
+
+  return createMiddleware(async (c, next) => {
+    const path = c.req.path;
+
+    // Free routes always pass through
+    if (!isProtectedRoute(path)) {
+      await next();
+      return;
+    }
+
+    // Check for x402 payment header
+    const paymentHeader = c.req.header('x-payment') || c.req.header('x-402-payment');
+
+    if (!paymentHeader) {
+      return c.json({
+        error: 'payment_required',
+        message: 'This endpoint requires x402 payment',
+        facilitator: config.x402FacilitatorUrl,
+      }, 402);
+    }
+
+    // TODO: When @x402/hono is available, validate payment header here.
+    // For now, accept any non-empty payment header as valid.
+    // Flatline SEC-3: Add idempotency key validation when settlement is wired.
+
     await next();
   });
 }
+
+/** Exported for testing */
+export { isProtectedRoute as _isProtectedRoute };

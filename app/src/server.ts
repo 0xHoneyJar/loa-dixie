@@ -391,7 +391,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // HOOK: x402 payment gate — micropayment middleware slot (loa-freeside #62)
   // Position: after allowlist (don't bill denied requests), before routes
   // Replace with @x402/hono when ready. See: app/src/middleware/payment.ts
-  app.use('/api/*', createPaymentGate());
+  app.use('/api/*', createPaymentGate({
+    x402Enabled: config.x402Enabled,
+    x402FacilitatorUrl: config.x402FacilitatorUrl,
+    nodeEnv: config.nodeEnv,
+  }));
 
   // --- Phase 2 Position 13: Conviction tier resolution ---
   // Resolves wallet → BGT staking → conviction tier (5-tier commons governance)
