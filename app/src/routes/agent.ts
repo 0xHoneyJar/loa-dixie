@@ -224,7 +224,22 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
         systemNote = `Note: Some knowledge sources may be outdated [${staleList}]. Consider noting this if your response draws heavily from these domains.`;
       }
 
-      // Forward to loa-finn with agent context
+      // --- QUOTE: Reserve credits before incurring inference cost ---
+      let quoteId: string | null = null;
+      if (deps.settlementClient) {
+        try {
+          const quote = await deps.settlementClient.quote({
+            model: 'claude-sonnet-4-6', // estimated model
+            estimatedTokens: (body.maxTokens ?? 600) + 200, // rough estimate: prompt + completion
+            walletAddress: agentTba,
+          });
+          quoteId = quote.quoteId;
+        } catch {
+          // Quote failed — continue without reservation (mock receipt path)
+        }
+      }
+
+      // --- INFER: Forward to loa-finn ---
       const finnResponse = await finnClient.request<{
         response: string;
         model: string;
@@ -239,28 +254,28 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
           maxTokens: body.maxTokens,
           knowledgeDomain: body.knowledgeDomain,
           sessionId: body.sessionId,
-          systemNote, // Adaptive routing: hedging instruction on low confidence
+          systemNote,
         },
       });
 
-      // Calculate cost: use dynamic pricing if available, else static table
+      // Calculate actual cost: use dynamic pricing if available, else static table
       const costMicroUsd = deps.pricingClient
         ? await deps.pricingClient.computeCost(finnResponse.model, finnResponse.input_tokens, finnResponse.output_tokens)
         : computeCost(finnResponse.model, finnResponse.input_tokens, finnResponse.output_tokens);
 
-      // Post-request budget check — warn if actual exceeds max (Bridge medium-8)
+      // Post-request budget check
       let budgetWarning: string | null = null;
       if (body.maxCostMicroUsd && costMicroUsd > body.maxCostMicroUsd) {
         budgetWarning = `Actual cost ${costMicroUsd}μUSD exceeded max ${body.maxCostMicroUsd}μUSD`;
       }
 
-      // Settle via freeside if available, else generate mock receipt
+      // --- SETTLE: Finalize with actual token usage ---
       let receipt: X402Receipt;
-      if (deps.settlementClient) {
+      if (deps.settlementClient && quoteId) {
         try {
           const settlementResult = await deps.settlementClient.settle({
-            quoteId: `quote-${Date.now()}`,
-            idempotencyKey: `${agentTba}-${Date.now()}`,
+            quoteId,
+            idempotencyKey: quoteId, // Bridgebuilder Finding 3: quoteId as idempotency key
             actualInputTokens: finnResponse.input_tokens,
             actualOutputTokens: finnResponse.output_tokens,
           });
@@ -273,7 +288,7 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
             transactionHash: settlementResult.transactionHash,
           };
         } catch {
-          // Settlement failed — fall back to mock receipt
+          // Settlement failed — generate mock receipt (quote will expire)
           receipt = {
             receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             payer: agentTba,

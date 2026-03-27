@@ -64,6 +64,8 @@ export interface DixieConfig {
   // Phase 3: x402 payment activation
   x402Enabled: boolean;
   x402FacilitatorUrl: string | null;
+  /** Shared secret for S2S JWT to freeside settlement API */
+  billingJwtSecret: string | null;
 
   // Phase 3: Dynamic pricing
   pricingApiUrl: string | null;
@@ -104,6 +106,7 @@ export interface DixieConfig {
  * Phase 3 additions:
  * DIXIE_X402_ENABLED           (optional) — enable x402 payment enforcement; default 'false'
  * DIXIE_X402_FACILITATOR_URL   (optional) — freeside x402 facilitator URL; null disables settlement
+ * BILLING_INTERNAL_JWT_SECRET  (optional) — shared secret for S2S JWT to freeside settlement API
  * DIXIE_PRICING_API_URL        (optional) — freeside dynamic pricing API URL; null uses hardcoded rates
  * DIXIE_PRICING_TTL            (optional) — pricing cache TTL in seconds; default 300
  */
@@ -218,6 +221,7 @@ export function loadConfig(): DixieConfig {
     // Phase 3: x402 payment
     x402Enabled: process.env.DIXIE_X402_ENABLED === 'true',
     x402FacilitatorUrl: process.env.DIXIE_X402_FACILITATOR_URL ?? null,
+    billingJwtSecret: process.env.BILLING_INTERNAL_JWT_SECRET ?? null,
 
     // Phase 3: Dynamic pricing
     pricingApiUrl: process.env.DIXIE_PRICING_API_URL ?? null,

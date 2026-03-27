@@ -7,6 +7,7 @@ import { createJwtMiddleware, initJwtKeys, getKid } from './middleware/jwt.js';
 import { NftOwnershipResolver } from './services/nft-ownership-resolver.js';
 import { SettlementClient } from './services/settlement-client.js';
 import { PricingClient } from './services/pricing-client.js';
+import { createS2STokenProvider } from './utils/s2s-jwt.js';
 import { AllowlistStore, createAllowlistMiddleware } from './middleware/allowlist.js';
 import { createRateLimit } from './middleware/rate-limit.js';
 import { createTracing } from './middleware/tracing.js';
@@ -120,6 +121,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   const settlementClient = new SettlementClient({
     facilitatorUrl: config.x402FacilitatorUrl,
     enabled: config.x402Enabled,
+    getServiceToken: config.billingJwtSecret
+      ? createS2STokenProvider({ secret: config.billingJwtSecret })
+      : undefined,
   });
   const pricingClient = new PricingClient({
     pricingApiUrl: config.pricingApiUrl,
