@@ -72,6 +72,7 @@ beforeAll(async () => {
     allowlistPath: '',
     adminKey: ADMIN_KEY,
     jwtPrivateKey: JWT_SECRET,
+    jwtAlgorithm: 'HS256' as const,
     nodeEnv: 'test',
     logLevel: 'error',
     rateLimitRpm: 1000,

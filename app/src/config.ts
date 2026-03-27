@@ -18,6 +18,10 @@ export interface DixieConfig {
   allowlistPath: string;
   adminKey: string;
   jwtPrivateKey: string;
+  /** Derived JWT algorithm — 'ES256' for asymmetric (PEM key), 'HS256' for symmetric */
+  jwtAlgorithm: 'ES256' | 'HS256';
+  /** Legacy HS256 secret for dual-algorithm transition window. Only used when jwtAlgorithm='ES256'. */
+  jwtLegacyHs256Secret: string | null;
   nodeEnv: string;
   logLevel: string;
   rateLimitRpm: number;
@@ -56,6 +60,16 @@ export interface DixieConfig {
 
   // Phase 2: Schedule callback HMAC secret (Bridge high-2)
   scheduleCallbackSecret: string;
+
+  // Phase 3: x402 payment activation
+  x402Enabled: boolean;
+  x402FacilitatorUrl: string | null;
+  /** Shared secret for S2S JWT to freeside settlement API */
+  billingJwtSecret: string | null;
+
+  // Phase 3: Dynamic pricing
+  pricingApiUrl: string | null;
+  pricingTtlSec: number;
 }
 
 /**
@@ -64,7 +78,9 @@ export interface DixieConfig {
  * FINN_URL              (required) — loa-finn backend URL (e.g. http://localhost:3000)
  * FINN_WS_URL           (optional) — WebSocket URL for loa-finn; defaults to FINN_URL with ws:// scheme
  * DIXIE_PORT            (optional) — HTTP listen port; default 3001
- * DIXIE_JWT_PRIVATE_KEY (required) — HS256 secret for JWT signing; min 32 chars (empty allowed in test)
+ * DIXIE_JWT_PRIVATE_KEY (required) — JWT signing key; HS256 raw secret (min 32 chars) or EC P-256 PEM for ES256
+ * DIXIE_JWT_ALG         (optional) — explicit algorithm override: 'ES256' or 'HS256'; auto-detected from key format if not set
+ * DIXIE_JWT_LEGACY_HS256_SECRET (optional) — old HS256 secret for dual-algorithm transition; only used when JWT_ALG=ES256
  * DIXIE_CORS_ORIGINS    (optional) — comma-separated allowed origins; default http://localhost:{port}
  * DIXIE_ALLOWLIST_PATH  (optional) — path to allowlist JSON file; default /data/allowlist.json
  * DIXIE_ADMIN_KEY       (optional) — admin API key for /api/admin endpoints
@@ -86,6 +102,13 @@ export interface DixieConfig {
  * DATABASE_POOL_SIZE          (optional) — max connections in PostgreSQL pool; default 10
  * DIXIE_RATE_LIMIT_BACKEND    (optional) — 'memory' or 'redis'; default 'memory' (auto-upgrades to 'redis' when REDIS_URL set)
  * DIXIE_SCHEDULE_CALLBACK_SECRET (optional) — HMAC secret for schedule callback verification; default '' (rejects all callbacks in production)
+ *
+ * Phase 3 additions:
+ * DIXIE_X402_ENABLED           (optional) — enable x402 payment enforcement; default 'false'
+ * DIXIE_X402_FACILITATOR_URL   (optional) — freeside x402 facilitator URL; null disables settlement
+ * BILLING_INTERNAL_JWT_SECRET  (optional) — shared secret for S2S JWT to freeside settlement API
+ * DIXIE_PRICING_API_URL        (optional) — freeside dynamic pricing API URL; null uses hardcoded rates
+ * DIXIE_PRICING_TTL            (optional) — pricing cache TTL in seconds; default 300
  */
 export function loadConfig(): DixieConfig {
   const finnUrl = process.env.FINN_URL;
@@ -94,20 +117,37 @@ export function loadConfig(): DixieConfig {
   }
 
   const nodeEnv = process.env.NODE_ENV ?? 'development';
-  // ADR: JWT key format — currently a raw string for HS256.
-  // For ES256 migration (Phase 2), this becomes a PEM-encoded EC private key.
-  // The validation below (≥32 chars) applies to HS256 raw secrets.
-  // For ES256, update validation to check for '-----BEGIN EC PRIVATE KEY-----' prefix.
   const jwtPrivateKey = process.env.DIXIE_JWT_PRIVATE_KEY ?? '';
 
-  // Validate JWT key — an empty or short key allows trivial token forgery.
-  // In test mode, allow empty key for convenience but warn.
+  // Determine JWT algorithm: explicit env var takes precedence, then auto-detect from key format
+  const jwtAlgRaw = process.env.DIXIE_JWT_ALG;
+  let jwtAlgorithm: 'ES256' | 'HS256';
+  const isPemKey = jwtPrivateKey.includes('-----BEGIN') && jwtPrivateKey.includes('PRIVATE KEY');
+
+  if (jwtAlgRaw === 'ES256' || jwtAlgRaw === 'HS256') {
+    jwtAlgorithm = jwtAlgRaw;
+  } else if (jwtAlgRaw) {
+    throw new Error(`DIXIE_JWT_ALG must be 'ES256' or 'HS256' (got '${jwtAlgRaw}')`);
+  } else {
+    jwtAlgorithm = isPemKey ? 'ES256' : 'HS256';
+  }
+
+  // Validate key material matches declared algorithm (Flatline SEC-1: prevent misclassification)
   if (nodeEnv === 'test' && !jwtPrivateKey) {
     process.stderr.write('WARNING: DIXIE_JWT_PRIVATE_KEY is empty (test mode)\n');
-  } else if (jwtPrivateKey.length < 32) {
-    throw new Error(
-      `DIXIE_JWT_PRIVATE_KEY must be at least 32 characters (got ${jwtPrivateKey.length})`,
-    );
+  } else if (jwtAlgorithm === 'ES256') {
+    if (!isPemKey) {
+      throw new Error(
+        'DIXIE_JWT_ALG=ES256 requires a PEM-encoded EC private key (-----BEGIN EC PRIVATE KEY----- or -----BEGIN PRIVATE KEY-----)',
+      );
+    }
+  } else {
+    // HS256: raw secret, minimum 32 chars
+    if (jwtPrivateKey.length < 32) {
+      throw new Error(
+        `DIXIE_JWT_PRIVATE_KEY must be at least 32 characters for HS256 (got ${jwtPrivateKey.length})`,
+      );
+    }
   }
 
   const port = safeParseInt(process.env.DIXIE_PORT, 3001, 65535);
@@ -143,6 +183,8 @@ export function loadConfig(): DixieConfig {
     allowlistPath: process.env.DIXIE_ALLOWLIST_PATH ?? '/data/allowlist.json',
     adminKey,
     jwtPrivateKey,
+    jwtAlgorithm,
+    jwtLegacyHs256Secret: process.env.DIXIE_JWT_LEGACY_HS256_SECRET ?? null,
     nodeEnv,
     logLevel: process.env.LOG_LEVEL ?? 'info',
     rateLimitRpm: safeParseInt(process.env.DIXIE_RATE_LIMIT_RPM, 100, 10_000),
@@ -175,5 +217,14 @@ export function loadConfig(): DixieConfig {
 
     // Phase 2: Schedule callback HMAC
     scheduleCallbackSecret: process.env.DIXIE_SCHEDULE_CALLBACK_SECRET ?? '',
+
+    // Phase 3: x402 payment
+    x402Enabled: process.env.DIXIE_X402_ENABLED === 'true',
+    x402FacilitatorUrl: process.env.DIXIE_X402_FACILITATOR_URL ?? null,
+    billingJwtSecret: process.env.BILLING_INTERNAL_JWT_SECRET ?? null,
+
+    // Phase 3: Dynamic pricing
+    pricingApiUrl: process.env.DIXIE_PRICING_API_URL ?? null,
+    pricingTtlSec: safeParseInt(process.env.DIXIE_PRICING_TTL, 300, 86_400),
   };
 }

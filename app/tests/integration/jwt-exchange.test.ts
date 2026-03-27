@@ -83,6 +83,7 @@ beforeAll(async () => {
       allowlistPath: '',
       adminKey: ADMIN_KEY,
       jwtPrivateKey: JWT_SECRET,
+      jwtAlgorithm: 'HS256' as const,
       nodeEnv: 'test',
       logLevel: 'error',
       rateLimitRpm: 1000,
@@ -114,6 +115,7 @@ describe('jwt-exchange: Dixie-issued JWT accepted by loa-finn', () => {
       .setIssuedAt()
       .setExpirationTime('1h')
       .setIssuer('dixie-bff')
+      .setAudience('dixie-bff')
       .sign(secret);
 
     // Add the wallet to allowlist first (must be valid Ethereum address for viem)
@@ -143,6 +145,7 @@ describe('jwt-exchange: Dixie-issued JWT accepted by loa-finn', () => {
       .setIssuedAt(Math.floor(Date.now() / 1000) - 7200) // 2 hours ago
       .setExpirationTime(Math.floor(Date.now() / 1000) - 3600) // expired 1 hour ago
       .setIssuer('dixie-bff')
+      .setAudience('dixie-bff')
       .sign(secret);
 
     const res = await makeRequest('/api/chat', {
@@ -180,6 +183,78 @@ describe('jwt-exchange: Dixie-issued JWT accepted by loa-finn', () => {
 
     // Wrong issuer should be rejected
     expect(res.status).toBe(401);
+  });
+
+  it('ES256 JWT issued and verified via JWKS round-trip', async () => {
+    if (isDockerMode) return;
+
+    // Generate an ephemeral EC P-256 keypair for this test
+    const { privateKey } = await jose.generateKeyPair('ES256', { extractable: true });
+    const privatePem = await jose.exportPKCS8(privateKey);
+
+    // Create a separate DixieApp with ES256 config
+    const es256Config: DixieConfig = {
+      port: 3498,
+      finnUrl: `http://localhost:${MOCK_FINN_PORT}`,
+      finnWsUrl: `ws://localhost:${MOCK_FINN_PORT}`,
+      corsOrigins: ['*'],
+      allowlistPath: '',
+      adminKey: ADMIN_KEY,
+      jwtPrivateKey: privatePem,
+      jwtAlgorithm: 'ES256' as const,
+      jwtLegacyHs256Secret: null,
+      nodeEnv: 'test',
+      logLevel: 'error',
+      rateLimitRpm: 1000,
+      otelEndpoint: '',
+    };
+    const es256App = createDixieApp(es256Config);
+
+    // Wait for initJwtKeys to complete (inside ready promise)
+    await es256App.ready;
+
+    // 1. Verify JWKS endpoint serves the public key
+    const jwksRes = await es256App.app.request('/api/auth/.well-known/jwks.json');
+    expect(jwksRes.status).toBe(200);
+    const jwks = await jwksRes.json();
+    expect(jwks.keys).toHaveLength(1);
+    expect(jwks.keys[0].alg).toBe('ES256');
+    expect(jwks.keys[0].kid).toBeDefined();
+    expect(jwks.keys[0].d).toBeUndefined(); // no private key leaked
+
+    // 2. Issue an ES256 token (simulating what /api/auth/siwe would produce)
+    const kid = jwks.keys[0].kid;
+    const es256Jwt = await new jose.SignJWT({ role: 'team' })
+      .setProtectedHeader({ alg: 'ES256', kid })
+      .setSubject(TEST_WALLET)
+      .setIssuer('dixie-bff')
+      .setAudience('dixie-bff')
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(privateKey);
+
+    // 3. Verify the token using the JWK from the JWKS endpoint (cross-service verification)
+    const pubKey = await jose.importJWK(jwks.keys[0], 'ES256');
+    const { payload } = await jose.jwtVerify(es256Jwt, pubKey, {
+      issuer: 'dixie-bff',
+      audience: 'dixie-bff',
+    });
+    expect(payload.sub).toBe(TEST_WALLET);
+    expect(payload.aud).toBe('dixie-bff');
+
+    // 4. Use the ES256 JWT to make an authenticated request through the full app
+    es256App.allowlistStore.addEntry('wallet', TEST_WALLET);
+    const chatRes = await es256App.app.request('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${es256Jwt}`,
+      },
+      body: JSON.stringify({ prompt: 'test ES256 exchange' }),
+    });
+    expect(chatRes.status).toBe(200);
+
+    es256App.allowlistStore.close();
   });
 
   it('ticket flow works end-to-end', async () => {

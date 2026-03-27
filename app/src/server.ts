@@ -3,7 +3,11 @@ import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { requestId } from './middleware/request-id.js';
 import { createCors } from './middleware/cors.js';
-import { createJwtMiddleware } from './middleware/jwt.js';
+import { createJwtMiddleware, initJwtKeys, getKid } from './middleware/jwt.js';
+import { NftOwnershipResolver } from './services/nft-ownership-resolver.js';
+import { SettlementClient } from './services/settlement-client.js';
+import { PricingClient } from './services/pricing-client.js';
+import { createS2STokenProvider } from './utils/s2s-jwt.js';
 import { AllowlistStore, createAllowlistMiddleware } from './middleware/allowlist.js';
 import { createRateLimit } from './middleware/rate-limit.js';
 import { createTracing } from './middleware/tracing.js';
@@ -13,6 +17,7 @@ import { createPaymentGate } from './middleware/payment.js';
 import { createWalletBridge } from './middleware/wallet-bridge.js';
 import { createHealthRoutes } from './routes/health.js';
 import { createAuthRoutes } from './routes/auth.js';
+import { createJwksRoutes } from './routes/jwks.js';
 import { createAdminRoutes } from './routes/admin.js';
 import { createChatRoutes } from './routes/chat.js';
 import { createSessionRoutes } from './routes/sessions.js';
@@ -112,6 +117,18 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     (config.logLevel || 'info') as LogLevel,
   );
   const finnClient = new FinnClient(config.finnUrl, { log });
+  const nftOwnershipResolver = new NftOwnershipResolver(finnClient);
+  const settlementClient = new SettlementClient({
+    facilitatorUrl: config.x402FacilitatorUrl,
+    enabled: config.x402Enabled,
+    getServiceToken: config.billingJwtSecret
+      ? createS2STokenProvider({ secret: config.billingJwtSecret })
+      : undefined,
+  });
+  const pricingClient = new PricingClient({
+    pricingApiUrl: config.pricingApiUrl,
+    ttlMs: config.pricingTtlSec * 1000,
+  });
   const allowlistStore = new AllowlistStore(config.allowlistPath, {
     watch: config.nodeEnv !== 'test',
   });
@@ -240,6 +257,13 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // Migration failure propagates (rejects the promise) so callers know the system
   // is not fully initialized. Log the error for diagnostics, then re-throw.
   const ready = (async () => {
+    // cycle-022: Initialize JWT keys (ES256 public key derivation + caching)
+    await initJwtKeys({
+      jwtPrivateKey: config.jwtPrivateKey,
+      jwtAlgorithm: config.jwtAlgorithm,
+      jwtLegacyHs256Secret: config.jwtLegacyHs256Secret,
+      issuer: 'dixie-bff',
+    });
     if (dbPool) {
       try {
         await migrate(dbPool);
@@ -360,7 +384,12 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.use('*', loggerMiddleware);
 
   // --- Auth middleware (extract wallet from JWT, set on context) ---
-  app.use('/api/*', createJwtMiddleware(config.jwtPrivateKey, 'dixie-bff'));
+  app.use('/api/*', createJwtMiddleware({
+    jwtPrivateKey: config.jwtPrivateKey,
+    jwtAlgorithm: config.jwtAlgorithm,
+    jwtLegacyHs256Secret: config.jwtLegacyHs256Secret,
+    issuer: 'dixie-bff',
+  }));
 
   // --- Wallet bridge (SEC-003: copy wallet from context to request header) ---
   // JWT middleware stores wallet via c.set('wallet'), but Hono sub-app boundaries
@@ -378,7 +407,11 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   // HOOK: x402 payment gate — micropayment middleware slot (loa-freeside #62)
   // Position: after allowlist (don't bill denied requests), before routes
   // Replace with @x402/hono when ready. See: app/src/middleware/payment.ts
-  app.use('/api/*', createPaymentGate());
+  app.use('/api/*', createPaymentGate({
+    x402Enabled: config.x402Enabled,
+    x402FacilitatorUrl: config.x402FacilitatorUrl,
+    nodeEnv: config.nodeEnv,
+  }));
 
   // --- Phase 2 Position 13: Conviction tier resolution ---
   // Resolves wallet → BGT staking → conviction tier (5-tier commons governance)
@@ -391,17 +424,8 @@ export function createDixieApp(config: DixieConfig): DixieApp {
   app.use('/api/*', createMemoryContext({
     memoryStore,
     resolveNftId: async (wallet: string) => {
-      // Resolve nftId from wallet via loa-finn identity graph
-      // Returns null if wallet has no associated dNFT
-      try {
-        const result = await finnClient.request<{ nftId: string }>(
-          'GET',
-          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
-        );
-        return result.nftId;
-      } catch {
-        return null;
-      }
+      const ownership = await nftOwnershipResolver.resolvePrimary(wallet);
+      return ownership?.nftId ?? null;
     },
   }));
 
@@ -419,11 +443,17 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     signalEmitter,
     adminKey: config.adminKey,
     reputationService,
+    pricingSource: () => pricingClient.getPricingSource(),
+    x402Enabled: config.x402Enabled,
   }));
+  app.route('/api/auth', createJwksRoutes());
   app.route('/api/auth', createAuthRoutes(allowlistStore, {
     jwtPrivateKey: config.jwtPrivateKey,
+    jwtAlgorithm: config.jwtAlgorithm,
+    jwtLegacyHs256Secret: config.jwtLegacyHs256Secret ?? undefined,
     issuer: 'dixie-bff',
     expiresIn: '1h',
+    getKid: () => getKid(),
   }));
   app.route('/api/admin', createAdminRoutes(allowlistStore, config.adminKey));
   app.route('/api/ws/ticket', createWsTicketRoutes(ticketStore));
@@ -436,20 +466,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     scheduleStore,
     convictionResolver,
     callbackSecret: config.scheduleCallbackSecret,
-    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
-    // resolve the primary. Multi-NFT support tracked in loa-finn issue
-    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
-    resolveNftOwnership: async (wallet: string) => {
-      try {
-        const result = await finnClient.request<{ nftId: string }>(
-          'GET',
-          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
-        );
-        return result;
-      } catch {
-        return null;
-      }
-    },
+    resolveNftOwnership: (wallet: string) => nftOwnershipResolver.resolvePrimary(wallet),
   }));
 
   // --- Phase 2: Enrichment API — autopoietic loop activation (Sprint 11) ---
@@ -493,40 +510,23 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     convictionResolver,
     memoryStore,
     priorityStore,
+    settlementClient,
+    pricingClient,
   }));
   app.route('/api/learning', createLearningRoutes({
     learningEngine,
-    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
-    // resolve the primary. Multi-NFT support tracked in loa-finn issue
-    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
-    resolveNftOwnership: async (wallet: string) => {
-      try {
-        const result = await finnClient.request<{ nftId: string }>(
-          'GET',
-          `/api/identity/wallet/${encodeURIComponent(wallet)}/nft`,
-        );
-        return result;
-      } catch {
-        return null;
-      }
-    },
+    resolveNftOwnership: (wallet: string) => nftOwnershipResolver.resolvePrimary(wallet),
   }));
   app.route('/api/memory', createMemoryRoutes({
     memoryStore,
-    // LIMITATION: Returns first NFT only — wallets with multiple dNFTs will only
-    // resolve the primary. Multi-NFT support tracked in loa-finn issue
-    // "Dixie Phase 2: API Contract Surfaces" (single-NFT limitation).
     resolveNftOwnership: async (wallet: string) => {
-      try {
-        const result = await finnClient.request<{
-          nftId: string;
-          ownerWallet: string;
-          delegatedWallets: string[];
-        }>('GET', `/api/identity/wallet/${encodeURIComponent(wallet)}/ownership`);
-        return result;
-      } catch {
-        return null;
-      }
+      const result = await nftOwnershipResolver.resolveOwnership(wallet);
+      if (!result || !result.ownerWallet) return null;
+      return {
+        nftId: result.nftId,
+        ownerWallet: result.ownerWallet,
+        delegatedWallets: result.delegatedWallets ?? [],
+      };
     },
   }));
 

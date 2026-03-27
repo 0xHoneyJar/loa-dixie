@@ -1,73 +1,95 @@
 {
-  "simstim_id": "simstim-20260228-c021-hounfour-bump",
   "schema_version": 1,
+  "simstim_id": "simstim-20260326-6b50f3e6",
   "state": "RUNNING",
   "phase": "implementation",
-  "cycle": "cycle-021",
   "timestamps": {
-    "started": "2026-02-28T11:20:00Z",
-    "last_activity": "2026-02-28T11:42:00Z"
+    "started": "2026-03-26T03:19:33Z",
+    "last_activity": "2026-03-26T03:54:09Z"
   },
   "phases": {
-    "preflight": "completed",
-    "discovery": "skipped",
-    "flatline_prd": "completed",
-    "architecture": "completed",
-    "flatline_sdd": "completed",
-    "red_team": "completed",
-    "planning": "completed",
-    "flatline_sprint": "completed",
-    "flatline_beads": "completed",
-    "implementation": "in_progress",
-    "complete": "pending"
+    "preflight": {
+      "status": "completed",
+      "completed_at": "2026-03-26T03:21:49Z"
+    },
+    "discovery": {
+      "status": "skipped",
+      "completed_at": "2026-03-26T03:21:49Z"
+    },
+    "flatline_prd": {
+      "status": "completed",
+      "started_at": "2026-03-26T03:22:21Z",
+      "completed_at": "2026-03-26T03:34:21Z"
+    },
+    "architecture": {
+      "status": "skipped",
+      "completed_at": "2026-03-26T03:34:43Z"
+    },
+    "flatline_sdd": {
+      "status": "completed",
+      "started_at": "2026-03-26T03:35:39Z",
+      "completed_at": "2026-03-26T03:43:50Z"
+    },
+    "planning": {
+      "status": "skipped",
+      "completed_at": "2026-03-26T03:45:59Z"
+    },
+    "flatline_sprint": {
+      "status": "completed",
+      "started_at": "2026-03-26T03:46:28Z",
+      "completed_at": "2026-03-26T03:51:40Z"
+    },
+    "implementation": {
+      "status": "in_progress",
+      "started_at": "2026-03-26T03:54:09Z"
+    },
+    "red_team": {
+      "status": "skipped",
+      "started_at": "2026-03-26T03:44:21Z",
+      "completed_at": "2026-03-26T03:45:33Z"
+    }
   },
   "artifacts": {
     "prd": {
       "path": "grimoires/loa/prd.md",
-      "checksum": "sha256:updated-post-flatline"
+      "checksum": "sha256:3b514148f228ad85a0019cdf8d2f9a6883fd18c096020756b9358e9c4b93bc4b",
+      "added": "2026-03-26T03:34:21Z"
     },
     "sdd": {
       "path": "grimoires/loa/sdd.md",
-      "checksum": "sha256:updated-post-flatline-redteam"
+      "checksum": "sha256:cda7221bcedc4b1dbedf930422cd380390bab328667883674bad2cf972e4f491",
+      "added": "2026-03-26T03:43:50Z"
     },
     "sprint": {
       "path": "grimoires/loa/sprint.md",
-      "checksum": "sha256:updated-post-flatline-beads"
+      "checksum": "sha256:14d3e235b88cd572450e0f126ea269b95bbaaa68cb63be287958400e336c4208",
+      "added": "2026-03-26T03:51:40Z"
     }
   },
-  "config": {
-    "flatline_models": ["opus", "gpt-5.3-codex", "gemini-2.5-pro"],
-    "red_team": true,
-    "vision_registry": false,
-    "beads_loop": true
-  },
-  "review_summary": {
-    "flatline_prd": {
-      "findings": 14,
+  "flatline_metrics": {
+    "prd": {
+      "integrated": 8,
+      "disputed": 0,
+      "blockers": 6
+    },
+    "sdd": {
       "integrated": 6,
-      "blockers_resolved": 1
+      "disputed": 1,
+      "blockers": 7
     },
-    "flatline_sdd": {
-      "findings": 13,
-      "high_consensus": 3,
-      "blockers_resolved": 2
-    },
-    "red_team": {
-      "attacks": 10,
-      "critical": 2,
-      "high": 5,
-      "mitigations_integrated": 3
-    },
-    "flatline_sprint": {
-      "findings": 7,
-      "high_resolved": 2,
-      "medium_resolved": 1,
-      "pass": 3
-    },
-    "flatline_beads": {
-      "iterations": 1,
-      "converged": true,
-      "change_percent": 0
+    "sprint": {
+      "integrated": 6,
+      "disputed": 0,
+      "blockers": 7
     }
-  }
+  },
+  "blocker_overrides": [],
+  "options": {
+    "from": null,
+    "timeout_hours": 24
+  },
+  "total_phases": 10,
+  "expected_plan_id": "plan-20260326-6b50f3e6",
+  "implementation_started_at": "2026-03-26T03:54:10Z",
+  "sync_attempts": 0
 }

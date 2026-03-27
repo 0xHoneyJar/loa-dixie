@@ -3,11 +3,17 @@ import { z } from 'zod';
 import { SiweMessage } from 'siwe';
 import * as jose from 'jose';
 import type { AllowlistStore } from '../middleware/allowlist.js';
+import { getJwks } from '../middleware/jwt.js';
 
 export interface AuthConfig {
   jwtPrivateKey: string;
+  jwtAlgorithm: 'ES256' | 'HS256';
+  /** Legacy HS256 secret for dual-algorithm transition */
+  jwtLegacyHs256Secret?: string | null;
   issuer: string;
   expiresIn: string;
+  /** Lazy getter for Key ID — resolved after initJwtKeys completes */
+  getKid?: () => string | null;
 }
 
 // ARCH-002: Runtime body validation — TypeScript generics are erased at compile time.
@@ -86,10 +92,41 @@ export function createAuthRoutes(
 
     const token = authHeader.slice(7);
     try {
-      const secret = new TextEncoder().encode(config.jwtPrivateKey);
-      const { payload } = await jose.jwtVerify(token, secret, {
-        issuer: config.issuer,
-      });
+      let payload: jose.JWTPayload;
+      const verifyOpts = { issuer: config.issuer, audience: 'dixie-bff' };
+
+      if (config.jwtAlgorithm === 'ES256') {
+        // Use cached public key from JWKS (set by initJwtKeys at startup)
+        const jwks = getJwks();
+        if (jwks.keys.length > 0) {
+          try {
+            const pubKey = await jose.importJWK(jwks.keys[0], 'ES256');
+            ({ payload } = await jose.jwtVerify(token, pubKey, {
+              ...verifyOpts,
+              algorithms: ['ES256'],
+            }));
+          } catch {
+            // Fallback to legacy HS256 secret during transition
+            if (config.jwtLegacyHs256Secret) {
+              const secret = new TextEncoder().encode(config.jwtLegacyHs256Secret);
+              ({ payload } = await jose.jwtVerify(token, secret, {
+                ...verifyOpts,
+                algorithms: ['HS256'],
+              }));
+            } else {
+              throw new Error('ES256 verification failed, no legacy HS256 secret');
+            }
+          }
+        } else {
+          throw new Error('JWKS not initialized');
+        }
+      } else {
+        const secret = new TextEncoder().encode(config.jwtPrivateKey);
+        ({ payload } = await jose.jwtVerify(token, secret, {
+          ...verifyOpts,
+          algorithms: ['HS256'],
+        }));
+      }
       return c.json({
         wallet: payload.sub,
         role: payload.role,
@@ -106,21 +143,36 @@ export function createAuthRoutes(
   return app;
 }
 
-// ADR: HS256 token issuance — see jwt.ts for full ES256 migration plan.
-// When migrating, this function changes to:
-//   1. Import PEM private key via jose.importPKCS8(config.jwtPrivateKey, 'ES256')
-//   2. Set alg to 'ES256' in protected header
-//   3. Add 'kid' header for key rotation support
+/** Cached ES256 private key — avoids per-request PEM parsing */
+let _cachedSigningKey: CryptoKey | null = null;
+
 async function issueJwt(
   wallet: string,
   config: AuthConfig,
 ): Promise<string> {
-  const secret = new TextEncoder().encode(config.jwtPrivateKey);
-  return new jose.SignJWT({ role: 'team' })
-    .setProtectedHeader({ alg: 'HS256' })
+  const builder = new jose.SignJWT({ role: 'team' })
     .setSubject(wallet)
     .setIssuer(config.issuer)
+    .setAudience('dixie-bff')
     .setIssuedAt()
-    .setExpirationTime(config.expiresIn)
-    .sign(secret);
+    .setExpirationTime(config.expiresIn);
+
+  if (config.jwtAlgorithm === 'ES256') {
+    if (!_cachedSigningKey) {
+      _cachedSigningKey = await jose.importPKCS8(config.jwtPrivateKey, 'ES256', { extractable: true }) as CryptoKey;
+    }
+    const header: jose.JWTHeaderParameters = { alg: 'ES256' };
+    const kid = config.getKid?.();
+    if (kid) header.kid = kid;
+    return builder.setProtectedHeader(header).sign(_cachedSigningKey);
+  }
+
+  // HS256 path
+  const secret = new TextEncoder().encode(config.jwtPrivateKey);
+  return builder.setProtectedHeader({ alg: 'HS256' }).sign(secret);
+}
+
+/** Reset cached signing key — for testing only */
+export function _resetSigningKeyCache(): void {
+  _cachedSigningKey = null;
 }

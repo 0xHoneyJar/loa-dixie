@@ -97,17 +97,37 @@ _None_
 
 ## Session Continuity
 
-**Recovery Anchor**: Cycle-012 planning complete. All Flatline phases passed. Ready for implementation.
+**Recovery Anchor**: Cycle-022 implementation complete. PR #83 ready to merge. Awaiting freeside#147 for production wiring.
 
 **Key Context**:
-- Cycle: cycle-012 (Agent Fleet Orchestration — From Oracle to Conductor)
-- PRD: `grimoires/loa/prd.md` v12.0.0 (23 FRs, Flatline-hardened)
-- SDD: `grimoires/loa/sdd.md` v12.0.0 (11 components, Flatline-hardened)
-- Sprint: `grimoires/loa/sprint.md` v12.0.0 (8 sprints, 79 tasks, Flatline-hardened)
-- Ledger: cycle-012 active, global sprint counter at 93, sprints 86-93
-- Beads: 87 open (8 epics + 79 tasks), flatline loop completed (3 iterations)
-- Simstim state: `.run/simstim-state.json` — implementation phase ready
-- Hounfour: v8.2.0 at `../../loa-hounfour`
-- Tests baseline: 1,432 passing across 88 files
+- Cycle: cycle-022 (Dixie Phase 3 — Full Production Launch)
+- PRD: `grimoires/loa/prd.md` v22.0.0 (10 FRs + 6 SEC findings, Flatline-hardened)
+- SDD: `grimoires/loa/sdd.md` v22.0.0 (4 tracks, Flatline-hardened, freeside API contracts defined)
+- Sprint: `grimoires/loa/sprint.md` v22.0.0 (4 sprints, 29+ tasks, Flatline-hardened)
+- Ledger: cycle-022 active, global sprint counter at 120, sprints 117-120
+- Branch: `feature/cycle-022-phase3-launch` (6 commits, PR #83)
+- Tests: 2,497 passing across 134 files
+- Flatline: 20 integrated, 1 disputed (accepted), 20 blockers resolved (3-model: Opus + GPT + Gemini)
+- Bridge: 2 CRITICALs + 5 HIGHs resolved in fix sprint
 
-**If resuming**: Run `/run sprint-plan` to begin autonomous implementation.
+**PR #83 contains**:
+- Sprint 1: ES256 JWT + JWKS endpoint + dual-algorithm transition
+- Sprint 2: NftOwnershipResolver (centralized 4 inline lambdas)
+- Sprint 3: Config-gated x402 payment middleware + settlement + pricing clients
+- Sprint 4: E2E harness extension with PostgreSQL
+- Bridge fix: HS256 legacy secret, audience validation, default-deny payment, kid race fix
+- ES256 integration test: full JWKS round-trip through createDixieApp
+
+**Closed issues**: #6 (Phase 3 launch wiring), #68 (staging infra migration)
+
+**Blocked on**:
+- freeside#147: x402 settlement API + pricing API + SSM parameters + deploy pipeline
+- Bridgebuilder review posted on freeside#147 with 6 architectural findings
+
+**Next from Dixie (after freeside delivers)**:
+- Wiring sprint: connect SettlementClient + PricingClient to real freeside endpoints
+- Add S2S JWT auth to SettlementClient
+- Replace mock receipt in agent.ts with real settlement
+- loa-finn PR for multi-NFT endpoint
+
+**If resuming**: Merge PR #83, then wait for freeside#147 delivery before the wiring sprint.

@@ -25,6 +25,8 @@ import type {
 import { DEFAULT_AGENT_RATE_LIMITS } from '../types/agent-api.js';
 import type { KnowledgePriorityStore } from '../services/knowledge-priority-store.js';
 import { computeCost } from '../types/economic.js';
+import type { SettlementClient } from '../services/settlement-client.js';
+import type { PricingClient } from '../services/pricing-client.js';
 
 export interface AgentRouteDeps {
   finnClient: FinnClient;
@@ -33,6 +35,10 @@ export interface AgentRouteDeps {
   rateLimits?: AgentRateLimitConfig;
   /** Task 21.4: Conviction-weighted knowledge priority voting store */
   priorityStore?: KnowledgePriorityStore;
+  /** cycle-022: Settlement client for x402 payment receipts */
+  settlementClient?: SettlementClient;
+  /** cycle-022: Dynamic pricing client */
+  pricingClient?: PricingClient;
 }
 
 /**
@@ -218,7 +224,22 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
         systemNote = `Note: Some knowledge sources may be outdated [${staleList}]. Consider noting this if your response draws heavily from these domains.`;
       }
 
-      // Forward to loa-finn with agent context
+      // --- QUOTE: Reserve credits before incurring inference cost ---
+      let quoteId: string | null = null;
+      if (deps.settlementClient) {
+        try {
+          const quote = await deps.settlementClient.quote({
+            model: 'claude-sonnet-4-6', // estimated model
+            estimatedTokens: (body.maxTokens ?? 600) + 200, // rough estimate: prompt + completion
+            walletAddress: agentTba,
+          });
+          quoteId = quote.quoteId;
+        } catch {
+          // Quote failed — continue without reservation (mock receipt path)
+        }
+      }
+
+      // --- INFER: Forward to loa-finn ---
       const finnResponse = await finnClient.request<{
         response: string;
         model: string;
@@ -233,29 +254,58 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono {
           maxTokens: body.maxTokens,
           knowledgeDomain: body.knowledgeDomain,
           sessionId: body.sessionId,
-          systemNote, // Adaptive routing: hedging instruction on low confidence
+          systemNote,
         },
       });
 
-      // Calculate cost using model-specific pricing table (Bridge iter2-medium-2)
-      const costMicroUsd = computeCost(finnResponse.model, finnResponse.input_tokens, finnResponse.output_tokens);
+      // Calculate actual cost: use dynamic pricing if available, else static table
+      const costMicroUsd = deps.pricingClient
+        ? await deps.pricingClient.computeCost(finnResponse.model, finnResponse.input_tokens, finnResponse.output_tokens)
+        : computeCost(finnResponse.model, finnResponse.input_tokens, finnResponse.output_tokens);
 
-      // Post-request budget check — warn if actual exceeds max (Bridge medium-8)
-      // Pre-flight already rejected clearly over-budget requests;
-      // this catches cases where actual cost exceeded the estimate
+      // Post-request budget check
       let budgetWarning: string | null = null;
       if (body.maxCostMicroUsd && costMicroUsd > body.maxCostMicroUsd) {
         budgetWarning = `Actual cost ${costMicroUsd}μUSD exceeded max ${body.maxCostMicroUsd}μUSD`;
       }
 
-      // Generate x402 receipt (mock — in production, settle via freeside)
-      const receipt: X402Receipt = {
-        receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        payer: agentTba,
-        payee: 'dixie-oracle',
-        amountMicroUsd: costMicroUsd,
-        timestamp: new Date().toISOString(),
-      };
+      // --- SETTLE: Finalize with actual token usage ---
+      let receipt: X402Receipt;
+      if (deps.settlementClient && quoteId) {
+        try {
+          const settlementResult = await deps.settlementClient.settle({
+            quoteId,
+            idempotencyKey: quoteId, // Bridgebuilder Finding 3: quoteId as idempotency key
+            actualInputTokens: finnResponse.input_tokens,
+            actualOutputTokens: finnResponse.output_tokens,
+          });
+          receipt = {
+            receiptId: settlementResult.receiptId,
+            payer: agentTba,
+            payee: 'dixie-oracle',
+            amountMicroUsd: settlementResult.amountMicroUsd || costMicroUsd,
+            timestamp: settlementResult.settledAt,
+            transactionHash: settlementResult.transactionHash,
+          };
+        } catch {
+          // Settlement failed — generate mock receipt (quote will expire)
+          receipt = {
+            receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            payer: agentTba,
+            payee: 'dixie-oracle',
+            amountMicroUsd: costMicroUsd,
+            timestamp: new Date().toISOString(),
+          };
+        }
+      } else {
+        receipt = {
+          receiptId: `rcpt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          payer: agentTba,
+          payee: 'dixie-oracle',
+          amountMicroUsd: costMicroUsd,
+          timestamp: new Date().toISOString(),
+        };
+      }
 
       const response: AgentQueryResponse = {
         response: finnResponse.response,

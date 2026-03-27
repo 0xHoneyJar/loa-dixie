@@ -22,6 +22,7 @@ const testConfig: DixieConfig = {
   allowlistPath: '/tmp/test-allowlist-e2e.json',
   adminKey: 'test-admin-key-for-phase2-e2e-validation',
   jwtPrivateKey: 'test-jwt-private-key-that-is-at-least-32-chars-long',
+  jwtAlgorithm: 'HS256' as const,
   nodeEnv: 'test',
   logLevel: 'error',
   rateLimitRpm: 1000,
