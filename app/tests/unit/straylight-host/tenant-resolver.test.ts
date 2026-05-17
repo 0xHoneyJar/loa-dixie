@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Context } from 'hono';
+import type { TenantResolver } from '@loa/straylight/host';
 import {
   checkSameTenant,
   createSessionTenantResolver,
-  type TenantResolver,
 } from '../../../src/services/straylight-host/tenant-resolver.js';
 
 function makeContext(wallet: string | undefined): Context {

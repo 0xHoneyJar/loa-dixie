@@ -199,3 +199,11 @@ Dixie aligned to Hounfour `v8.6.0` (from `v8.3.1`).
 - **Rationale**: Gate 3 prerequisite for future Straylight `@loa/straylight/host` type-only adoption. Straylight depends on `@0xhoneyjar/loa-hounfour@^8.6.0`; resolving the Dixie/Hounfour skew unblocks the future host-adapter dependency flip.
 - **Scope**: Hounfour dependency pin update + lockfile regeneration + conformance fixture regeneration (mechanical, via `scripts/generate-conformance-fixtures.ts`; schema count grew 53 → 60). No Straylight dependency flip in this PR. The local `app/src/services/straylight-host/` adapter boundary from PR #96 remains dormant.
 - **Validation**: typecheck, lint, 2530 tests, and build all pass against Hounfour `v8.6.0`. No source edits required for API drift.
+
+## Addendum — Gate 3 Follow-Through: Straylight host type adoption (2026-05-17)
+
+Dixie now consumes Straylight host **type definitions** from the tag-pinned package `@loa/straylight#v0.0.1`.
+
+- **What changed**: The local type mirror at `app/src/services/straylight-host/types.ts` has been removed and replaced by `import type { ... } from '@loa/straylight/host'`. The barrel `app/src/services/straylight-host/index.ts` re-exports types from the package via `export type * from '@loa/straylight/host'` and continues to export the local runtime helpers. The local mirror's drift detector has been replaced by a slim package-contract test that pins the upstream closed-enum vocabulary and `EstateSummaryCounts` shape.
+- **What did not change**: Local runtime helpers (`tenant-resolver` checks, `intake-deny-log` factory, `refusal-passthrough` relay identity functions) remain Dixie-local. There is **no runtime import from `@loa/straylight`**: only `import type` / `export type *` from the `./host` subpath. No endpoints, routes, middleware, proxy, NATS, HTTP, RPC, Discord/Telegram, or rendering surfaces were added or modified. Hounfour stays pinned at `v8.6.0`.
+- **Dependency posture**: `@loa/straylight` is added as a regular dependency at `github:0xHoneyJar/loa-straylight#v0.0.1`. The lockfile resolves to a single Hounfour `8.6.0` (Straylight's transitive `^8.6.0` dedupes against Dixie's pin).

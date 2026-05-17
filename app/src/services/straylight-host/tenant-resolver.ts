@@ -1,4 +1,4 @@
-// Host-side cross-tenant primitive — Dixie-local adapter mirror.
+// Host-side cross-tenant primitive — Dixie-local runtime helpers.
 //
 // The wedge does not model `tenant_id` as a first-class field on Actor /
 // Estate. The host must derive tenant identity from caller-supplied context
@@ -8,25 +8,15 @@
 // There is no production default resolver; passing one is the caller's
 // responsibility.
 //
-// Source of truth: `loa-straylight/src/straylight/host/tenancy.ts`. This
-// file is a pre-consumption mirror and will be replaced by a direct import
-// from `@loa/straylight/host` in the future dependency-wiring PR.
+// Type definitions (`TenantResolver`, `TenantCheckResult`) are sourced from
+// the tag-pinned `@loa/straylight/host` package (type-only). The runtime
+// helpers below remain Dixie-local because Straylight runtime imports are
+// out of scope for this slice.
 
 import type { Context } from 'hono';
+import type { TenantResolver, TenantCheckResult } from '@loa/straylight/host';
 
-/**
- * Maps an actor_id / estate_id / receipt_id-derived id to a tenant slug.
- * Returns `undefined` when the id cannot be resolved — callers MUST treat
- * `undefined` as ambiguous and refuse (`tenant_unresolved`). The function
- * MUST be pure for a given id over the lifetime of one host invocation.
- */
-export type TenantResolver = (id: string) => string | undefined;
-
-export interface TenantCheckResult {
-  ok: boolean;
-  /** Set when `ok === false`. */
-  reason?: 'cross_tenant' | 'tenant_unresolved';
-}
+export type { TenantResolver, TenantCheckResult };
 
 /**
  * Verify that `targetId` resolves into `callerTenant`. Returns `{ ok: true }`

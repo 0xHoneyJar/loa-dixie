@@ -9,19 +9,24 @@ import {
 } from '../../../src/services/straylight-host/refusal-passthrough.js';
 import type {
   AuditChainLookupResponse,
+  AuditEvent,
+  EstateSummaryCounts,
   EstateSummaryResponse,
   ExclusionDisplayResponse,
+  ProvenanceEntry,
   ProvenanceWalkResponse,
   ReceiptRetrievalResponse,
   RecallIntakeResponse,
-} from '../../../src/services/straylight-host/types.js';
+  RecallPack,
+  RecallReceipt,
+} from '@loa/straylight/host';
 
 describe('relayRecallIntake', () => {
   it('returns a deep-equal unchanged served response', () => {
     const response: RecallIntakeResponse = {
       outcome: 'served',
-      pack: { opaque: 'wedge-pack' },
-      receipt: { opaque: 'wedge-receipt' },
+      pack: { opaque: 'wedge-pack' } as unknown as RecallPack,
+      receipt: { opaque: 'wedge-receipt' } as unknown as RecallReceipt,
       audit_event_id: 'ae-1',
     };
     const before = structuredClone(response);
@@ -62,7 +67,7 @@ describe('relayReceiptRetrieval', () => {
   it('returns a deep-equal unchanged found response', () => {
     const response: ReceiptRetrievalResponse = {
       outcome: 'found',
-      receipt: { opaque: 'wedge-receipt' },
+      receipt: { opaque: 'wedge-receipt' } as unknown as RecallReceipt,
     };
     const before = structuredClone(response);
     const out = relayReceiptRetrieval(response);
@@ -121,7 +126,10 @@ describe('relayProvenanceWalk', () => {
   it('returns a deep-equal unchanged walked response', () => {
     const response: ProvenanceWalkResponse = {
       outcome: 'walked',
-      provenance: [{ opaque: 'entry-1' }, { opaque: 'entry-2' }],
+      provenance: [
+        { opaque: 'entry-1' } as unknown as ProvenanceEntry,
+        { opaque: 'entry-2' } as unknown as ProvenanceEntry,
+      ],
     };
     const before = structuredClone(response);
     const out = relayProvenanceWalk(response);
@@ -157,7 +165,10 @@ describe('relayAuditChainLookup', () => {
   it('returns a deep-equal unchanged verified response', () => {
     const response: AuditChainLookupResponse = {
       outcome: 'verified',
-      events: [{ opaque: 'ev-1' }, { opaque: 'ev-2' }],
+      events: [
+        { opaque: 'ev-1' } as unknown as AuditEvent,
+        { opaque: 'ev-2' } as unknown as AuditEvent,
+      ],
       chain_status: 'ok',
     };
     const before = structuredClone(response);
@@ -169,7 +180,7 @@ describe('relayAuditChainLookup', () => {
   it('preserves broken outcome with break metadata verbatim', () => {
     const response: AuditChainLookupResponse = {
       outcome: 'broken',
-      events: [{ opaque: 'ev-1' }],
+      events: [{ opaque: 'ev-1' } as unknown as AuditEvent],
       chain_status: 'broken',
       break_index: 0,
       break_reason: 'hash_mismatch',
@@ -214,9 +225,9 @@ describe('relayEstateSummary', () => {
       estate_id: 'estate-1',
       counts: {
         by_class: { observation: 5, claim: 2 },
-        by_status: { active: 7 },
+        by_status: { active: 7 } as EstateSummaryCounts['by_status'],
         by_privacy_scope: { actor_private: 3, public_discord: 4 },
-        by_risk_level: { low: 5, medium: 2 },
+        by_risk_level: { low: 5, medium: 2 } as EstateSummaryCounts['by_risk_level'],
         _widened_privacy_scope: {
           public: 1,
           tenant: 2,
