@@ -17,6 +17,9 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - uses: actions/checkout@v6
@@ -24,12 +27,16 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: '@0xhoneyjar'
           cache: npm
           cache-dependency-path: app/package-lock.json
 
       - name: Install dependencies
         working-directory: app
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Typecheck
         working-directory: app
