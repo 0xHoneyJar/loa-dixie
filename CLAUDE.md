@@ -5,29 +5,34 @@
 > This file contains project-specific customizations that take precedence over the framework instructions.
 > The framework instructions are loaded via the `@` import above.
 
-## Project Configuration
+## Context Intake Discipline (read FIRST at session start)
 
-Add your project-specific Claude Code instructions here. These instructions will take precedence
-over the imported framework defaults.
+Before any substantive work — before reading PRD/SDD/sprint, before grepping
+the codebase, before drafting a plan — every agent in this repo MUST read:
 
-### Example Customizations
+- **`grimoires/loa/known-failures.md`** — the operational log of degradation
+  patterns we've already hit and the workarounds that did NOT fix them.
+  Reading this before triaging a problem prevents re-attempting prior dead-ends
+  (e.g., bumping `max_output_tokens` on `gpt-5.5-pro` empty-content; re-running
+  BB hoping the network recovers; trying to fix `beads_rust` mid-sprint).
 
-```markdown
-## Tech Stack
-- Language: TypeScript
-- Framework: Next.js 14
-- Database: PostgreSQL
+The file is append-only and uses a structured schema (KF-NNN entries with
+Status / Symptom / Recurrence count / Attempts table / Reading guide).
+**Recurrence count ≥ 3** is the load-bearing signal — that failure class is
+structural; route through the upstream issue, do not retry the listed attempts.
 
-## Coding Standards
-- Use functional components with hooks
-- Prefer named exports
-- Always include unit tests
+When you observe a degradation that's already documented in known-failures.md:
+increment `Recurrence count` and add a row to `Attempts` with your evidence
+(commit SHA / PR# / run ID). When you observe a NEW degradation: add a
+fresh KF-NNN entry. The point of the file is to compound across sessions —
+it only works if every session contributes.
 
-## Domain Context
-- This is a fintech application
-- Security is paramount
-- All API calls must be authenticated
-```
+## Team & Ownership
+
+- **Primary maintainer**: @janitooor
+- **Default PR reviewer**: @janitooor — always request review from them
+- **Repo**: 0xHoneyJar/loa
+- **CODEOWNERS**: `.github/CODEOWNERS` handles auto-assignment on GitHub
 
 ## How This Works
 
