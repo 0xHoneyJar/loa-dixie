@@ -1,11 +1,11 @@
-// Drift detector for the Dixie-local Straylight recall-host mirror.
+// Slim package-contract tripwires for the Straylight recall-host wire surface.
 //
-// This file is NOT a schema authority. Its sole job is to fail loudly if
-// the local mirror in `app/src/services/straylight-host/types.ts` drifts
-// away from the closed enums and structural shapes the wedge wire contract
-// pins. When the follow-up dependency-wiring PR replaces the local mirror
-// with `import type { ... } from '@loa/straylight/host'`, this file becomes
-// redundant and should be deleted along with the local mirror it guards.
+// Type imports are sourced (type-only) from the tag-pinned
+// `@loa/straylight/host` package — no runtime import. The job of this file
+// is to fail loudly if a future Straylight tag bump silently widens or
+// reshapes the closed enums and shapes that Dixie's relay logic depends
+// on. Compile-time guards (`Exclude<...> extends never`) catch new values;
+// runtime expectations cover cardinality and key-set sanity.
 
 import { describe, expect, it } from 'vitest';
 import type {
@@ -14,10 +14,10 @@ import type {
   EstateSummaryResponse,
   ExclusionReason,
   HostFrame,
-} from '../../../src/services/straylight-host/types.js';
+} from '@loa/straylight/host';
 
-describe('DeniedReason mirror', () => {
-  it('exactly matches the Straylight host contract values', () => {
+describe('@loa/straylight/host — DeniedReason closed vocabulary', () => {
+  it('matches the nine pinned values exactly', () => {
     const expected = [
       'class_validation_failed',
       'policy_unavailable',
@@ -30,9 +30,6 @@ describe('DeniedReason mirror', () => {
       'tenant_resolution_failed',
     ] as const satisfies readonly DeniedReason[];
 
-    // Compile-time guard: any DeniedReason value NOT in `expected` makes
-    // _Missing non-never, and the assignment of literal `true` to the
-    // resulting `false` type fails to typecheck.
     type _Missing = Exclude<DeniedReason, (typeof expected)[number]>;
     const _noExtras: _Missing extends never ? true : false = true;
     expect(_noExtras).toBe(true);
@@ -42,8 +39,8 @@ describe('DeniedReason mirror', () => {
   });
 });
 
-describe('ExclusionReason mirror', () => {
-  it('exactly matches the six receipt categories', () => {
+describe('@loa/straylight/host — ExclusionReason closed vocabulary', () => {
+  it('matches the six receipt categories exactly', () => {
     const expected = [
       'included',
       'excluded',
@@ -62,7 +59,7 @@ describe('ExclusionReason mirror', () => {
   });
 });
 
-describe('HostFrame mirror', () => {
+describe('@loa/straylight/host — HostFrame supported values', () => {
   it('is exactly actor_private | public_discord', () => {
     const expected = ['actor_private', 'public_discord'] as const satisfies readonly HostFrame[];
 
@@ -74,37 +71,39 @@ describe('HostFrame mirror', () => {
   });
 });
 
-describe('Surface 6 EstateSummaryCounts shape', () => {
-  const counts: EstateSummaryCounts = {
-    by_class: {},
-    by_status: {},
-    by_privacy_scope: { actor_private: 0, public_discord: 0 },
-    by_risk_level: {},
-    _widened_privacy_scope: {
-      public: 0,
-      tenant: 0,
-      actor_private: 0,
-      sealed: 0,
-    },
-  };
-
-  it('_widened_privacy_scope retains the four-key trace shape', () => {
-    const keys = Object.keys(counts._widened_privacy_scope).sort();
-    expect(keys).toEqual(['actor_private', 'public', 'sealed', 'tenant']);
+describe('@loa/straylight/host — EstateSummaryCounts shape', () => {
+  it('by_privacy_scope retains the two-key served shape', () => {
+    type Keys = keyof EstateSummaryCounts['by_privacy_scope'];
+    type _Missing = Exclude<Keys, 'actor_private' | 'public_discord'>;
+    type _Extras = Exclude<'actor_private' | 'public_discord', Keys>;
+    const _noMissing: _Missing extends never ? true : false = true;
+    const _noExtras: _Extras extends never ? true : false = true;
+    expect(_noMissing).toBe(true);
+    expect(_noExtras).toBe(true);
   });
 
-  it('by_privacy_scope retains the two-key served shape', () => {
-    const keys = Object.keys(counts.by_privacy_scope).sort();
-    expect(keys).toEqual(['actor_private', 'public_discord']);
+  it('_widened_privacy_scope retains the four-key trace shape', () => {
+    type Keys = keyof EstateSummaryCounts['_widened_privacy_scope'];
+    type Expected = 'public' | 'tenant' | 'actor_private' | 'sealed';
+    type _Missing = Exclude<Keys, Expected>;
+    type _Extras = Exclude<Expected, Keys>;
+    const _noMissing: _Missing extends never ? true : false = true;
+    const _noExtras: _Extras extends never ? true : false = true;
+    expect(_noMissing).toBe(true);
+    expect(_noExtras).toBe(true);
   });
 
   it('is the counts payload type used by summarized EstateSummaryResponse', () => {
-    const response: EstateSummaryResponse = {
-      outcome: 'summarized',
-      actor_id: 'actor-1',
-      estate_id: 'estate-1',
-      counts,
-    };
-    expect(response.outcome).toBe('summarized');
+    type SummarizedCounts = Extract<
+      EstateSummaryResponse,
+      { outcome: 'summarized' }
+    >['counts'];
+    type _Same = SummarizedCounts extends EstateSummaryCounts
+      ? EstateSummaryCounts extends SummarizedCounts
+        ? true
+        : false
+      : false;
+    const _same: _Same = true;
+    expect(_same).toBe(true);
   });
 });

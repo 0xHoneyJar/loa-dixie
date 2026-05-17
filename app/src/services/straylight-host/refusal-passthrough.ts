@@ -19,6 +19,9 @@
 //
 // Typed refusal reasons are preserved verbatim — the response value
 // returned is the exact value received.
+//
+// Response types are imported (type-only) from the tag-pinned
+// `@loa/straylight/host` package; Dixie does not redefine the wire surface.
 
 import type {
   AuditChainLookupResponse,
@@ -27,7 +30,7 @@ import type {
   ProvenanceWalkResponse,
   ReceiptRetrievalResponse,
   RecallIntakeResponse,
-} from './types.js';
+} from '@loa/straylight/host';
 
 /**
  * Surface 1 relay. Dixie relays Straylight's `RecallIntakeResponse`

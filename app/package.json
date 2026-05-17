@@ -22,6 +22,7 @@
   "dependencies": {
     "@0xhoneyjar/loa-hounfour": "github:0xHoneyJar/loa-hounfour#v8.6.0",
     "@hono/node-server": "^1.14.0",
+    "@loa/straylight": "github:0xHoneyJar/loa-straylight#v0.0.1",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-trace-otlp-grpc": "0.57.0",
     "@opentelemetry/resources": "^1.30.0",
