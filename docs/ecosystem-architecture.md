@@ -54,7 +54,7 @@ graph TB
 | 5 — Product | `loa-dixie` | dNFT Oracle — first product customer | **Staging** |
 | 4 — Platform | `loa-freeside` | API, Discord/TG, token-gating, billing, IaC | In progress |
 | 3 — Runtime | `loa-finn` | Persistent sessions, tool sandbox, memory | **Staging** |
-| 2 — Protocol | `loa-hounfour` | Schemas, state machines, model routing contracts | **Shipping** (v8.3.1) |
+| 2 — Protocol | `loa-hounfour` | Schemas, state machines, model routing contracts | **Shipping** (v8.6.0) |
 | 1 — Framework | `loa` | Agent dev framework, skills, Bridgebuilder | **Shipping** |
 
 Each layer depends only on layers below it. Protocol contracts flow upward: lower layers define contracts, upper layers consume them.
@@ -229,7 +229,7 @@ The `@0xhoneyjar/loa-hounfour` package provides the shared governance type syste
 | Service | Target Version | Status | Details |
 |---------|---------------|--------|---------|
 | **hounfour (package)** | v8.3.0 | Published | Source of truth for all protocol types |
-| **Dixie** | v8.3.0 | Complete | PR #64 (initial), #69 (chain-bound-hash). `package.json`: `github:0xHoneyJar/loa-hounfour#v8.3.0` |
+| **Dixie** | v8.6.0 | Complete | PR #64 (initial), #69 (chain-bound-hash), Gate 3 alignment to v8.6.0. `package.json`: `github:0xHoneyJar/loa-hounfour#v8.6.0` |
 | **Finn** | v8.3.0 | In progress | Runtime contract alignment underway |
 | **Freeside** | v8.3.0 | In progress | Platform integration pending Finn completion |
 
@@ -247,7 +247,7 @@ The `@0xhoneyjar/loa-hounfour` package provides the shared governance type syste
 #### Dixie --> Hounfour (Protocol)
 
 - **Protocol**: npm package dependency (build-time)
-- **Version**: `@0xhoneyjar/loa-hounfour#v8.3.0`
+- **Version**: `@0xhoneyjar/loa-hounfour#v8.6.0`
 - **Imports**: Core types (AccessPolicy, AgentIdentity, CircuitState), governance types (TaskType, ReputationEvent, ScoringPath), economy types (computeCostMicro, verifyPricingConservation), validators and schemas
 - **Contract surface**: Type validation, economic conservation laws, governance state machines
 

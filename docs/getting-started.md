@@ -131,7 +131,7 @@ loa-dixie/
       utils/                # Shared utilities (crypto, etc.)
       __tests__/            # Unit tests co-located with source
     tests/                  # Integration and e2e test suites
-    package.json            # Dependencies including @0xhoneyjar/loa-hounfour#v8.3.0
+    package.json            # Dependencies including @0xhoneyjar/loa-hounfour#v8.6.0
   deploy/                   # Deployment configuration
     Dockerfile              # Multi-stage production build
     docker-compose.yml      # Local dev: Dixie + Finn
@@ -175,7 +175,7 @@ The critical governance invariant is positions 11-12-13: **allowlist -> payment 
 
 ### Hounfour Protocol Types
 
-Dixie consumes the `@0xhoneyjar/loa-hounfour` package (v8.3.0) for shared governance types, schema validators, and economic conservation laws. All types in `app/src/types.ts` document their alignment with hounfour protocol types.
+Dixie consumes the `@0xhoneyjar/loa-hounfour` package (v8.6.0) for shared governance types, schema validators, and economic conservation laws. All types in `app/src/types.ts` document their alignment with hounfour protocol types.
 
 ### Circuit Breaker (Finn Connection)
 

@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-02-23T22:50:37.930Z",
+  "generated_at": "2026-05-17T08:32:30.662Z",
   "hounfour_version": "linked",
-  "total_schemas": 53,
+  "total_schemas": 60,
   "generated_count": 39,
-  "skipped_count": 14,
+  "skipped_count": 21,
   "manual_count": 25,
   "samples": [
     {
@@ -671,6 +671,55 @@
         "conservation_status": "conserved",
         "contract_version": "7.9.2"
       }
+    },
+    {
+      "schema": "panelDecisionArtifact",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "panelVerdict",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "deliberationDissent",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with patterns must specify a default value"
+    },
+    {
+      "schema": "crossScoreReport",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "orgIdentity",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "orgRepresentativeDelegation",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
+    },
+    {
+      "schema": "successionPolicy",
+      "valid": false,
+      "sample": null,
+      "skipped": true,
+      "skip_reason": "String types with formats must specify a default value"
     }
   ]
 }

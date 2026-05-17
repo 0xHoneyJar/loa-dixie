@@ -191,3 +191,11 @@ and migration proposals are generated automatically.
 - `app/src/services/migration-proposal.ts` — Migration Proposal Generator (Sprint 12, Level 6)
 - `grimoires/loa/context/adr-constitutional-amendment.md` — Constitutional amendment process (Sprint 12)
 - `app/tests/unit/protocol-evolution.test.ts` — Level 6 foundation tests (Sprint 12)
+
+## Addendum — Gate 3 Hounfour Alignment (2026-05-17)
+
+Dixie aligned to Hounfour `v8.6.0` (from `v8.3.1`).
+
+- **Rationale**: Gate 3 prerequisite for future Straylight `@loa/straylight/host` type-only adoption. Straylight depends on `@0xhoneyjar/loa-hounfour@^8.6.0`; resolving the Dixie/Hounfour skew unblocks the future host-adapter dependency flip.
+- **Scope**: Hounfour dependency pin update + lockfile regeneration + conformance fixture regeneration (mechanical, via `scripts/generate-conformance-fixtures.ts`; schema count grew 53 → 60). No Straylight dependency flip in this PR. The local `app/src/services/straylight-host/` adapter boundary from PR #96 remains dormant.
+- **Validation**: typecheck, lint, 2530 tests, and build all pass against Hounfour `v8.6.0`. No source edits required for API drift.
