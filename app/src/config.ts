@@ -70,6 +70,16 @@ export interface DixieConfig {
   // Phase 3: Dynamic pricing
   pricingApiUrl: string | null;
   pricingTtlSec: number;
+
+  // Phase 26E: Straylight recall-intake endpoint (ADR-026D)
+  recallIntakeEnabled: boolean;
+  straylightRuntimeDixieKey: string;
+  recallIntakeBodyMaxBytes: number;
+  recallIntakeRateRpm: number;
+  recallIntakeMaxAssertionsPerTenant: number;
+  recallIntakeMaxAssertionBytesPerTenant: number;
+  recallIntakeIdempotencyTtlSec: number;
+  recallIntakeIdempotencyMaxEntries: number;
 }
 
 /**
@@ -226,5 +236,43 @@ export function loadConfig(): DixieConfig {
     // Phase 3: Dynamic pricing
     pricingApiUrl: process.env.DIXIE_PRICING_API_URL ?? null,
     pricingTtlSec: safeParseInt(process.env.DIXIE_PRICING_TTL, 300, 86_400),
+
+    // Phase 26E: Straylight recall-intake (ADR-026D §4.a fail-closed startup
+    // when enabled with empty key — handled below before return).
+    recallIntakeEnabled: (() => {
+      const enabled = process.env.DIXIE_RECALL_INTAKE_ENABLED === 'true';
+      if (enabled) {
+        const key = process.env.STRAYLIGHT_RUNTIME_DIXIE_KEY ?? '';
+        if (key.length === 0) {
+          throw new Error(
+            'DIXIE_RECALL_INTAKE_ENABLED=true requires non-empty STRAYLIGHT_RUNTIME_DIXIE_KEY (ADR-026D §4.a fail-closed)',
+          );
+        }
+      }
+      return enabled;
+    })(),
+    straylightRuntimeDixieKey: process.env.STRAYLIGHT_RUNTIME_DIXIE_KEY ?? '',
+    recallIntakeBodyMaxBytes: safeParseInt(process.env.DIXIE_RECALL_INTAKE_BODY_MAX_BYTES, 32_768, 1_048_576),
+    recallIntakeRateRpm: safeParseInt(process.env.DIXIE_RECALL_INTAKE_RATE_RPM, 30, 10_000),
+    recallIntakeMaxAssertionsPerTenant: safeParseInt(
+      process.env.DIXIE_RECALL_INTAKE_MAX_ASSERTIONS_PER_TENANT,
+      512,
+      1_000_000,
+    ),
+    recallIntakeMaxAssertionBytesPerTenant: safeParseInt(
+      process.env.DIXIE_RECALL_INTAKE_MAX_ASSERTION_BYTES_PER_TENANT,
+      1_048_576,
+      268_435_456,
+    ),
+    recallIntakeIdempotencyTtlSec: safeParseInt(
+      process.env.DIXIE_RECALL_INTAKE_IDEMPOTENCY_TTL,
+      900,
+      86_400,
+    ),
+    recallIntakeIdempotencyMaxEntries: safeParseInt(
+      process.env.DIXIE_RECALL_INTAKE_IDEMPOTENCY_MAX_ENTRIES,
+      4_096,
+      1_000_000,
+    ),
   };
 }
