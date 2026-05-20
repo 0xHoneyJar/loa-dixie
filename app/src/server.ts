@@ -24,6 +24,15 @@ import { createSessionRoutes } from './routes/sessions.js';
 import { createIdentityRoutes } from './routes/identity.js';
 import { createWsTicketRoutes } from './routes/ws-ticket.js';
 import { createMemoryRoutes } from './routes/memory.js';
+import { createRecallIntakeRoutes } from './routes/recall-intake.js';
+import {
+  createCapabilityHolder,
+  createBoundedEstateStore,
+  createIdempotencyCache,
+  createPerEstateMutex,
+  createPerTenantRateLimit,
+} from './services/straylight-recall-intake/index.js';
+import { createInMemoryIntakeDenyLog } from './services/straylight-host/index.js';
 import { FinnClient } from './proxy/finn-client.js';
 import { TicketStore } from './services/ticket-store.js';
 import { MemoryStore } from './services/memory-store.js';
@@ -548,6 +557,40 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     if (!governorRegistry.getResource(fleetGovernor.resourceType)) {
       governorRegistry.registerResource(fleetGovernor);
     }
+  }
+
+  // --- Phase 26E: Straylight recall-intake endpoint (ADR-026D) ---
+  // Conditional mount. When disabled, the route is not registered at all.
+  // When enabled, config has already validated STRAYLIGHT_RUNTIME_DIXIE_KEY
+  // is non-empty (fail-closed startup, ADR-026D §4.a).
+  if (config.recallIntakeEnabled) {
+    const recallCapabilityHolder = createCapabilityHolder();
+    const recallBoundedStore = createBoundedEstateStore({
+      maxAssertionsPerTenant: config.recallIntakeMaxAssertionsPerTenant,
+      maxAssertionBytesPerTenant: config.recallIntakeMaxAssertionBytesPerTenant,
+    });
+    const recallIdempotencyCache = createIdempotencyCache({
+      ttlSec: config.recallIntakeIdempotencyTtlSec,
+      maxEntries: config.recallIntakeIdempotencyMaxEntries,
+    });
+    const recallMutex = createPerEstateMutex();
+    const recallRateLimit = createPerTenantRateLimit({
+      rpm: config.recallIntakeRateRpm,
+    });
+    const recallIntakeLog = createInMemoryIntakeDenyLog();
+    app.route(
+      '/api/recall/intake',
+      createRecallIntakeRoutes({
+        bodyMaxBytes: config.recallIntakeBodyMaxBytes,
+        capabilityHolder: recallCapabilityHolder,
+        boundedStore: recallBoundedStore,
+        idempotencyCache: recallIdempotencyCache,
+        perEstateMutex: recallMutex,
+        perTenantRateLimit: recallRateLimit,
+        intakeLog: recallIntakeLog,
+        emitAudit: (ev) => log('info', { ...ev }),
+      }),
+    );
   }
 
   // --- SPA fallback (placeholder — web build integrated later) ---
