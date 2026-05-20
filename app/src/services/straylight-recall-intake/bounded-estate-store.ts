@@ -18,6 +18,12 @@
 // for refusal / served paths under a SEEDED, BOUNDED, IN-PROCESS dataset.
 // It does NOT integrate Dixie production memory. Real persistent assertion
 // storage remains out of scope and gated by future authorization.
+//
+// SKP-001 — Concurrency posture: tenant identity is captured per-request
+// via `forTenant(tenant_id)`, which returns a `MinimalRecallStore` view
+// closed over the tenant. There is NO shared mutable "active tenant" in
+// the registry; concurrent requests for different tenants operate on
+// independent views and cannot race on a global slot.
 
 // Type-only imports from the package's declared `"types"`-only roots are
 // safe under ADR-026A §"Decision" §5: the package's `exports` map permits
@@ -35,6 +41,39 @@ import type {
   RecallReceipt,
   TransitionReceipt,
 } from '@loa/straylight';
+
+/**
+ * Refusal raised by the bounded store when a tenant-scoped view is asked
+ * to write under a foreign estate_id (or its bound actor/keyring/slot was
+ * never seeded). SKP-001: a view created via `forTenant(tenantA)` MUST
+ * NOT be able to mutate another tenant's estate by passing tenantB's ids.
+ *
+ * Reads of foreign estate_ids fail closed by returning empty / undefined
+ * and DO NOT throw — this matches the existing read-side fail-closed
+ * style and keeps speculative seam lookups cheap. Writes throw because
+ * silently dropping a write would be invisible corruption.
+ */
+export class BoundedStoreScopeViolationError extends Error {
+  readonly tenant_id: string;
+  readonly bound_estate_id: string | undefined;
+  readonly attempted_estate_id: string | undefined;
+  readonly surface: string;
+  constructor(opts: {
+    tenant_id: string;
+    bound_estate_id: string | undefined;
+    attempted_estate_id: string | undefined;
+    surface: string;
+  }) {
+    super(
+      `bounded estate store scope violation: tenant=${opts.tenant_id} bound_estate=${opts.bound_estate_id ?? '<unseeded>'} attempted_estate=${opts.attempted_estate_id ?? '<missing>'} surface=${opts.surface}`,
+    );
+    this.name = 'BoundedStoreScopeViolationError';
+    this.tenant_id = opts.tenant_id;
+    this.bound_estate_id = opts.bound_estate_id;
+    this.attempted_estate_id = opts.attempted_estate_id;
+    this.surface = opts.surface;
+  }
+}
 
 /**
  * Refusal raised by the bounded store when a per-tenant cap is exceeded.
@@ -125,7 +164,7 @@ interface AuditWriteInput {
   created_at: string;
 }
 
-export interface BoundedEstateStore extends MinimalRecallStore {
+export interface BoundedEstateStore {
   /**
    * Seed an actor + estate + keyring + initial assertions for a tenant.
    * Enforces both per-tenant caps. Throws `BoundedStoreCapExceededError`
@@ -142,9 +181,14 @@ export interface BoundedEstateStore extends MinimalRecallStore {
   /** Add a single assertion under a tenant; enforces caps. */
   addAssertion(tenant_id: string, assertion: Assertion): void;
 
-  /** Active tenant for the next seam call. The route sets this to the
-   * authoritative tenant before invoking `handleRecallIntake`. */
-  setActiveTenant(tenant_id: string | undefined): void;
+  /**
+   * Return a request-scoped `MinimalRecallStore` view bound to the given
+   * tenant. The view's `listAssertions`, `getKeyring`, and storage writes
+   * close over `tenant_id` captured at view construction; no shared
+   * mutable active-tenant slot exists. Concurrent requests for different
+   * tenants get independent views (SKP-001).
+   */
+  forTenant(tenant_id: string): MinimalRecallStore;
 
   /** Test/observability: per-tenant footprint snapshot. */
   inspectTenant(tenant_id: string): {
@@ -175,7 +219,6 @@ export function createBoundedEstateStore(
   const auditEvents: AuditEvent[] = [];
   const auditByEstate = new Map<string, AuditEvent[]>();
   const auditTail = new Map<string, Hash>();
-  let activeTenant: string | undefined;
 
   function requireSlot(tenant_id: string): TenantSlot {
     const slot = tenants.get(tenant_id);
@@ -200,136 +243,6 @@ export function createBoundedEstateStore(
     }
   }
 
-  const storage: MinimalStorageSurface = {
-    upsertRecallReceipt(receipt) {
-      recallReceipts.set(receipt.receipt_id, receipt);
-    },
-    getRecallReceipt(receipt_id) {
-      return recallReceipts.get(receipt_id);
-    },
-    upsertTransitionReceipt(receipt) {
-      transitionReceipts.set(receipt.receipt_id, receipt);
-    },
-    getTransitionReceipt(receipt_id) {
-      return transitionReceipts.get(receipt_id);
-    },
-    listTransitionReceipts(estate_id) {
-      return [...transitionReceipts.values()].filter((r) => r.estate_id === estate_id);
-    },
-    appendTransition(transition) {
-      const list = transitions.get(transition.estate_id) ?? [];
-      list.push(transition);
-      transitions.set(transition.estate_id, list);
-    },
-    listTransitions(estate_id) {
-      return [...(transitions.get(estate_id) ?? [])];
-    },
-    upsertAssertion(assertion) {
-      // Routed through `addAssertion` for cap enforcement; this storage
-      // method exists for type conformance but never bypasses caps.
-      if (!activeTenant) {
-        throw new BoundedStoreCapExceededError({
-          tenant_id: '<unbound>',
-          dimension: 'assertion_count',
-          cap: 0,
-          observed: 0,
-        });
-      }
-      addAssertionInternal(activeTenant, assertion);
-    },
-    getAssertion(assertion_id) {
-      for (const slot of tenants.values()) {
-        const a = slot.assertions.get(assertion_id);
-        if (a) return a;
-      }
-      return undefined;
-    },
-    listAssertions(estate_id) {
-      const out: Assertion[] = [];
-      for (const slot of tenants.values()) {
-        if (slot.estate.estate_id !== estate_id) continue;
-        out.push(...slot.assertions.values());
-      }
-      return out;
-    },
-    upsertActor(actor) {
-      if (!activeTenant) return;
-      const slot = tenants.get(activeTenant);
-      if (slot) slot.actor = actor;
-    },
-    getActor(actor_id) {
-      for (const slot of tenants.values()) {
-        if (slot.actor.actor_id === actor_id) return slot.actor;
-      }
-      return undefined;
-    },
-    upsertEstate(estate) {
-      if (!activeTenant) return;
-      const slot = tenants.get(activeTenant);
-      if (slot) slot.estate = estate;
-    },
-    getEstate(estate_id) {
-      for (const slot of tenants.values()) {
-        if (slot.estate.estate_id === estate_id) return slot.estate;
-      }
-      return undefined;
-    },
-    upsertKeyring(keyring) {
-      if (!activeTenant) return;
-      const slot = tenants.get(activeTenant);
-      if (slot) slot.keyring = keyring;
-    },
-    getKeyring(keyring_id) {
-      for (const slot of tenants.values()) {
-        if (slot.keyring.keyring_id === keyring_id) return slot.keyring;
-      }
-      return undefined;
-    },
-    appendAuditEvent(event) {
-      appendAudit(event);
-    },
-    listAuditEvents(estate_id) {
-      if (estate_id === undefined) return [...auditEvents];
-      return [...(auditByEstate.get(estate_id) ?? [])];
-    },
-    getAuditTail(estate_id) {
-      return auditTail.get(estate_id);
-    },
-  };
-
-  const auditLog: MinimalAuditLogSurface = {
-    append(input) {
-      const event_id = `ae_${auditEvents.length + 1}_${input.estate_id}`;
-      const event: AuditEvent = {
-        audit_event_id: event_id,
-        event_type: input.event_type,
-        actor_id: input.actor_id,
-        estate_id: input.estate_id,
-        transition_id: input.transition_id,
-        assertion_refs: input.assertion_refs ?? [],
-        request_hash: input.request_hash,
-        result_hash: input.result_hash,
-        signer_refs: input.signer_refs,
-        policy_decision_ref: input.policy_decision_ref,
-        payload: input.payload ?? {},
-        created_at: input.created_at,
-        prev_event_hash: auditTail.get(input.estate_id),
-      } as unknown as AuditEvent;
-      // event_hash is computed by Straylight in the real adapter; here we
-      // synthesize a deterministic chain link for the bounded seam.
-      const chainLink = `h_${auditEvents.length + 1}_${input.estate_id}`;
-      (event as unknown as { event_hash: string }).event_hash = chainLink;
-      appendAudit(event);
-      return event;
-    },
-    list() {
-      return auditEvents;
-    },
-    listFor(estate_id) {
-      return [...(auditByEstate.get(estate_id) ?? [])];
-    },
-  };
-
   function addAssertionInternal(tenant_id: string, assertion: Assertion): void {
     const slot = requireSlot(tenant_id);
     if (slot.assertions.size >= cfg.maxAssertionsPerTenant) {
@@ -353,25 +266,214 @@ export function createBoundedEstateStore(
     slot.bytes += sizeDelta;
   }
 
+  function buildView(tenant_id: string): MinimalRecallStore {
+    // SKP-001: snapshot the (estate_id, actor_id, keyring_id) the view
+    // is bound to at construction time. All cross-estate reads/writes
+    // through this view are checked against this snapshot. If the slot
+    // hasn't been seeded yet, all four slots are `undefined` and every
+    // estate-keyed surface fails closed (reads → empty / undefined,
+    // writes → BoundedStoreScopeViolationError).
+    const boundSlot = tenants.get(tenant_id);
+    const boundEstateId = boundSlot?.estate.estate_id;
+    const boundActorId = boundSlot?.actor.actor_id;
+    const boundKeyringId = boundSlot?.keyring.keyring_id;
+
+    function isOwnEstate(estate_id: string | undefined): boolean {
+      return boundEstateId !== undefined && estate_id === boundEstateId;
+    }
+
+    function refuseForeignWrite(
+      surface: string,
+      attempted_estate_id: string | undefined,
+    ): never {
+      throw new BoundedStoreScopeViolationError({
+        tenant_id,
+        bound_estate_id: boundEstateId,
+        attempted_estate_id,
+        surface,
+      });
+    }
+
+    const storage: MinimalStorageSurface = {
+      upsertRecallReceipt(receipt) {
+        if (!isOwnEstate(receipt.estate_id)) {
+          refuseForeignWrite('storage.upsertRecallReceipt', receipt.estate_id);
+        }
+        recallReceipts.set(receipt.receipt_id, receipt);
+      },
+      getRecallReceipt(receipt_id) {
+        const r = recallReceipts.get(receipt_id);
+        if (!r) return undefined;
+        // Read fail-closed: do not surface another tenant's receipt
+        // through this view even when the caller has the receipt_id.
+        if (!isOwnEstate(r.estate_id)) return undefined;
+        return r;
+      },
+      upsertTransitionReceipt(receipt) {
+        if (!isOwnEstate(receipt.estate_id)) {
+          refuseForeignWrite('storage.upsertTransitionReceipt', receipt.estate_id);
+        }
+        transitionReceipts.set(receipt.receipt_id, receipt);
+      },
+      getTransitionReceipt(receipt_id) {
+        const r = transitionReceipts.get(receipt_id);
+        if (!r) return undefined;
+        if (!isOwnEstate(r.estate_id)) return undefined;
+        return r;
+      },
+      listTransitionReceipts(estate_id) {
+        if (!isOwnEstate(estate_id)) return [];
+        return [...transitionReceipts.values()].filter((r) => r.estate_id === estate_id);
+      },
+      appendTransition(transition) {
+        if (!isOwnEstate(transition.estate_id)) {
+          refuseForeignWrite('storage.appendTransition', transition.estate_id);
+        }
+        const list = transitions.get(transition.estate_id) ?? [];
+        list.push(transition);
+        transitions.set(transition.estate_id, list);
+      },
+      listTransitions(estate_id) {
+        if (!isOwnEstate(estate_id)) return [];
+        return [...(transitions.get(estate_id) ?? [])];
+      },
+      upsertAssertion(assertion) {
+        if (!isOwnEstate(assertion.estate_id)) {
+          refuseForeignWrite('storage.upsertAssertion', assertion.estate_id);
+        }
+        // Routed through `addAssertion` for cap enforcement; this storage
+        // method exists for type conformance and is bound to the
+        // request-scoped tenant captured at view construction.
+        addAssertionInternal(tenant_id, assertion);
+      },
+      getAssertion(assertion_id) {
+        const slot = tenants.get(tenant_id);
+        if (!slot) return undefined;
+        return slot.assertions.get(assertion_id);
+      },
+      listAssertions(estate_id) {
+        if (!isOwnEstate(estate_id)) return [];
+        const slot = tenants.get(tenant_id);
+        if (!slot) return [];
+        return [...slot.assertions.values()];
+      },
+      upsertActor(actor) {
+        if (boundActorId !== undefined && actor.actor_id !== boundActorId) {
+          refuseForeignWrite('storage.upsertActor', actor.actor_id);
+        }
+        const slot = tenants.get(tenant_id);
+        if (slot) slot.actor = actor;
+      },
+      getActor(actor_id) {
+        if (boundActorId === undefined || actor_id !== boundActorId) return undefined;
+        const slot = tenants.get(tenant_id);
+        return slot?.actor;
+      },
+      upsertEstate(estate) {
+        if (!isOwnEstate(estate.estate_id)) {
+          refuseForeignWrite('storage.upsertEstate', estate.estate_id);
+        }
+        const slot = tenants.get(tenant_id);
+        if (slot) slot.estate = estate;
+      },
+      getEstate(estate_id) {
+        if (!isOwnEstate(estate_id)) return undefined;
+        const slot = tenants.get(tenant_id);
+        return slot?.estate;
+      },
+      upsertKeyring(keyring) {
+        if (boundKeyringId !== undefined && keyring.keyring_id !== boundKeyringId) {
+          refuseForeignWrite('storage.upsertKeyring', keyring.keyring_id);
+        }
+        const slot = tenants.get(tenant_id);
+        if (slot) slot.keyring = keyring;
+      },
+      getKeyring(keyring_id) {
+        if (boundKeyringId === undefined || keyring_id !== boundKeyringId) return undefined;
+        const slot = tenants.get(tenant_id);
+        return slot?.keyring;
+      },
+      appendAuditEvent(event) {
+        if (!isOwnEstate(event.estate_id)) {
+          refuseForeignWrite('storage.appendAuditEvent', event.estate_id);
+        }
+        appendAudit(event);
+      },
+      listAuditEvents(estate_id) {
+        // SKP-001: a tenant-scoped view can ONLY read its own estate's
+        // audit events. The unscoped form (`estate_id === undefined`)
+        // collapses to the bound estate as well, instead of leaking the
+        // global audit log across tenants.
+        const target = estate_id ?? boundEstateId;
+        if (!isOwnEstate(target) || boundEstateId === undefined) return [];
+        return [...(auditByEstate.get(boundEstateId) ?? [])];
+      },
+      getAuditTail(estate_id) {
+        if (!isOwnEstate(estate_id) || boundEstateId === undefined) return undefined;
+        return auditTail.get(boundEstateId);
+      },
+    };
+
+    const auditLog: MinimalAuditLogSurface = {
+      append(input) {
+        if (!isOwnEstate(input.estate_id)) {
+          refuseForeignWrite('auditLog.append', input.estate_id);
+        }
+        const event_id = `ae_${auditEvents.length + 1}_${input.estate_id}`;
+        const event: AuditEvent = {
+          audit_event_id: event_id,
+          event_type: input.event_type,
+          actor_id: input.actor_id,
+          estate_id: input.estate_id,
+          transition_id: input.transition_id,
+          assertion_refs: input.assertion_refs ?? [],
+          request_hash: input.request_hash,
+          result_hash: input.result_hash,
+          signer_refs: input.signer_refs,
+          policy_decision_ref: input.policy_decision_ref,
+          payload: input.payload ?? {},
+          created_at: input.created_at,
+          prev_event_hash: auditTail.get(input.estate_id),
+        } as unknown as AuditEvent;
+        // event_hash is computed by Straylight in the real adapter; here we
+        // synthesize a deterministic chain link for the bounded seam.
+        const chainLink = `h_${auditEvents.length + 1}_${input.estate_id}`;
+        (event as unknown as { event_hash: string }).event_hash = chainLink;
+        appendAudit(event);
+        return event;
+      },
+      list() {
+        // SKP-001: the unscoped list collapses to the bound estate's
+        // events through this view. Operators wanting the cross-tenant
+        // audit ledger must hold a privileged handle (not exposed here).
+        if (boundEstateId === undefined) return [];
+        return [...(auditByEstate.get(boundEstateId) ?? [])];
+      },
+      listFor(estate_id) {
+        if (!isOwnEstate(estate_id)) return [];
+        return [...(auditByEstate.get(estate_id) ?? [])];
+      },
+    };
+
+    return {
+      storage,
+      auditLog,
+      getKeyring() {
+        const slot = tenants.get(tenant_id);
+        if (!slot) {
+          throw new Error(`bounded-estate-store: no slot for tenant ${tenant_id}`);
+        }
+        return slot.keyring;
+      },
+      listAssertions() {
+        const slot = tenants.get(tenant_id);
+        if (!slot) return [];
+        return [...slot.assertions.values()];
+      },
+    };
+  }
+
   return {
-    storage,
-    auditLog,
-    getKeyring() {
-      if (!activeTenant) {
-        throw new Error('bounded-estate-store: no active tenant set');
-      }
-      const slot = tenants.get(activeTenant);
-      if (!slot) {
-        throw new Error(`bounded-estate-store: no slot for active tenant ${activeTenant}`);
-      }
-      return slot.keyring;
-    },
-    listAssertions() {
-      if (!activeTenant) return [];
-      const slot = tenants.get(activeTenant);
-      if (!slot) return [];
-      return [...slot.assertions.values()];
-    },
     seedTenant(input) {
       tenants.set(input.tenant_id, {
         actor: input.actor,
@@ -387,8 +489,8 @@ export function createBoundedEstateStore(
     addAssertion(tenant_id, assertion) {
       addAssertionInternal(tenant_id, assertion);
     },
-    setActiveTenant(tenant_id) {
-      activeTenant = tenant_id;
+    forTenant(tenant_id) {
+      return buildView(tenant_id);
     },
     inspectTenant(tenant_id) {
       const slot = tenants.get(tenant_id);

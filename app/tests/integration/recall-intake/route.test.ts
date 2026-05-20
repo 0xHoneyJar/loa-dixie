@@ -233,6 +233,87 @@ describe('POST /api/recall/intake — body & rate caps', () => {
     expect(res.status).toBe(413);
   });
 
+  it('refuses oversized streamed body without Content-Length (SKP-003)', async () => {
+    // SKP-003: clients can omit Content-Length, send a stale value, or
+    // chunk-transfer-encode the body. The route MUST cap bytes at the
+    // streaming layer BEFORE JSON.parse can consume an oversized body.
+    const app = buildApp({ bodyMaxBytes: 256 });
+    // Build a streaming body that emits well over the cap with NO
+    // Content-Length header. The first chunk alone already exceeds the
+    // 256-byte cap; the cap check must short-circuit on streamed bytes.
+    const oversized = 'a'.repeat(2_000);
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(oversized));
+        controller.close();
+      },
+    });
+    const req = new Request('http://localhost/api/recall/intake', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-test-wallet': WALLET,
+        'idempotency-key': 'k1',
+      },
+      body: stream,
+      // Node's fetch requires `duplex: 'half'` for streaming request bodies.
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    // Sanity: Content-Length must be absent for this test to exercise the
+    // streamed-cap path rather than the cheap header pre-check.
+    expect(req.headers.get('content-length')).toBeNull();
+    const res = await app.fetch(req);
+    expect(res.status).toBe(413);
+    const j = (await res.json()) as { error: string };
+    expect(j.error).toBe('ingress.payload_too_large');
+  });
+
+  it('invalid JSON under the byte cap returns invalid_request, not payload_too_large (SKP-003)', async () => {
+    // SKP-003: a malformed body that fits under the cap must reach the
+    // JSON.parse path and surface as 400 ingress.invalid_request — NOT
+    // 413. This guards against the cap accidentally rejecting small
+    // bodies, and against JSON.parse running before the cap check.
+    const app = buildApp({ bodyMaxBytes: 4_096 });
+    const res = await app.request('/api/recall/intake', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-test-wallet': WALLET,
+        'idempotency-key': 'k1',
+      },
+      body: '{ this is not json',
+    });
+    expect(res.status).toBe(400);
+    const j = (await res.json()) as { error: string };
+    expect(j.error).toBe('ingress.invalid_request');
+  });
+
+  it('valid body under the byte cap reaches the served path (SKP-003)', async () => {
+    // SKP-003 regression: a well-formed body within bodyMaxBytes must
+    // proceed past the body-cap stage. We assert the response is NOT a
+    // 413 payload-too-large refusal — confirming the cap did not
+    // accidentally reject a compliant payload.
+    const app = buildApp({ bodyMaxBytes: 4_096 });
+    const res = await app.request('/api/recall/intake', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-test-wallet': WALLET,
+        'idempotency-key': 'k-under-cap',
+      },
+      body: JSON.stringify(bodyForWallet(WALLET, 'r-under-cap')),
+    });
+    expect(res.status).not.toBe(413);
+    if (res.status >= 400) {
+      const j = (await res.json()) as { error?: string };
+      // If the request fails at any layer, it MUST NOT be the body-cap
+      // refusal — we are validating that the cap let a valid payload
+      // through.
+      expect(j.error).not.toBe('ingress.payload_too_large');
+      expect(j.error).not.toBe('ingress.invalid_request');
+    }
+  });
+
   it('refuses sustained per-tenant load (429, ADR-026D §3.a (ii))', async () => {
     const app = buildApp({ ratePerMinute: 1 });
     const make = (n: number) =>

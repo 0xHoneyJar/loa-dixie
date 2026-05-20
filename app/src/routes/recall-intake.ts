@@ -139,7 +139,12 @@ export function createRecallIntakeRoutes(deps: RecallIntakeRouteDeps): Hono {
       return c.json(r.body, r.http_status);
     }
 
-    // Body-size pre-check by Content-Length (cheap, before parse).
+    // Body-size pre-check by Content-Length (cheap, before any read).
+    // SKP-003: the Content-Length check is opportunistic (clients may
+    // omit it, send a stale value, or chunked-encode the body). The
+    // authoritative bound is the streamed-byte check below, which runs
+    // BEFORE the full JSON parse and short-circuits as soon as any byte
+    // beyond `bodyMaxBytes` arrives.
     const contentLengthHeader = c.req.header('content-length');
     if (contentLengthHeader) {
       const len = Number.parseInt(contentLengthHeader, 10);
@@ -178,24 +183,32 @@ export function createRecallIntakeRoutes(deps: RecallIntakeRouteDeps): Hono {
       return c.json(r.body, r.http_status);
     }
 
-    // Body parse + zod.
-    const raw = await c.req.json().catch(() => null);
-    if (raw === null || typeof raw !== 'object') {
-      const r = ingressRefusal('ingress.invalid_request', 'invalid JSON body', {
-        tenant_id: wallet,
-      });
-      emit({ ...r.audit, request_id: requestId });
-      return c.json(r.body, r.http_status);
-    }
-
-    // Byte-budget post-parse cross-check (catches chunked / unset Content-Length).
-    const bodyBytes = Buffer.byteLength(JSON.stringify(raw), 'utf8');
-    if (bodyBytes > deps.bodyMaxBytes) {
+    // SKP-003: read the body with a hard byte cap BEFORE attempting
+    // JSON.parse. Reading from the underlying ReadableStream means we
+    // never buffer more than `bodyMaxBytes + 1` regardless of whether
+    // Content-Length was present, accurate, or absent (chunked).
+    const bodyText = await readBodyWithCap(c, deps.bodyMaxBytes);
+    if (bodyText === BODY_OVER_CAP) {
       const r = ingressRefusal(
         'ingress.payload_too_large',
         `body exceeds ${deps.bodyMaxBytes} bytes`,
         { tenant_id: wallet },
       );
+      emit({ ...r.audit, request_id: requestId });
+      return c.json(r.body, r.http_status);
+    }
+
+    // Body parse + zod, now safely bounded.
+    let raw: unknown;
+    try {
+      raw = bodyText.length === 0 ? null : JSON.parse(bodyText);
+    } catch {
+      raw = null;
+    }
+    if (raw === null || typeof raw !== 'object') {
+      const r = ingressRefusal('ingress.invalid_request', 'invalid JSON body', {
+        tenant_id: wallet,
+      });
       emit({ ...r.audit, request_id: requestId });
       return c.json(r.body, r.http_status);
     }
@@ -238,87 +251,99 @@ export function createRecallIntakeRoutes(deps: RecallIntakeRouteDeps): Hono {
     };
 
     // Idempotency cache lookup. ADR-026D §3.b: replay returns prior response
-    // verbatim, never appends duplicate state.
-    const replayed = deps.idempotencyCache.get(idempotencyKeyTuple, Date.now());
-    if (replayed !== undefined) {
+    // verbatim, never appends duplicate state. SKP-002: a same-key request
+    // arriving while a prior request is still in-flight awaits the same
+    // execution rather than racing the seam.
+    const cachedReplay = deps.idempotencyCache.get(idempotencyKeyTuple, Date.now());
+    if (cachedReplay !== undefined) {
       emit({
         event: 'recall_intake.replayed',
         tenant_id: wallet,
         caller_actor_id: wallet,
         request_id: requestId,
       });
-      return responseFromSeam(c, replayed);
+      return responseFromSeam(c, cachedReplay);
     }
 
     // Per-estate serialization. ADR-026D §3.c (i).
+    // SKP-002: idempotencyCache.runOnce coalesces concurrent same-key calls
+    // onto a single in-flight promise. The exec body acquires the per-
+    // estate mutex and invokes the seam; cap-exceeded refusals are thrown
+    // out so they bypass the cache (guard refusals must remain
+    // re-evaluable on subsequent retries when caps are relaxed).
     const estateKey = body.request.estate_id;
-    const seamResponse = await deps.perEstateMutex.withLock(estateKey, async () => {
-      // Fail-closed bounded-store guard. The store throws when the active
-      // tenant's caps are exceeded; the guardRefusal path uses 503 + audit.
-      try {
-        deps.boundedStore.setActiveTenant(wallet);
-        const tenantResolver: TenantResolver = (_id: string) => wallet;
-        const intakeDeps: IntakeDeps = {
-          tenantResolver,
-          intakeLog: deps.intakeLog,
-          now: now().toISOString(),
-        };
-        // Construct the seam request from validated body. Caller is always
-        // the authoritative session wallet (cross-tenant body mismatches
-        // were rejected above).
-        const seamReq: RecallIntakeRequest = {
-          request: body.request as unknown as RecallIntakeRequest['request'],
-          detail_level: body.detail_level,
-          caller: { ...body.caller, tenant_id: wallet, actor_id: wallet },
-        };
-        // Sole isolated cast at the seam call site: Phase 26E uses a
-        // Dixie-local structural store conformant with executeRecall's
-        // surface; the Straylight types declare `EstateStore` (a class) as
-        // the parameter. We cast through `unknown` here and document the
-        // structural-conformance rationale in bounded-estate-store.ts.
-        const store = deps.boundedStore as unknown as EstateStore;
-        return await deps.capabilityHolder.withCapability((cap) =>
-          handleRecallIntake(store, seamReq, intakeDeps, cap),
-        );
-      } catch (err) {
-        if (err instanceof BoundedStoreCapExceededError) {
-          const cls =
-            err.dimension === 'assertion_count'
-              ? 'guard.tenant_assertion_cap'
-              : 'guard.tenant_byte_budget';
-          const r = guardRefusal(cls, err.message, {
-            tenant_id: wallet,
-            caller_actor_id: wallet,
-          });
-          emit({ ...r.audit, request_id: requestId });
-          return { __guard__: r } as const;
-        }
-        // Unknown error inside the seam path. We treat as storage_unavailable.
-        const fallbackResp: RecallIntakeResponse = {
-          outcome: 'denied',
-          reason: 'storage_unavailable',
-          raw_reasons: [
-            err instanceof Error
-              ? `runtime_seam:internal:${err.message}`
-              : 'runtime_seam:internal:unknown',
-          ],
-        };
-        return fallbackResp;
-      } finally {
-        // Clear the bounded-store's active tenant slot so a subsequent
-        // request without a fresh setActiveTenant can never inherit a
-        // stale tenant binding from this one.
-        deps.boundedStore.setActiveTenant(undefined);
+    let seamResponse: RecallIntakeResponse;
+    try {
+      seamResponse = await deps.idempotencyCache.runOnce(
+        idempotencyKeyTuple,
+        Date.now(),
+        () =>
+          deps.perEstateMutex.withLock(estateKey, async () => {
+            // SKP-001: tenant identity is captured per-request via
+            // `forTenant`, not via a shared mutable active-tenant slot.
+            // Concurrent requests for different tenants get independent
+            // views.
+            const tenantStore = deps.boundedStore.forTenant(wallet);
+            const tenantResolver: TenantResolver = (_id: string) => wallet;
+            const intakeDeps: IntakeDeps = {
+              tenantResolver,
+              intakeLog: deps.intakeLog,
+              now: now().toISOString(),
+            };
+            // Construct the seam request from validated body. Caller is
+            // always the authoritative session wallet (cross-tenant body
+            // mismatches were rejected above).
+            const seamReq: RecallIntakeRequest = {
+              request: body.request as unknown as RecallIntakeRequest['request'],
+              detail_level: body.detail_level,
+              caller: { ...body.caller, tenant_id: wallet, actor_id: wallet },
+            };
+            // Sole isolated cast at the seam call site: Phase 26E uses a
+            // Dixie-local structural store conformant with executeRecall's
+            // surface; the Straylight types declare `EstateStore` (a class)
+            // as the parameter. We cast through `unknown` here and
+            // document the structural-conformance rationale in
+            // bounded-estate-store.ts.
+            const store = tenantStore as unknown as EstateStore;
+            try {
+              return await deps.capabilityHolder.withCapability((cap) =>
+                handleRecallIntake(store, seamReq, intakeDeps, cap),
+              );
+            } catch (err) {
+              // BoundedStoreCapExceededError must escape `runOnce` so the
+              // cache does NOT pin a guard refusal; bubble it to the
+              // outer catch.
+              if (err instanceof BoundedStoreCapExceededError) throw err;
+              // Unknown internal error → fall back to a denied response
+              // shape so the cache pins it (replay invariant).
+              const fallbackResp: RecallIntakeResponse = {
+                outcome: 'denied',
+                reason: 'storage_unavailable',
+                raw_reasons: [
+                  err instanceof Error
+                    ? `runtime_seam:internal:${err.message}`
+                    : 'runtime_seam:internal:unknown',
+                ],
+              };
+              return fallbackResp;
+            }
+          }),
+      );
+    } catch (err) {
+      if (err instanceof BoundedStoreCapExceededError) {
+        const cls =
+          err.dimension === 'assertion_count'
+            ? 'guard.tenant_assertion_cap'
+            : 'guard.tenant_byte_budget';
+        const r = guardRefusal(cls, err.message, {
+          tenant_id: wallet,
+          caller_actor_id: wallet,
+        });
+        emit({ ...r.audit, request_id: requestId });
+        return c.json(r.body, r.http_status);
       }
-    });
-
-    if ('__guard__' in seamResponse) {
-      return c.json(seamResponse.__guard__.body, seamResponse.__guard__.http_status);
+      throw err;
     }
-
-    // Populate idempotency cache before responding so concurrent retries
-    // collide on the cache rather than re-execute.
-    deps.idempotencyCache.put(idempotencyKeyTuple, seamResponse, Date.now());
 
     if (seamResponse.outcome === 'served') {
       emit({
@@ -349,6 +374,60 @@ function responseFromSeam(c: Context, seam: RecallIntakeResponse) {
   const r = mapSeamResponseToRefusal(seam, {});
   if (r) return c.json(r.body, r.http_status);
   return c.json(seam, 200);
+}
+
+/** Sentinel returned by `readBodyWithCap` when the body exceeds the cap. */
+const BODY_OVER_CAP = Symbol('body-over-cap');
+type BodyOverCap = typeof BODY_OVER_CAP;
+
+/**
+ * SKP-003 — read the request body with a hard byte cap, BEFORE any JSON
+ * parsing. Streams chunks from the underlying `ReadableStream` and
+ * short-circuits the moment cumulative bytes exceed `maxBytes`. Works
+ * correctly when `Content-Length` is absent, stale, or the request is
+ * chunk-transfer-encoded.
+ *
+ * Returns the body as a UTF-8 string, or `BODY_OVER_CAP` when the cap is
+ * exceeded. Stream reads are cancelled on overflow so we never buffer the
+ * whole oversize body in memory.
+ */
+async function readBodyWithCap(
+  c: Context,
+  maxBytes: number,
+): Promise<string | BodyOverCap> {
+  const reader = c.req.raw.body?.getReader();
+  if (!reader) {
+    // No body stream — fall back to a bounded text read. `text()` here
+    // will only resolve for short bodies; we still validate the byte
+    // length defensively.
+    const t = await c.req.raw.clone().text().catch(() => '');
+    if (Buffer.byteLength(t, 'utf8') > maxBytes) return BODY_OVER_CAP;
+    return t;
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          // Cancel may reject if the stream already errored — ignore;
+          // the over-cap sentinel is the dominant signal.
+        }
+        return BODY_OVER_CAP;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const buf = Buffer.concat(chunks.map((u) => Buffer.from(u)));
+  return buf.toString('utf8');
 }
 
 // Re-export the same-tenant helper as a convenience for tests that want

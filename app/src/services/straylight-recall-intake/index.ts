@@ -24,6 +24,7 @@ export {
 export {
   createBoundedEstateStore,
   BoundedStoreCapExceededError,
+  BoundedStoreScopeViolationError,
   type BoundedEstateStore,
   type BoundedEstateStoreConfig,
   type MinimalRecallStore,
