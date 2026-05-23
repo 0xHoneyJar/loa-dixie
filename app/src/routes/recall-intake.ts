@@ -4,8 +4,15 @@
 // ADR-026C §3.1–§3.8. Endpoint prerequisites: ADR-026D §3.a–§3.d.
 // Fail-closed catalogue: ADR-026D §4.a–§4.g.
 //
+// Phase 30C — Recall-intake contract preflight: the ingress zod schema is
+// structurally aligned with `@loa/straylight/host`'s `RecallIntakeRequest`
+// so no `as unknown as` cast is required at the seam. Host-ish / legacy
+// shapes (e.g. `signature_value`, `algorithm`, `risk_profile: routine`,
+// `environment_frame: actor_private`) are refused at ingress with
+// `ingress.invalid_request` rather than silently passed through.
+//
 // Pipeline (per request):
-//   1. zod validation of body shape
+//   1. zod validation of body shape (strict — wedge-aligned)
 //   2. authenticated wallet resolution (existing JWT middleware)
 //   3. AUTHORITATIVE tenant/actor override — caller-supplied
 //      `caller.tenant_id`, `caller.actor_id`, and `request.actor_id`
@@ -52,13 +59,102 @@ import type {
   TenantResolver,
 } from '@loa/straylight/host';
 
-const RecallSignatureSchema = z
+// Phase 30C — wedge-aligned ingress schema.
+//
+// The schema below is the *real* `RecallIntakeRequest` shape exported by
+// `@loa/straylight/host`. The route refuses anything else at ingress
+// rather than silently casting a host-ish body to the wedge type.
+//
+// Closed enums (mirrored from `@loa/straylight`):
+//   * SignerType, SignatureType — wedge `SignatureEnvelope`
+//   * AssertionClass, AssertionStatus — wedge `RecallRequest` filter sets
+//   * EnvironmentFrame — full wedge vocabulary (the host narrows to
+//     {actor_private, public_discord} for surface 4/6 via `HostFrame`,
+//     but the underlying `RecallRequest.environment_frame` is the wedge
+//     enum, NOT the host one — Surface 1 intake reuses the wedge type
+//     directly, so the route schema must accept the wedge vocabulary).
+//   * RiskLevel — wedge `RecallRequest.risk_profile`
+//   * ReceiptDetailLevel — `'minimal' | 'standard' | 'debug'`
+//   * HostFrame — narrowed enum on `caller.frame` (host-side)
+//
+// A compile-time tripwire below (`_RecallIntakeBodyMatchesHost`) ensures
+// the inferred zod output is assignable to the host's `RecallIntakeRequest`
+// without an unsafe cast.
+
+const SIGNER_TYPES = [
+  'actor_controller',
+  'operator',
+  'runtime',
+  'reviewer',
+  'policy_service',
+  'admin',
+  'wallet',
+  'service_key',
+] as const;
+
+const SIGNATURE_TYPES = [
+  'ed25519',
+  'secp256k1',
+  'hmac',
+  'dev_signature',
+] as const;
+
+const ASSERTION_CLASSES = [
+  'observation',
+  'event',
+  'claim',
+  'assumption',
+  'preference',
+  'reflection',
+  'identity',
+  'relationship',
+  'permission',
+  'plan',
+  'action_trace',
+  'feedback_signal',
+  'evaluation_result',
+  'challenge',
+  'revocation',
+  'commitment',
+] as const;
+
+const ASSERTION_STATUSES = [
+  'proposed',
+  'active',
+  'contested',
+  'demoted',
+  'revoked',
+  'forgotten_from_recall',
+  'superseded',
+  'sealed',
+] as const;
+
+const ENVIRONMENT_FRAMES = [
+  'private_operator',
+  'private_chat',
+  'public_discord',
+  'public_telegram',
+  'repo_workflow',
+  'tool_action_precheck',
+  'audit_review',
+] as const;
+
+const RISK_LEVELS = ['low', 'medium', 'high', 'critical'] as const;
+
+const RECEIPT_DETAIL_LEVELS = ['minimal', 'standard', 'debug'] as const;
+
+const HOST_FRAMES = ['actor_private', 'public_discord'] as const;
+
+const SignatureEnvelopeSchema = z
   .object({
     signature_id: z.string().min(1).max(256),
     signer_id: z.string().min(1).max(256),
-    signature_value: z.string().min(1).max(4096),
-    algorithm: z.string().min(1).max(64),
+    signer_type: z.enum(SIGNER_TYPES),
+    signature_type: z.enum(SIGNATURE_TYPES),
+    signed_payload_hash: z.string().min(1).max(512),
+    signature: z.string().min(1).max(4096),
     signed_at: z.string().min(1).max(64),
+    key_ref: z.string().min(1).max(512),
   })
   .strict();
 
@@ -67,17 +163,22 @@ const RecallRequestSchema = z
     recall_request_id: z.string().min(1).max(256),
     actor_id: z.string().min(1).max(256),
     estate_id: z.string().min(1).max(256),
-    environment_frame: z.enum(['actor_private', 'public_discord']),
-    risk_profile: z.enum(['routine', 'sensitive']).default('routine'),
-    requested_classes: z.array(z.string().min(1).max(128)).max(64).optional(),
-    excluded_classes: z.array(z.string().min(1).max(128)).max(64).optional(),
-    exclude_statuses: z.array(z.string().min(1).max(64)).max(16).optional(),
-    mark_statuses: z.array(z.string().min(1).max(64)).max(16).optional(),
-    include_statuses: z.array(z.string().min(1).max(64)).max(16).optional(),
+    requested_by: z.string().min(1).max(256),
+    task: z.string().min(1).max(2048),
+    intent: z.string().min(1).max(2048).optional(),
+    environment_frame: z.enum(ENVIRONMENT_FRAMES),
+    risk_profile: z.enum(RISK_LEVELS),
+    requested_classes: z.array(z.enum(ASSERTION_CLASSES)).max(64).optional(),
+    excluded_classes: z.array(z.enum(ASSERTION_CLASSES)).max(64).optional(),
+    include_statuses: z.array(z.enum(ASSERTION_STATUSES)).max(16).optional(),
+    mark_statuses: z.array(z.enum(ASSERTION_STATUSES)).max(16).optional(),
+    exclude_statuses: z.array(z.enum(ASSERTION_STATUSES)).max(16).optional(),
     max_items: z.number().int().min(1).max(1024).optional(),
+    freshness_window: z.string().min(1).max(64).optional(),
     include_provenance: z.boolean().optional(),
-    include_receipt_detail: z.enum(['minimal', 'standard', 'debug']).default('minimal'),
-    signature: RecallSignatureSchema,
+    include_receipt_detail: z.enum(RECEIPT_DETAIL_LEVELS),
+    signature: SignatureEnvelopeSchema,
+    created_at: z.string().min(1).max(64),
   })
   .strict();
 
@@ -86,17 +187,30 @@ const HostCallerSchema = z
     tenant_id: z.string().min(1).max(256),
     actor_id: z.string().min(1).max(256),
     session_id: z.string().min(1).max(256).optional(),
-    frame: z.enum(['actor_private', 'public_discord']).optional(),
+    frame: z.enum(HOST_FRAMES).optional(),
   })
   .strict();
 
 const RecallIntakeBodySchema = z
   .object({
     request: RecallRequestSchema,
-    detail_level: z.enum(['minimal', 'standard', 'debug']),
+    detail_level: z.enum(RECEIPT_DETAIL_LEVELS),
     caller: HostCallerSchema,
   })
   .strict();
+
+// Compile-time tripwire — Phase 30C contract preflight.
+//
+// If a future Straylight type bump renames or widens any field on
+// `RecallIntakeRequest`, this assignment fails at typecheck and forces a
+// deliberate update of the ingress schema rather than allowing a silent
+// drift. The check is type-only; no runtime value is produced.
+type _ZodRecallIntakeBody = z.infer<typeof RecallIntakeBodySchema>;
+type _RecallIntakeBodyMatchesHost = _ZodRecallIntakeBody extends RecallIntakeRequest
+  ? true
+  : false;
+const _recallIntakeBodyMatchesHost: _RecallIntakeBodyMatchesHost = true;
+void _recallIntakeBodyMatchesHost;
 
 const IDEMPOTENCY_HEADER = 'idempotency-key';
 const MAX_IDEMPOTENCY_KEY_LEN = 256;
@@ -290,11 +404,14 @@ export function createRecallIntakeRoutes(deps: RecallIntakeRouteDeps): Hono {
               intakeLog: deps.intakeLog,
               now: now().toISOString(),
             };
-            // Construct the seam request from validated body. Caller is
-            // always the authoritative session wallet (cross-tenant body
-            // mismatches were rejected above).
+            // Phase 30C — wedge-aligned ingress means `body` is already
+            // structurally a `RecallIntakeRequest` (enforced by the zod
+            // schema + the `_RecallIntakeBodyMatchesHost` tripwire).
+            // No `as unknown as` cast at the seam call site. Caller fields
+            // are normalized to the authoritative session wallet (cross-
+            // tenant body mismatches were rejected above).
             const seamReq: RecallIntakeRequest = {
-              request: body.request as unknown as RecallIntakeRequest['request'],
+              request: body.request,
               detail_level: body.detail_level,
               caller: { ...body.caller, tenant_id: wallet, actor_id: wallet },
             };

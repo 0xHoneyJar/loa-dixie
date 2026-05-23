@@ -95,22 +95,34 @@ function buildApp(opts?: {
   return app;
 }
 
+// Phase 30C — wedge-aligned recall-intake body. Mirrors
+// `RecallIntakeRequest` from `@loa/straylight/host`: the inner `request`
+// is the wedge `RecallRequest` shape (full enum vocabularies, full
+// `SignatureEnvelope` keys, `requested_by` / `task` / `created_at`
+// required). The route's ingress schema rejects host-ish / legacy
+// bodies; this fixture is the only shape that should pass preflight.
 function bodyForWallet(wallet: string, request_id: string) {
   return {
     request: {
       recall_request_id: request_id,
       actor_id: wallet,
       estate_id: wallet,
-      environment_frame: 'actor_private',
-      risk_profile: 'routine',
+      requested_by: wallet,
+      task: 'recall-intake-route-test',
+      environment_frame: 'private_chat',
+      risk_profile: 'low',
       include_receipt_detail: 'minimal',
       signature: {
         signature_id: 'sig_1',
         signer_id: 'signer_test',
-        signature_value: 'devsig',
-        algorithm: 'ed25519',
+        signer_type: 'actor_controller',
+        signature_type: 'dev_signature',
+        signed_payload_hash: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+        signature: 'devsig',
         signed_at: '2026-05-18T00:00:00Z',
+        key_ref: 'kref_test',
       },
+      created_at: '2026-05-18T00:00:00Z',
     },
     detail_level: 'minimal',
     caller: {
@@ -220,7 +232,7 @@ describe('POST /api/recall/intake — body & rate caps', () => {
     const app = buildApp({ bodyMaxBytes: 256 });
     const body = bodyForWallet(WALLET, 'r1');
     // Bloat to push over 256B.
-    body.request.signature.signature_value = 'a'.repeat(2_000);
+    body.request.signature.signature = 'a'.repeat(2_000);
     const res = await app.request('/api/recall/intake', {
       method: 'POST',
       headers: {
