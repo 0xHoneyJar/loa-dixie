@@ -346,5 +346,23 @@ describe('Phase 30E — POST /api/recall/intake served path with self-consistent
     // Policy decision must be `allow` for a competence-passing low/private
     // recall; needs_review or deny would mean the seed is wrong.
     expect(j.pack?.policy_decision.decision).toBe('allow');
+
+    // Phase 32A — enriched-receipt consumer-contract assertions.
+    //
+    // Phase 31E added `RecallReceipt.redacted_counts_by_reason` and folded
+    // it into `receipt_hash` computation (loa-straylight 12f85d2). Phase
+    // 32A proves Dixie passes that field through verbatim from the
+    // Straylight seam. The live empty-estate fixture redacts nothing, so
+    // these assertions lock the always-present + sum-invariant + hash
+    // shape without asserting any semantic content of the counter.
+    expect(Array.isArray(j.receipt?.redacted_counts_by_reason)).toBe(true);
+    const sumByReason = (j.receipt?.redacted_counts_by_reason ?? []).reduce(
+      (acc, r) => acc + r.count,
+      0,
+    );
+    expect(sumByReason).toBe(j.receipt?.redacted_count);
+    expect(typeof j.receipt?.excluded_counts_by_reason).toBe('object');
+    expect(j.receipt?.excluded_counts_by_reason).not.toBeNull();
+    expect(j.receipt?.receipt_hash?.startsWith('sha256:')).toBe(true);
   });
 });
