@@ -87,7 +87,8 @@ export interface DixieConfig {
  *
  * FINN_URL              (required) — loa-finn backend URL (e.g. http://localhost:3000)
  * FINN_WS_URL           (optional) — WebSocket URL for loa-finn; defaults to FINN_URL with ws:// scheme
- * DIXIE_PORT            (optional) — HTTP listen port; default 3001
+ * PORT                  (optional) — Railway/platform-injected HTTP listen port; takes precedence over DIXIE_PORT
+ * DIXIE_PORT            (optional) — local/dev fallback & legacy override for the HTTP listen port; default 3001 (used only when PORT is unset)
  * DIXIE_JWT_PRIVATE_KEY (required) — JWT signing key; HS256 raw secret (min 32 chars) or EC P-256 PEM for ES256
  * DIXIE_JWT_ALG         (optional) — explicit algorithm override: 'ES256' or 'HS256'; auto-detected from key format if not set
  * DIXIE_JWT_LEGACY_HS256_SECRET (optional) — old HS256 secret for dual-algorithm transition; only used when JWT_ALG=ES256
@@ -160,7 +161,11 @@ export function loadConfig(): DixieConfig {
     }
   }
 
-  const port = safeParseInt(process.env.DIXIE_PORT, 3001, 65535);
+  // Railway (and most PaaS) inject PORT and expect the web service to listen on it.
+  // PORT takes precedence; DIXIE_PORT is the local/dev fallback & legacy override; default 3001.
+  // A present-but-invalid PORT is selected by ?? and falls through safeParseInt to the default
+  // (it does not fall back to DIXIE_PORT) — the simpler, predictable behavior.
+  const port = safeParseInt(process.env.PORT ?? process.env.DIXIE_PORT, 3001, 65535);
   const finnWsUrl = process.env.FINN_WS_URL
     ?? finnUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
 
