@@ -19,6 +19,8 @@ describe('loadConfig', () => {
 
   it('loads with defaults when FINN_URL is set', () => {
     process.env.FINN_URL = 'http://localhost:4000';
+    delete process.env.PORT;
+    delete process.env.DIXIE_PORT;
     const config = loadConfig();
 
     expect(config.finnUrl).toBe('http://localhost:4000');
@@ -32,9 +34,43 @@ describe('loadConfig', () => {
 
   it('respects custom port', () => {
     process.env.FINN_URL = 'http://finn:4000';
+    delete process.env.PORT;
     process.env.DIXIE_PORT = '8080';
     const config = loadConfig();
     expect(config.port).toBe(8080);
+  });
+
+  it('honors Railway PORT when set', () => {
+    process.env.FINN_URL = 'http://finn:4000';
+    delete process.env.DIXIE_PORT;
+    process.env.PORT = '5005';
+    const config = loadConfig();
+    expect(config.port).toBe(5005);
+  });
+
+  it('falls back to DIXIE_PORT when PORT is absent', () => {
+    process.env.FINN_URL = 'http://finn:4000';
+    delete process.env.PORT;
+    process.env.DIXIE_PORT = '8080';
+    const config = loadConfig();
+    expect(config.port).toBe(8080);
+  });
+
+  it('PORT takes precedence over DIXIE_PORT when both are set', () => {
+    process.env.FINN_URL = 'http://finn:4000';
+    process.env.PORT = '5005';
+    process.env.DIXIE_PORT = '8080';
+    const config = loadConfig();
+    expect(config.port).toBe(5005);
+  });
+
+  it('invalid PORT falls through safeParseInt to the default (not to DIXIE_PORT)', () => {
+    process.env.FINN_URL = 'http://finn:4000';
+    process.env.PORT = 'not-a-number';
+    process.env.DIXIE_PORT = '8080';
+    const config = loadConfig();
+    // A present-but-invalid PORT is selected by ?? and parseInt -> NaN -> default 3001.
+    expect(config.port).toBe(3001);
   });
 
   it('splits CORS origins by comma', () => {
