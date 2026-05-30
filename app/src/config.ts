@@ -80,7 +80,29 @@ export interface DixieConfig {
   recallIntakeMaxAssertionBytesPerTenant: number;
   recallIntakeIdempotencyTtlSec: number;
   recallIntakeIdempotencyMaxEntries: number;
+
+  // Phase 32K: dev/operator-only seeded live estate (default-off smoke).
+  // When enabled, the server seeds ONE synthetic dev/operator tenant slot
+  // into the process-local bounded estate store after createBoundedEstateStore
+  // so a direct POST /api/recall/intake smoke for that tenant can return a
+  // served recall instead of seam.storage_unavailable. dev/operator ONLY,
+  // never production admission. See
+  // docs/RECALL-WEDGE-SEEDED-LIVE-ESTATE-STORAGE-DESIGN.md §11 (Phase 32K).
+  recallIntakeDevSeedEnabled: boolean;
+  /** Synthetic dev/operator tenant id to seed (empty when disabled). */
+  recallIntakeDevSeedTenantId: string;
 }
+
+/**
+ * EVM-address-shaped tenant/session identity check.
+ *
+ * Phase 32K: the dev-seed tenant id must match the wallet/address format the
+ * recall-intake route's tenant/session identity uses (the JWT `sub` wallet,
+ * normalized via viem `getAddress` in the allowlist middleware). We validate
+ * the canonical `0x` + 40-hex shape at config load so an enabled-but-malformed
+ * seed fails closed at startup instead of silently seeding nothing.
+ */
+const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 
 /**
  * Environment variables:
@@ -120,6 +142,20 @@ export interface DixieConfig {
  * BILLING_INTERNAL_JWT_SECRET  (optional) — shared secret for S2S JWT to freeside settlement API
  * DIXIE_PRICING_API_URL        (optional) — freeside dynamic pricing API URL; null uses hardcoded rates
  * DIXIE_PRICING_TTL            (optional) — pricing cache TTL in seconds; default 300
+ *
+ * Phase 32K additions (dev/operator-only seeded live estate; default OFF):
+ * DIXIE_RECALL_INTAKE_DEV_SEED_ENABLED   (optional) — when 'true', seed ONE synthetic
+ *                                          dev/operator tenant into the in-process bounded
+ *                                          estate store so a direct recall-intake smoke can
+ *                                          return a served recall. Default 'false'. Requires
+ *                                          DIXIE_RECALL_INTAKE_ENABLED=true. dev/operator
+ *                                          ONLY — never production memory admission.
+ * DIXIE_RECALL_INTAKE_DEV_SEED_TENANT_ID (required when the dev seed is enabled) — synthetic
+ *                                          0x-prefixed 40-hex dev/operator wallet/address to
+ *                                          seed. Must match the recall-intake tenant/session
+ *                                          identity format. Enabled + missing/invalid → throws
+ *                                          at startup (fail-closed; never silently seed nothing).
+ *                                          Provide via env/secret — do NOT commit a live id.
  */
 export function loadConfig(): DixieConfig {
   const finnUrl = process.env.FINN_URL;
@@ -279,5 +315,39 @@ export function loadConfig(): DixieConfig {
       4_096,
       1_000_000,
     ),
+
+    // Phase 32K: dev/operator seeded live estate gate (default off; fail-closed
+    // at startup when enabled with a missing/invalid synthetic tenant id).
+    // Validation runs in the IIFE below; the parsed pair is spread in after.
+    ...(() => {
+      const enabled = process.env.DIXIE_RECALL_INTAKE_DEV_SEED_ENABLED === 'true';
+      if (!enabled) {
+        return {
+          recallIntakeDevSeedEnabled: false,
+          recallIntakeDevSeedTenantId: '',
+        };
+      }
+      // The dev seed only makes sense when the recall route is mounted; an
+      // enabled seed without an enabled route would seed a store nothing
+      // reads. Fail closed rather than silently no-op.
+      const routeEnabled = process.env.DIXIE_RECALL_INTAKE_ENABLED === 'true';
+      if (!routeEnabled) {
+        throw new Error(
+          'DIXIE_RECALL_INTAKE_DEV_SEED_ENABLED=true requires DIXIE_RECALL_INTAKE_ENABLED=true (Phase 32K dev/operator seed)',
+        );
+      }
+      const tenantId = (process.env.DIXIE_RECALL_INTAKE_DEV_SEED_TENANT_ID ?? '').trim();
+      if (!EVM_ADDRESS_RE.test(tenantId)) {
+        // Do NOT echo the raw value — it may be operator-provided. Report the
+        // expected shape only.
+        throw new Error(
+          'DIXIE_RECALL_INTAKE_DEV_SEED_ENABLED=true requires a valid DIXIE_RECALL_INTAKE_DEV_SEED_TENANT_ID (0x + 40 hex chars); fail-closed (Phase 32K)',
+        );
+      }
+      return {
+        recallIntakeDevSeedEnabled: true,
+        recallIntakeDevSeedTenantId: tenantId,
+      };
+    })(),
   };
 }

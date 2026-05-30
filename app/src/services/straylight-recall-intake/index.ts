@@ -30,6 +30,17 @@ export {
   type MinimalRecallStore,
 } from './bounded-estate-store.js';
 
+// Phase 32K — dev/operator-only seeded live estate (default-off smoke).
+export {
+  buildDevSeedMaterial,
+  seedDevOperatorEstate,
+  DEV_SEED_SIGNER_ID,
+  DEV_SEED_SIGNER_TYPE,
+  DEV_SEED_KEY_REF,
+  DEV_SEED_VALID_FROM,
+  type DevSeedMaterial,
+} from './dev-seeded-estate.js';
+
 export {
   createIdempotencyCache,
   type IdempotencyCache,
