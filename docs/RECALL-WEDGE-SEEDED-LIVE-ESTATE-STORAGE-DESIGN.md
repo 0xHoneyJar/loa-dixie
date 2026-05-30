@@ -9,8 +9,10 @@
 > (readiness checkpoint), ADR-026C, ADR-026D
 > **Related (freeside-characters)**: Phase 41D (controlled live
 > `/recall-wedge-live-demo` smoke), Phase 42A (next-MVP decision)
-> **Status**: **docs-only design gate** — code-inspection-grounded. **No
-> implementation. No seeding. No source change.**
+> **Status**: **docs-only design gate** (32J) — code-inspection-grounded. **No
+> implementation. No seeding. No source change.** _Superseded for
+> implementation by the Phase 32K addendum in §11, which ships Option 1 as a
+> default-off dev/operator seed._
 
 This document is a **design gate**, not an implementation. It identifies the
 narrowest safe future path to seed a dev/operator estate so that a later live
@@ -373,3 +375,110 @@ This phase explicitly does **not**:
   seeding step exists today; intentionally **not** modified by this docs-only
   gate (no good anchor — the runbook covers infra deploy/rollback, not the
   in-process recall store).
+
+---
+
+## 11. Phase 32K addendum — implemented dev/operator seed (default-off)
+
+> **Phase**: 32K · **Status**: **implemented** (Option 1 from §4/§5). This
+> section documents the env gate and non-goals of the shipped code; the
+> design rationale above is unchanged.
+
+Phase 32K implements the §5-recommended Option 1: a deterministic,
+**dev/operator-only**, **default-off**, idempotent in-process `seedTenant`
+seed wired immediately after `createBoundedEstateStore(...)` in
+`app/src/server.ts`, behind a dedicated env gate distinct from
+`DIXIE_RECALL_INTAKE_ENABLED`.
+
+### Env gate
+
+| Env var | Default | Meaning |
+|---------|---------|---------|
+| `DIXIE_RECALL_INTAKE_DEV_SEED_ENABLED` | `false` | When `true`, seed exactly **one** synthetic dev/operator tenant slot into the process-local bounded estate store. Requires `DIXIE_RECALL_INTAKE_ENABLED=true`. |
+| `DIXIE_RECALL_INTAKE_DEV_SEED_TENANT_ID` | _(empty)_ | Synthetic `0x`+40-hex dev/operator wallet/address to seed. **Required** when the seed is enabled; must match the recall-intake tenant/session identity format. Provide via env/secret — **never commit a live id**. |
+
+**Fail-closed behavior** (`app/src/config.ts`, mirrors the ADR-026D §4.a
+key gate): enabled is default-off; enabled without
+`DIXIE_RECALL_INTAKE_ENABLED=true` throws at `loadConfig()`; enabled with a
+missing or non-`0x40hex` tenant id throws at `loadConfig()` (never silently
+seeds nothing). The fail-closed error message reports the expected shape
+only and does **not** echo the raw operator-provided value. The raw tenant
+id is **not** logged at startup — only a `recall_intake_dev_seed_active`
+warning that the seed ran.
+
+### What the seed is / is not
+
+- The seed stores only **synthetic signer/keyring metadata** (`signer_id`,
+  `signer_type`, a public `key_ref` label, a `recall_estate_context`
+  competence rule) plus an empty (zero-assertion) estate. The served recall
+  over that estate returns an `allow` pack with `included: []`.
+- The `dev_signature` a caller presents is **caller-computed at request
+  time** (HMAC over the canonical recall payload keyed by the public
+  `key_ref`); it is **never stored**. `dev_signature` carries no
+  cryptographic authority (it is marked DEVELOPMENT-ONLY upstream). **No
+  secret, private key, live id, token, URL, or signature is committed.**
+- The seed is **idempotent** (`seedTenant` replaces the slot) and **safe to
+  rerun** on every process startup. It is **non-durable** (lost on restart;
+  re-seeded next startup) — acceptable for a dev/operator smoke.
+
+### Public storage / internal-seam denial sanitization
+
+Phase 32K now **sanitizes public storage/internal-seam denial bodies**. The
+`storage_unavailable` denial class is the only one whose seam `raw_reasons`
+is an uncontrolled exception message rather than public Straylight
+vocabulary: producer A (unseeded tenant) coerces the bounded store's
+`getKeyring()` throw — whose message embeds bounded-store implementation text
+and the raw tenant id — into `raw_reasons`, and producer C (route
+internal-error fallback) synthesizes a `runtime_seam:internal:*` raw reason.
+`mapSeamResponseToRefusal` now **omits `raw_reasons` from the public HTTP
+body** for the `seam.storage_unavailable` class (key omitted, not emptied)
+and returns a fixed classification-only `message`. The raw reason is retained
+**only** on the internal `audit` object (the existing intake-deny / emitAudit
+trail — no new logging surface is introduced). The safe `503` status and
+`seam.storage_unavailable` classification are unchanged, and every other
+denial class (e.g. `privacy_scope_refusal`, `blocked_by_policy`) still
+forwards its public-vocabulary `raw_reasons` per the Phase 32D denied-no-leak
+contract.
+
+### Non-goals (carried from §6/§8, unchanged)
+
+This seed is a **dev/operator smoke mechanism only**. It is **NOT**:
+
+- production memory admission;
+- a user-facing or public write path;
+- a Discord/Telegram message-history ingestion path;
+- a "remember this" / candidate-memory admission path;
+- a public rollout or public-channel recall;
+- a cross-user auth/consent implementation.
+
+It introduces no Freeside Characters change, no Discord command
+registration, no Railway env change, no production DB migration, and no
+Postgres seed rows.
+
+### Acceptance status
+
+The §7 acceptance criteria are proven **in-repo** by:
+
+- `app/tests/unit/recall-intake/dev-seeded-estate-config.test.ts` —
+  default-off; fail-closed on enabled-but-missing/invalid tenant id; no raw
+  value echo.
+- `app/tests/integration/recall-intake/dev-seeded-live-estate.test.ts` —
+  drives the **real** Dixie app + **real** Straylight runtime (no mocked
+  `handleRecallIntake`): seeded tenant → `200` served / `allow`; unseeded
+  tenant → safe `seam.storage_unavailable` / `503`; no-auth → `401`; expired
+  token → `401`; cross-tenant body mismatch → `403`; default-off preserves
+  the unseeded `503`; idempotent re-seed; served wire body carries no
+  secrets/internals/tenant-debug/JWT material; and both the unseeded and
+  default-off `503` denial bodies carry no `raw_reasons`, bounded-store
+  detail, raw tenant ids, or internal seam/debug text.
+- `app/tests/unit/recall-intake/refusal-mapping.test.ts` — unit proof that
+  the `seam.storage_unavailable` class omits `raw_reasons` from the public
+  body (producers A and C) while retaining them on the internal audit
+  object, and that other denial classes still forward public `raw_reasons`.
+
+**A live smoke after deploy is still required** to accept served recall
+*in the deployed environment*. The in-repo integration test is the
+live-equivalent proof against the real runtime, but it does not substitute
+for a controlled post-deploy `POST /api/recall/intake` smoke against the
+configured dev/operator tenant (see §7 "Direct Dixie smoke" and the
+freeside-characters Phase 41D live demo).

@@ -31,6 +31,7 @@ import {
   createIdempotencyCache,
   createPerEstateMutex,
   createPerTenantRateLimit,
+  seedDevOperatorEstate,
 } from './services/straylight-recall-intake/index.js';
 import { createInMemoryIntakeDenyLog } from './services/straylight-host/index.js';
 import { FinnClient } from './proxy/finn-client.js';
@@ -569,6 +570,26 @@ export function createDixieApp(config: DixieConfig): DixieApp {
       maxAssertionsPerTenant: config.recallIntakeMaxAssertionsPerTenant,
       maxAssertionBytesPerTenant: config.recallIntakeMaxAssertionBytesPerTenant,
     });
+
+    // --- Phase 32K: dev/operator-only seeded live estate (default OFF) ---
+    // Narrow smoke mechanism only (see Phase 32J design gate, PR #116). When
+    // the dedicated dev-seed gate is enabled, seed exactly ONE synthetic
+    // dev/operator tenant slot here — after createBoundedEstateStore and
+    // before the store serves requests — so a direct POST /api/recall/intake
+    // for that tenant returns a served recall instead of
+    // seam.storage_unavailable. Idempotent (seedTenant replaces the slot);
+    // non-durable (lost on restart; re-seeded next startup). This seeds NO
+    // assertions, NEVER reads request/Discord/user input, stores NO secrets,
+    // and is NOT production memory admission. Config has already validated the
+    // synthetic tenant id format (fail-closed). The raw tenant id is NOT
+    // logged — only that the dev seed ran.
+    if (config.recallIntakeDevSeedEnabled) {
+      seedDevOperatorEstate(recallBoundedStore, config.recallIntakeDevSeedTenantId);
+      log('warn', {
+        event: 'recall_intake_dev_seed_active',
+        note: 'dev/operator seeded estate enabled — NOT production memory admission',
+      });
+    }
     const recallIdempotencyCache = createIdempotencyCache({
       ttlSec: config.recallIntakeIdempotencyTtlSec,
       maxEntries: config.recallIntakeIdempotencyMaxEntries,

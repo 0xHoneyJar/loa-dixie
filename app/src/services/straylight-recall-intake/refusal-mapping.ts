@@ -173,13 +173,40 @@ export function mapSeamResponseToRefusal(
   const m = reasonMap[response.reason];
   const cls: RefusalClass = m ? m.cls : 'seam.storage_unavailable';
   const status: RefusalEnvelope['http_status'] = m ? m.status : 503;
+
+  // Phase 32K — sanitize public storage / internal-seam denial bodies.
+  //
+  // `storage_unavailable` is the ONE denial class whose seam `raw_reasons`
+  // is an UNCONTROLLED exception message rather than public Straylight
+  // vocabulary, so its raw reasons must never reach the public HTTP body:
+  //   * producer A — unseeded tenant: the Straylight host try/catch
+  //     (`@loa/straylight/.../host/intake.js`) coerces the bounded store's
+  //     `getKeyring()` throw into `reason:'storage_unavailable'` with
+  //     `raw_reasons:[err.message]`, where `err.message` carries the
+  //     bounded-store implementation text AND the raw tenant id
+  //     (`bounded-estate-store: no slot for tenant <id>`);
+  //   * producer C — the Dixie route internal-error fallback
+  //     (`routes/recall-intake.ts`) synthesizes
+  //     `raw_reasons:['runtime_seam:internal:' + err.message]`.
+  // Both are dropped from the public `body` here and retained ONLY on the
+  // internal `audit` object below (no new logging system is introduced —
+  // the existing emitAudit/intake-deny trail keeps the raw reason). The
+  // public message is a fixed, classification-only string. Every OTHER
+  // denial class keeps its public `raw_reasons` (public wedge vocabulary —
+  // the Phase 32D denied-no-leak contract).
+  const isInternalSeamFailure = cls === 'seam.storage_unavailable';
   return {
     http_status: status,
     body: {
       outcome: 'denied',
       error: cls,
-      message: `seam denial: ${response.reason}`,
-      raw_reasons: response.raw_reasons,
+      message: isInternalSeamFailure
+        ? 'recall storage unavailable'
+        : `seam denial: ${response.reason}`,
+      // Omit the key entirely (not just empty) for internal-seam failures so
+      // the public wire body contains neither the `raw_reasons` key nor any
+      // bounded-store / tenant / internal-seam text.
+      ...(isInternalSeamFailure ? {} : { raw_reasons: response.raw_reasons }),
       audit_event_id: response.audit_event_id,
       intake_log_entry_id: response.intake_log_entry_id,
     },
