@@ -1,0 +1,81 @@
+{
+  "probe_kind": "admission_wedge_contract_probe",
+  "probe_version": "dixie_admission_wedge_probe_v0",
+  "scenario": "draft_contract_probe",
+  "scenario_id": "reject_candidate_no_assertion",
+  "schema_final": false,
+  "runtime_enabled": false,
+  "production_admission": false,
+  "public_safe": true,
+  "intent": "A proposed candidate is denied admission; no admitted assertion is minted, the candidate remains non-recallable, and a rejection receipt exists on the audit boundary.",
+  "invariant_refs": [
+    "inv4_rejected_candidate_never_recallable",
+    "inv3_accepted_transition_creates_or_references_admitted_assertion",
+    "inv6_fail_closed_no_leak"
+  ],
+  "canonical_vocab_used": [
+    "AssertionStatus.proposed",
+    "Transition.admit_assertion",
+    "AuditEvent.transition_denied"
+  ],
+  "draft_vocab_used": [
+    "source_candidate_id",
+    "recall_eligible",
+    "rendered_candidate_payload",
+    "receipt_public_ref"
+  ],
+  "notes": [
+    "DRAFT / PROBE ONLY — not a frozen schema and not a live contract.",
+    "Canonical alignment: rejection is anchored on the canonical Straylight audit event 'transition_denied' (a denied 'admit_assertion' transition). The probe deliberately does NOT coin a parallel 'rejected' status.",
+    "Synonym-collision flag: the Freeside-local proof labels 'rejected', 'candidate_rejected', and 'candidate_not_admitted' are a three-way synonym collision and are referenced here as proof labels only, all reconciling onto 'transition_denied'. Note 'candidate_not_admitted' (pending, never decided) is semantically distinct from an explicit denial; this probe is the explicit-denial case.",
+    "Rejection is terminal for recall eligibility; any future appeal/correction path is separately gated and not implied here.",
+    "Receipt/audit split: the public_response carries only a stable outcome and public summary; the denial receipt (policy reason, candidate ref, audit event) lives on the audit object."
+  ],
+  "input": {
+    "candidate_id": "cand_demo_003",
+    "tenant_id": "tenant_demo",
+    "estate_id": "estate_demo",
+    "proposing_actor_id": "actor_demo",
+    "proposed_assertion_class": "claim",
+    "candidate_payload": "unsafe_marker:candidate-body-demo-003",
+    "source_kind": "synthetic_probe",
+    "source_ref": "unsafe_marker:source-ref-demo-003"
+  },
+  "admission_transition": {
+    "admission_transition_id": "trans_demo_002",
+    "transition_kind": "admit_assertion",
+    "outcome": "denied",
+    "source_candidate_id": "cand_demo_003",
+    "admitted_assertion_id": null,
+    "authority_signer_type_draft": "policy_service",
+    "policy_decision": "denied_by_policy"
+  },
+  "admitted_assertion": null,
+  "recall_projection": {
+    "ordinary_recall_members": [],
+    "explanation": "No admitted assertion was minted; the denied candidate is excluded from ordinary recall and remains non-recallable."
+  },
+  "public_response": {
+    "outcome": "denied",
+    "recall_eligible": false,
+    "rendered_candidate_payload": false,
+    "public_summary": "Candidate admission was denied. No assertion was created and the candidate is not recallable."
+  },
+  "audit": {
+    "admission_receipt": {
+      "receipt_id": "rcpt_demo_003",
+      "decision_time_label": "demo_decision_time",
+      "service_actor": "actor_demo",
+      "policy_reason": "denied_by_policy",
+      "source_candidate_id": "cand_demo_003",
+      "admitted_assertion_id": null,
+      "recall_eligibility_result": "not_eligible",
+      "audit_event": "transition_denied"
+    },
+    "tenant_id": "tenant_demo",
+    "estate_id": "estate_demo",
+    "candidate_payload": "unsafe_marker:candidate-body-demo-003",
+    "source_ref": "unsafe_marker:source-ref-demo-003",
+    "audit_only": true
+  }
+}

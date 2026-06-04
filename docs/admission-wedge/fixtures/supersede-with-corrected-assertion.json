@@ -1,0 +1,116 @@
+{
+  "probe_kind": "admission_wedge_contract_probe",
+  "probe_version": "dixie_admission_wedge_probe_v0",
+  "scenario": "draft_contract_probe",
+  "scenario_id": "supersede_with_corrected_assertion",
+  "schema_final": false,
+  "runtime_enabled": false,
+  "production_admission": false,
+  "public_safe": true,
+  "intent": "An existing active assertion is superseded by a corrected active assertion; ordinary recall includes only the corrected active assertion while the superseded prior state remains audit/provenance only.",
+  "invariant_refs": [
+    "inv5_supersession_auditable_recall_active_only",
+    "inv2_candidate_not_recallable_before_admission",
+    "inv6_fail_closed_no_leak"
+  ],
+  "canonical_vocab_used": [
+    "AssertionStatus.active",
+    "AssertionStatus.superseded",
+    "RecallUseInstruction.usable",
+    "RecallUseInstruction.do_not_use_for_action"
+  ],
+  "draft_vocab_used": [
+    "supersedes_assertion_id",
+    "superseded_by_assertion_id",
+    "supersession_transition_id",
+    "recall_eligible",
+    "recall_use_instruction",
+    "rendered_candidate_payload",
+    "receipt_public_ref"
+  ],
+  "notes": [
+    "DRAFT / PROBE ONLY — not a frozen schema and not a live contract.",
+    "Canonical alignment: correction is expressed as the canonical (superseded, active) PAIR — the prior assertion moves to canonical status 'superseded' and the corrected assertion is canonical status 'active' with a supersede link. The probe deliberately does NOT coin a 'corrected'/'corrected_active' status; 'corrected active' is direction, not a new status value.",
+    "The superseded prior remains audit/provenance only: recall_eligible is false on the superseded record (signalled with RecallUseInstruction 'do_not_use_for_action'), and it is excluded from ordinary recall.",
+    "Supersession is a follow-on transition over an already-admitted assertion, not a first-pass admission outcome.",
+    "Forget/revoke/correction UI remains out of scope; this probe defines no user-facing correction surface.",
+    "Link field names (supersedes_assertion_id, superseded_by_assertion_id, supersession_transition_id) are DRAFT and subject to reconciliation against Straylight-owned assertion types."
+  ],
+  "input": {
+    "tenant_id": "tenant_demo",
+    "estate_id": "estate_demo",
+    "correcting_actor_id": "actor_demo",
+    "prior_assertion_id": "assn_demo_002",
+    "corrected_candidate_payload": "unsafe_marker:candidate-body-demo-004",
+    "source_kind": "synthetic_probe",
+    "source_ref": "unsafe_marker:source-ref-demo-004"
+  },
+  "supersession_transition": {
+    "supersession_transition_id": "trans_demo_003",
+    "transition_kind": "admit_assertion",
+    "outcome": "accepted",
+    "supersedes_assertion_id": "assn_demo_002",
+    "corrected_assertion_id": "assn_demo_003",
+    "authority_signer_type_draft": "policy_service",
+    "policy_decision": "correction_accepted_under_policy"
+  },
+  "assertions": [
+    {
+      "assertion_id": "assn_demo_002",
+      "assertion_status": "superseded",
+      "assertion_class": "claim",
+      "superseded_by_assertion_id": "assn_demo_003",
+      "recall_eligible": false,
+      "recall_use_instruction": "do_not_use_for_action",
+      "audit_provenance_only": true
+    },
+    {
+      "assertion_id": "assn_demo_003",
+      "assertion_status": "active",
+      "assertion_class": "claim",
+      "supersedes_assertion_id": "assn_demo_002",
+      "recall_eligible": true,
+      "recall_use_instruction": "usable"
+    }
+  ],
+  "recall_projection": {
+    "ordinary_recall_members": [
+      "assn_demo_003"
+    ],
+    "excluded_from_ordinary_recall": [
+      "assn_demo_002"
+    ],
+    "explanation": "Ordinary recall includes the corrected active assertion only. The superseded prior assertion is retained for audit/provenance and excluded from ordinary recall."
+  },
+  "public_response": {
+    "outcome": "superseded_with_correction",
+    "active_assertion_status": "active",
+    "recall_eligible": true,
+    "recall_use_instruction": "usable",
+    "rendered_candidate_payload": false,
+    "receipt_public_ref": "rcpt_demo_004",
+    "public_summary": "A corrected active assertion now supersedes the prior assertion. Ordinary recall reflects only the corrected active assertion."
+  },
+  "audit": {
+    "supersession_receipt": {
+      "receipt_id": "rcpt_demo_004",
+      "decision_time_label": "demo_decision_time",
+      "service_actor": "actor_demo",
+      "policy_reason": "correction_accepted_under_policy",
+      "supersedes_assertion_id": "assn_demo_002",
+      "corrected_assertion_id": "assn_demo_003",
+      "recall_eligibility_result": "corrected_active_eligible",
+      "audit_event": "assertion_admitted"
+    },
+    "superseded_prior": {
+      "assertion_id": "assn_demo_002",
+      "assertion_status": "superseded",
+      "candidate_payload": "unsafe_marker:prior-body-demo-004"
+    },
+    "tenant_id": "tenant_demo",
+    "estate_id": "estate_demo",
+    "corrected_candidate_payload": "unsafe_marker:candidate-body-demo-004",
+    "source_ref": "unsafe_marker:source-ref-demo-004",
+    "audit_only": true
+  }
+}

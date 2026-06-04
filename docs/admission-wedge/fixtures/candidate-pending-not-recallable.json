@@ -1,0 +1,65 @@
+{
+  "probe_kind": "admission_wedge_contract_probe",
+  "probe_version": "dixie_admission_wedge_probe_v0",
+  "scenario": "draft_contract_probe",
+  "scenario_id": "candidate_pending_not_recallable",
+  "schema_final": false,
+  "runtime_enabled": false,
+  "production_admission": false,
+  "public_safe": true,
+  "intent": "A candidate proposal exists but no admission transition has occurred; it is not recallable and its payload is never echoed in the public projection.",
+  "invariant_refs": [
+    "inv1_candidate_is_not_admitted",
+    "inv2_candidate_not_recallable_before_admission",
+    "inv6_fail_closed_no_leak"
+  ],
+  "canonical_vocab_used": [
+    "AssertionStatus.proposed"
+  ],
+  "draft_vocab_used": [
+    "candidate_state",
+    "recall_eligible",
+    "rendered_candidate_payload",
+    "admission_transition"
+  ],
+  "notes": [
+    "DRAFT / PROBE ONLY — not a frozen schema and not a live contract.",
+    "Canonical alignment: the pre-admission state uses the canonical Straylight AssertionStatus 'proposed' (Straylight-owned), NOT the Freeside-local proof label 'candidate_pending'. The scenario_id keeps the descriptive name 'candidate_pending_not_recallable' purely as a scenario label, never as a status value.",
+    "Pending-vs-denied distinction: a candidate with NO admission_transition is simply 'proposed'. This is deliberately distinct from a denied candidate (see reject-candidate-no-assertion.json, which carries a 'transition_denied' audit event). The two must not be collapsed.",
+    "Field names under draft_vocab_used are directional proposals subject to cross-repo reconciliation; only the canonical_vocab_used terms are treated as upstream-owned."
+  ],
+  "input": {
+    "candidate_id": "cand_demo_001",
+    "tenant_id": "tenant_demo",
+    "estate_id": "estate_demo",
+    "proposing_actor_id": "actor_demo",
+    "proposed_assertion_class": "observation",
+    "candidate_payload": "unsafe_marker:candidate-body-demo-001",
+    "source_kind": "synthetic_probe",
+    "source_ref": "unsafe_marker:source-ref-demo-001"
+  },
+  "admission_transition": null,
+  "admitted_assertion": null,
+  "recall_projection": {
+    "ordinary_recall_members": [],
+    "explanation": "No admitted, active assertion exists; the proposed candidate is excluded from ordinary recall."
+  },
+  "public_response": {
+    "outcome": "accepted_as_proposed",
+    "candidate_state": "proposed",
+    "recall_eligible": false,
+    "rendered_candidate_payload": false,
+    "public_summary": "Candidate recorded as proposed. Not admitted and not recallable until an explicit admission transition accepts it."
+  },
+  "audit": {
+    "receipt_id": "rcpt_demo_001",
+    "candidate_id": "cand_demo_001",
+    "tenant_id": "tenant_demo",
+    "estate_id": "estate_demo",
+    "proposing_actor_id": "actor_demo",
+    "candidate_payload": "unsafe_marker:candidate-body-demo-001",
+    "source_ref": "unsafe_marker:source-ref-demo-001",
+    "decision": "none_yet",
+    "audit_only": true
+  }
+}

@@ -499,6 +499,14 @@ This Phase 33B succeeds if **all** of the following hold:
 
 ## 15. Cross-references
 
+> **Phase 33C status note (added later).** Phase 33C acted on this decision and
+> authored the first **draft v0** Admission Wedge contract probes at
+> `docs/admission-wedge/fixtures/` (five probe JSONs + an isolated, dependency-free
+> validator + a README). It remains **non-runtime**: it implements **no** live
+> route, storage, auth, or admission behavior, and it does **not** freeze a
+> schema. Future Freeside Characters reconciliation against these probes remains a
+> separate, separately-gated effort.
+
 - `docs/ADMISSION-WEDGE-CONTRACT-RESPONSE.md` — Dixie Phase 33A contract response
   / acceptance gate (PR #118). Its §10 pre-listed this Phase 33B as "contract
   fixture / probe alignment"; this doc is that decision. Gains a single minimal

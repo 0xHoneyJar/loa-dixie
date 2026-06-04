@@ -1,0 +1,99 @@
+{
+  "probe_kind": "admission_wedge_contract_probe",
+  "probe_version": "dixie_admission_wedge_probe_v0",
+  "scenario": "draft_contract_probe",
+  "scenario_id": "accept_candidate_to_admitted_assertion",
+  "schema_final": false,
+  "runtime_enabled": false,
+  "production_admission": false,
+  "public_safe": true,
+  "intent": "A proposed candidate is accepted; an admission transition links it to an admitted, active assertion that becomes recall-eligible under policy, without echoing the raw candidate payload.",
+  "invariant_refs": [
+    "inv3_accepted_transition_creates_or_references_admitted_assertion",
+    "inv2_candidate_not_recallable_before_admission",
+    "inv6_fail_closed_no_leak"
+  ],
+  "canonical_vocab_used": [
+    "AssertionStatus.proposed",
+    "AssertionStatus.active",
+    "Transition.admit_assertion",
+    "AuditEvent.assertion_admitted",
+    "RecallUseInstruction.usable"
+  ],
+  "draft_vocab_used": [
+    "source_candidate_id",
+    "admission_transition_id",
+    "admitted_assertion_id",
+    "recall_eligible",
+    "recall_use_instruction",
+    "rendered_candidate_payload",
+    "receipt_public_ref"
+  ],
+  "notes": [
+    "DRAFT / PROBE ONLY — not a frozen schema and not a live contract.",
+    "Canonical alignment: the ACT of admission is the canonical Straylight transition 'admit_assertion' and audit event 'assertion_admitted'; the resulting STATUS is canonical 'active'. There is NO bare 'admitted' status upstream, so the probe deliberately avoids 'admitted'/'admitted_active_assertion' as a status value.",
+    "Recall eligibility is expressed as 'under policy': a boolean recall_eligible plus the canonical RecallUseInstruction signal ('usable'), not an unconditional grant. The boolean and the canonical signal are kept side by side so future reconciliation is cheap.",
+    "Receipt/audit split: the public_response carries only a public-safe receipt reference and summary; the full admission receipt (policy reasoning, candidate ref, ids) lives on the audit object.",
+    "Link field names (source_candidate_id, admission_transition_id, admitted_assertion_id) are DRAFT and subject to reconciliation against Straylight-owned assertion types."
+  ],
+  "input": {
+    "candidate_id": "cand_demo_002",
+    "tenant_id": "tenant_demo",
+    "estate_id": "estate_demo",
+    "proposing_actor_id": "actor_demo",
+    "proposed_assertion_class": "preference",
+    "candidate_payload": "unsafe_marker:candidate-body-demo-002",
+    "source_kind": "synthetic_probe",
+    "source_ref": "unsafe_marker:source-ref-demo-002"
+  },
+  "admission_transition": {
+    "admission_transition_id": "trans_demo_001",
+    "transition_kind": "admit_assertion",
+    "outcome": "accepted",
+    "source_candidate_id": "cand_demo_002",
+    "admitted_assertion_id": "assn_demo_001",
+    "authority_signer_type_draft": "policy_service",
+    "policy_decision": "accepted_under_policy"
+  },
+  "admitted_assertion": {
+    "admitted_assertion_id": "assn_demo_001",
+    "assertion_status": "active",
+    "assertion_class": "preference",
+    "source_candidate_id": "cand_demo_002",
+    "admission_transition_id": "trans_demo_001",
+    "recall_eligible": true,
+    "recall_use_instruction": "usable"
+  },
+  "recall_projection": {
+    "ordinary_recall_members": [
+      "assn_demo_001"
+    ],
+    "explanation": "The admitted assertion is active and recall-eligible under policy, so it appears in ordinary recall."
+  },
+  "public_response": {
+    "outcome": "admitted",
+    "assertion_status": "active",
+    "recall_eligible": true,
+    "recall_use_instruction": "usable",
+    "rendered_candidate_payload": false,
+    "receipt_public_ref": "rcpt_demo_002",
+    "public_summary": "Candidate admitted under policy. The resulting assertion is active and recall-eligible. The candidate payload is not echoed."
+  },
+  "audit": {
+    "admission_receipt": {
+      "receipt_id": "rcpt_demo_002",
+      "decision_time_label": "demo_decision_time",
+      "service_actor": "actor_demo",
+      "policy_reason": "accepted_under_policy",
+      "source_candidate_id": "cand_demo_002",
+      "admitted_assertion_id": "assn_demo_001",
+      "recall_eligibility_result": "eligible_under_policy",
+      "audit_event": "assertion_admitted"
+    },
+    "tenant_id": "tenant_demo",
+    "estate_id": "estate_demo",
+    "candidate_payload": "unsafe_marker:candidate-body-demo-002",
+    "source_ref": "unsafe_marker:source-ref-demo-002",
+    "audit_only": true
+  }
+}
