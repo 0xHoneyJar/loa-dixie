@@ -515,6 +515,9 @@ this document**; each requires its own separately-gated design/review/audit.
 - **Phase 33B (future Dixie)** — contract fixture / probe alignment: record
   candidate/admission fixtures and align them with freeside-characters
   Phase 43C, against this accepted draft v0 vocabulary.
+  *(Decided docs-only in `docs/ADMISSION-WEDGE-FIXTURE-PROBE-ALIGNMENT-DECISION.md`
+  — selects Dixie-first fixture/probe ownership and defines the minimum future
+  Phase 33C probe set; authorizes no implementation.)*
 - **Phase 33C (future Dixie)** — no-op validator or contract tests: a
   shape/no-leak validator with no live route and no storage writes.
 - **freeside-characters Phase 45C** — reconciliation against this accepted Dixie
