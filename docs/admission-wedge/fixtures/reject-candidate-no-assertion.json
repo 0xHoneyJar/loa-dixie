@@ -1,13 +1,20 @@
 {
   "probe_kind": "admission_wedge_contract_probe",
-  "probe_version": "dixie_admission_wedge_probe_v0",
-  "scenario": "draft_contract_probe",
+  "probe_version": "dixie_admission_wedge_probe_v1",
+  "status": "draft_contract_probe",
   "scenario_id": "reject_candidate_no_assertion",
   "schema_final": false,
+  "canonical_schema": false,
+  "route_contract": false,
   "runtime_enabled": false,
   "production_admission": false,
   "public_safe": true,
-  "intent": "A proposed candidate is denied admission; no admitted assertion is minted, the candidate remains non-recallable, and a rejection receipt exists on the audit boundary.",
+  "hardening_phase": "33E",
+  "identity_binding_final": false,
+  "synthetic_binding": true,
+  "straylight_primitive_review": "required_before_route_design",
+  "straylight_primitive_review_complete": false,
+  "intent": "A proposed candidate is denied admission by an explicit rejection transition; no admitted assertion is minted, the candidate remains non-recallable, and a rejection receipt exists on the audit boundary.",
   "invariant_refs": [
     "inv4_rejected_candidate_never_recallable",
     "inv3_accepted_transition_creates_or_references_admitted_assertion",
@@ -22,14 +29,21 @@
     "source_candidate_id",
     "recall_eligible",
     "rendered_candidate_payload",
-    "receipt_public_ref"
+    "public_receipt_ref",
+    "audit_receipt_ref",
+    "authority_signer_type_draft",
+    "authority_scope_draft",
+    "idempotency_key_draft",
+    "idempotency_scope_draft"
   ],
   "notes": [
-    "DRAFT / PROBE ONLY — not a frozen schema and not a live contract.",
-    "Canonical alignment: rejection is anchored on the canonical Straylight audit event 'transition_denied' (a denied 'admit_assertion' transition). The probe deliberately does NOT coin a parallel 'rejected' status.",
-    "Synonym-collision flag: the Freeside-local proof labels 'rejected', 'candidate_rejected', and 'candidate_not_admitted' are a three-way synonym collision and are referenced here as proof labels only, all reconciling onto 'transition_denied'. Note 'candidate_not_admitted' (pending, never decided) is semantically distinct from an explicit denial; this probe is the explicit-denial case.",
+    "DRAFT v1 / PROBE ONLY — Phase 33E vocabulary hardening over the Phase 33C draft v0 probe. NOT a frozen schema, NOT canonical, NOT a live route contract.",
+    "Canonical alignment (hardened): rejection is anchored on the canonical Straylight audit event 'transition_denied' (a denied 'admit_assertion' transition) and a public outcome 'denied'. The denied/rejected/transition_denied vocabulary is bound to an EXPLICIT rejection transition (transition.outcome 'denied'), NOT to a mere pending absence of a transition. The probe deliberately does NOT coin a parallel 'rejected' status.",
+    "Synonym-collision flag: the Freeside-local proof labels 'rejected', 'candidate_rejected', and 'candidate_not_admitted' are a three-way synonym collision and are referenced here as proof labels only, all reconciling onto 'transition_denied'. Note 'candidate_not_admitted' (pending, never decided) is semantically distinct from this explicit denial; the pending case is candidate-pending-not-recallable.json.",
     "Rejection is terminal for recall eligibility; any future appeal/correction path is separately gated and not implied here.",
-    "Receipt/audit split: the public_response carries only a stable outcome and public summary; the denial receipt (policy reason, candidate ref, audit event) lives on the audit object."
+    "Authority/signer (draft, non-final): the rejection transition carries authority_signer_type_draft ('policy_service', a canonical SignerType member) plus authority_scope_draft and authority_binding_final:false. NOT a production auth claim.",
+    "Idempotency (draft, non-final): the denied admission write attempt carries idempotency_key_draft / idempotency_scope_draft / idempotency_final:false so a retried rejection coalesces; final semantics are NOT decided here.",
+    "Receipt/audit split (hardened): public_response carries only a stable outcome, a public-safe receipt reference (receipt_public_ref), and a public summary; the denial receipt detail (policy reason, candidate ref, audit event) lives on the private audit object (audit_private:true, public_audit_detail:false). Identity binding is synthetic-only and non-final."
   ],
   "input": {
     "candidate_id": "cand_demo_003",
@@ -41,6 +55,11 @@
     "source_kind": "synthetic_probe",
     "source_ref": "unsafe_marker:source-ref-demo-003"
   },
+  "idempotency": {
+    "idempotency_key_draft": "idem_demo_003",
+    "idempotency_scope_draft": "per_tenant_admission_transition_draft",
+    "idempotency_final": false
+  },
   "admission_transition": {
     "admission_transition_id": "trans_demo_002",
     "transition_kind": "admit_assertion",
@@ -48,9 +67,17 @@
     "source_candidate_id": "cand_demo_003",
     "admitted_assertion_id": null,
     "authority_signer_type_draft": "policy_service",
+    "authority_scope_draft": "admit_assertion_class_claim_draft",
+    "authority_binding_final": false,
     "policy_decision": "denied_by_policy"
   },
   "admitted_assertion": null,
+  "receipt_split": {
+    "public_receipt_ref": "rcpt_public_demo_003",
+    "audit_receipt_ref": "rcpt_demo_003",
+    "audit_private": true,
+    "public_audit_detail": false
+  },
   "recall_projection": {
     "ordinary_recall_members": [],
     "explanation": "No admitted assertion was minted; the denied candidate is excluded from ordinary recall and remains non-recallable."
@@ -59,6 +86,7 @@
     "outcome": "denied",
     "recall_eligible": false,
     "rendered_candidate_payload": false,
+    "receipt_public_ref": "rcpt_public_demo_003",
     "public_summary": "Candidate admission was denied. No assertion was created and the candidate is not recallable."
   },
   "audit": {

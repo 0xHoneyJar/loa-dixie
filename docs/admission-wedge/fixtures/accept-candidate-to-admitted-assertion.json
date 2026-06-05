@@ -1,13 +1,20 @@
 {
   "probe_kind": "admission_wedge_contract_probe",
-  "probe_version": "dixie_admission_wedge_probe_v0",
-  "scenario": "draft_contract_probe",
+  "probe_version": "dixie_admission_wedge_probe_v1",
+  "status": "draft_contract_probe",
   "scenario_id": "accept_candidate_to_admitted_assertion",
   "schema_final": false,
+  "canonical_schema": false,
+  "route_contract": false,
   "runtime_enabled": false,
   "production_admission": false,
   "public_safe": true,
-  "intent": "A proposed candidate is accepted; an admission transition links it to an admitted, active assertion that becomes recall-eligible under policy, without echoing the raw candidate payload.",
+  "hardening_phase": "33E",
+  "identity_binding_final": false,
+  "synthetic_binding": true,
+  "straylight_primitive_review": "required_before_route_design",
+  "straylight_primitive_review_complete": false,
+  "intent": "A proposed candidate is accepted; an admission transition links it to an admitted, active assertion that becomes recall-eligible under draft policy, without echoing the raw candidate payload.",
   "invariant_refs": [
     "inv3_accepted_transition_creates_or_references_admitted_assertion",
     "inv2_candidate_not_recallable_before_admission",
@@ -27,14 +34,22 @@
     "recall_eligible",
     "recall_use_instruction",
     "rendered_candidate_payload",
-    "receipt_public_ref"
+    "public_receipt_ref",
+    "audit_receipt_ref",
+    "authority_signer_type_draft",
+    "authority_scope_draft",
+    "idempotency_key_draft",
+    "idempotency_scope_draft"
   ],
   "notes": [
-    "DRAFT / PROBE ONLY — not a frozen schema and not a live contract.",
-    "Canonical alignment: the ACT of admission is the canonical Straylight transition 'admit_assertion' and audit event 'assertion_admitted'; the resulting STATUS is canonical 'active'. There is NO bare 'admitted' status upstream, so the probe deliberately avoids 'admitted'/'admitted_active_assertion' as a status value.",
-    "Recall eligibility is expressed as 'under policy': a boolean recall_eligible plus the canonical RecallUseInstruction signal ('usable'), not an unconditional grant. The boolean and the canonical signal are kept side by side so future reconciliation is cheap.",
-    "Receipt/audit split: the public_response carries only a public-safe receipt reference and summary; the full admission receipt (policy reasoning, candidate ref, ids) lives on the audit object.",
-    "Link field names (source_candidate_id, admission_transition_id, admitted_assertion_id) are DRAFT and subject to reconciliation against Straylight-owned assertion types."
+    "DRAFT v1 / PROBE ONLY — Phase 33E vocabulary hardening over the Phase 33C draft v0 probe. NOT a frozen schema, NOT canonical, NOT a live route contract.",
+    "Canonical alignment: the ACT of admission is the canonical Straylight transition 'admit_assertion' and audit event 'assertion_admitted'; the resulting STATUS is canonical 'active'. There is NO bare 'admitted' status upstream, so the probe deliberately avoids 'admitted'/'admitted_active_assertion' as a status value. 'admitted' survives only as a lifecycle outcome label on public_response.outcome, not as a final canonical status name.",
+    "Chain (hardened): the probe links candidate -> transition -> admitted assertion: input.candidate_id == transition.source_candidate_id == admitted_assertion.source_candidate_id, transition.admitted_assertion_id == admitted_assertion.admitted_assertion_id, and admitted_assertion.admission_transition_id == transition.admission_transition_id.",
+    "Recall eligibility is expressed as 'under draft policy': a boolean recall_eligible plus the canonical RecallUseInstruction signal ('usable'), not an unconditional grant. The admitted active assertion is recall-eligible; the boolean and the canonical signal are kept side by side so future reconciliation is cheap.",
+    "Authority/signer (draft, non-final): the transition carries authority_signer_type_draft ('policy_service', a canonical SignerType member mirrored at app/src/routes/recall-intake.ts) plus authority_scope_draft and authority_binding_final:false. The FIELD names and binding are draft; this is NOT a production auth claim and service auth is not end-user consent.",
+    "Idempotency (draft, non-final): the admission transition write carries idempotency_key_draft / idempotency_scope_draft / idempotency_final:false. Final idempotency semantics are NOT decided here.",
+    "Receipt/audit split (hardened): public_response carries only a public-safe receipt reference (public_receipt_ref) and summary; the full admission receipt (policy reasoning, candidate ref, ids, audit_event) lives on the private audit object under audit_private:true / public_audit_detail:false. The two ref fields are deliberately distinct values.",
+    "Identity binding is synthetic-only and non-final (synthetic_binding:true, identity_binding_final:false). Link field names are DRAFT and subject to reconciliation against Straylight-owned assertion types. A Straylight primitive/vocabulary review is required before route design and has NOT been performed."
   ],
   "input": {
     "candidate_id": "cand_demo_002",
@@ -46,6 +61,11 @@
     "source_kind": "synthetic_probe",
     "source_ref": "unsafe_marker:source-ref-demo-002"
   },
+  "idempotency": {
+    "idempotency_key_draft": "idem_demo_002",
+    "idempotency_scope_draft": "per_tenant_admission_transition_draft",
+    "idempotency_final": false
+  },
   "admission_transition": {
     "admission_transition_id": "trans_demo_001",
     "transition_kind": "admit_assertion",
@@ -53,6 +73,8 @@
     "source_candidate_id": "cand_demo_002",
     "admitted_assertion_id": "assn_demo_001",
     "authority_signer_type_draft": "policy_service",
+    "authority_scope_draft": "admit_assertion_class_preference_draft",
+    "authority_binding_final": false,
     "policy_decision": "accepted_under_policy"
   },
   "admitted_assertion": {
@@ -64,11 +86,17 @@
     "recall_eligible": true,
     "recall_use_instruction": "usable"
   },
+  "receipt_split": {
+    "public_receipt_ref": "rcpt_public_demo_002",
+    "audit_receipt_ref": "rcpt_demo_002",
+    "audit_private": true,
+    "public_audit_detail": false
+  },
   "recall_projection": {
     "ordinary_recall_members": [
       "assn_demo_001"
     ],
-    "explanation": "The admitted assertion is active and recall-eligible under policy, so it appears in ordinary recall."
+    "explanation": "The admitted assertion is active and recall-eligible under draft policy, so it appears in ordinary recall."
   },
   "public_response": {
     "outcome": "admitted",
@@ -76,8 +104,8 @@
     "recall_eligible": true,
     "recall_use_instruction": "usable",
     "rendered_candidate_payload": false,
-    "receipt_public_ref": "rcpt_demo_002",
-    "public_summary": "Candidate admitted under policy. The resulting assertion is active and recall-eligible. The candidate payload is not echoed."
+    "receipt_public_ref": "rcpt_public_demo_002",
+    "public_summary": "Candidate admitted under draft policy. The resulting assertion is active and recall-eligible. The candidate payload is not echoed."
   },
   "audit": {
     "admission_receipt": {

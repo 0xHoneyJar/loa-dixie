@@ -1,13 +1,20 @@
 {
   "probe_kind": "admission_wedge_contract_probe",
-  "probe_version": "dixie_admission_wedge_probe_v0",
-  "scenario": "draft_contract_probe",
+  "probe_version": "dixie_admission_wedge_probe_v1",
+  "status": "draft_contract_probe",
   "scenario_id": "supersede_with_corrected_assertion",
   "schema_final": false,
+  "canonical_schema": false,
+  "route_contract": false,
   "runtime_enabled": false,
   "production_admission": false,
   "public_safe": true,
-  "intent": "An existing active assertion is superseded by a corrected active assertion; ordinary recall includes only the corrected active assertion while the superseded prior state remains audit/provenance only.",
+  "hardening_phase": "33E",
+  "identity_binding_final": false,
+  "synthetic_binding": true,
+  "straylight_primitive_review": "required_before_route_design",
+  "straylight_primitive_review_complete": false,
+  "intent": "An existing active assertion is superseded by a corrected active assertion; ordinary recall includes only the corrected active assertion while the superseded prior assertion remains audit/provenance only.",
   "invariant_refs": [
     "inv5_supersession_auditable_recall_active_only",
     "inv2_candidate_not_recallable_before_admission",
@@ -26,15 +33,22 @@
     "recall_eligible",
     "recall_use_instruction",
     "rendered_candidate_payload",
-    "receipt_public_ref"
+    "public_receipt_ref",
+    "audit_receipt_ref",
+    "authority_signer_type_draft",
+    "authority_scope_draft",
+    "idempotency_key_draft",
+    "idempotency_scope_draft"
   ],
   "notes": [
-    "DRAFT / PROBE ONLY — not a frozen schema and not a live contract.",
-    "Canonical alignment: correction is expressed as the canonical (superseded, active) PAIR — the prior assertion moves to canonical status 'superseded' and the corrected assertion is canonical status 'active' with a supersede link. The probe deliberately does NOT coin a 'corrected'/'corrected_active' status; 'corrected active' is direction, not a new status value.",
-    "The superseded prior remains audit/provenance only: recall_eligible is false on the superseded record (signalled with RecallUseInstruction 'do_not_use_for_action'), and it is excluded from ordinary recall.",
+    "DRAFT v1 / PROBE ONLY — Phase 33E vocabulary hardening over the Phase 33C draft v0 probe. NOT a frozen schema, NOT canonical, NOT a live route contract.",
+    "Canonical alignment: correction is expressed as the canonical (superseded, active) PAIR — the prior assertion moves to canonical status 'superseded' and the corrected assertion is canonical status 'active' with a supersede link. The probe deliberately does NOT coin a 'corrected'/'corrected_active' status; 'corrected active' is a relationship/direction, not a new standalone status value.",
+    "Recall direction (hardened): ordinary recall includes the corrected active assertion ONLY (recall_projection.ordinary_recall_members). The superseded prior remains audit/provenance only: recall_eligible is false on the superseded record (signalled with RecallUseInstruction 'do_not_use_for_action') and it is in excluded_from_ordinary_recall.",
     "Supersession is a follow-on transition over an already-admitted assertion, not a first-pass admission outcome.",
-    "Forget/revoke/correction UI remains out of scope; this probe defines no user-facing correction surface.",
-    "Link field names (supersedes_assertion_id, superseded_by_assertion_id, supersession_transition_id) are DRAFT and subject to reconciliation against Straylight-owned assertion types."
+    "Authority/signer (draft, non-final): the supersession transition carries authority_signer_type_draft ('policy_service', a canonical SignerType member) plus authority_scope_draft and authority_binding_final:false. NOT a production auth claim.",
+    "Idempotency (draft, non-final): the supersession write carries idempotency_key_draft / idempotency_scope_draft / idempotency_final:false; final semantics are NOT decided here.",
+    "Receipt/audit split (hardened): public_response carries only a public-safe receipt reference (receipt_public_ref) and summary; the full supersession receipt lives on the private audit object (audit_private:true, public_audit_detail:false). The superseded prior body stays audit-only.",
+    "Forget/revoke/correction UI remains out of scope; this probe defines no user-facing correction surface. Identity binding is synthetic-only and non-final; link field names are DRAFT and subject to reconciliation against Straylight-owned assertion types."
   ],
   "input": {
     "tenant_id": "tenant_demo",
@@ -45,6 +59,11 @@
     "source_kind": "synthetic_probe",
     "source_ref": "unsafe_marker:source-ref-demo-004"
   },
+  "idempotency": {
+    "idempotency_key_draft": "idem_demo_004",
+    "idempotency_scope_draft": "per_tenant_supersession_transition_draft",
+    "idempotency_final": false
+  },
   "supersession_transition": {
     "supersession_transition_id": "trans_demo_003",
     "transition_kind": "admit_assertion",
@@ -52,6 +71,8 @@
     "supersedes_assertion_id": "assn_demo_002",
     "corrected_assertion_id": "assn_demo_003",
     "authority_signer_type_draft": "policy_service",
+    "authority_scope_draft": "supersede_assertion_class_claim_draft",
+    "authority_binding_final": false,
     "policy_decision": "correction_accepted_under_policy"
   },
   "assertions": [
@@ -73,6 +94,12 @@
       "recall_use_instruction": "usable"
     }
   ],
+  "receipt_split": {
+    "public_receipt_ref": "rcpt_public_demo_004",
+    "audit_receipt_ref": "rcpt_demo_004",
+    "audit_private": true,
+    "public_audit_detail": false
+  },
   "recall_projection": {
     "ordinary_recall_members": [
       "assn_demo_003"
@@ -88,7 +115,7 @@
     "recall_eligible": true,
     "recall_use_instruction": "usable",
     "rendered_candidate_payload": false,
-    "receipt_public_ref": "rcpt_demo_004",
+    "receipt_public_ref": "rcpt_public_demo_004",
     "public_summary": "A corrected active assertion now supersedes the prior assertion. Ordinary recall reflects only the corrected active assertion."
   },
   "audit": {

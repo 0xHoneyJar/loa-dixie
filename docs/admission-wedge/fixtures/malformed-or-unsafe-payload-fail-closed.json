@@ -1,13 +1,20 @@
 {
   "probe_kind": "admission_wedge_contract_probe",
-  "probe_version": "dixie_admission_wedge_probe_v0",
-  "scenario": "draft_contract_probe",
+  "probe_version": "dixie_admission_wedge_probe_v1",
+  "status": "draft_contract_probe",
   "scenario_id": "malformed_or_unsafe_payload_fail_closed",
   "schema_final": false,
+  "canonical_schema": false,
+  "route_contract": false,
   "runtime_enabled": false,
   "production_admission": false,
   "public_safe": true,
-  "intent": "A malformed or unsafe candidate input is presented; the path fails closed with a stable reason code, mints no admitted assertion, and leaks no raw payload, unsafe marker, source material, or stack trace into the public response.",
+  "hardening_phase": "33E",
+  "identity_binding_final": false,
+  "synthetic_binding": true,
+  "straylight_primitive_review": "required_before_route_design",
+  "straylight_primitive_review_complete": false,
+  "intent": "A malformed or unsafe candidate input is presented; the path fails closed with a stable public reason code from the existing Dixie refusal family, mints no admitted assertion, and leaks no raw payload, unsafe marker, source material, or stack trace into the public response.",
   "invariant_refs": [
     "inv6_fail_closed_no_leak",
     "inv3_accepted_transition_creates_or_references_admitted_assertion",
@@ -17,14 +24,18 @@
   "draft_vocab_used": [
     "reason_code",
     "recall_eligible",
-    "rendered_candidate_payload"
+    "rendered_candidate_payload",
+    "audit_receipt_ref",
+    "idempotency_key_draft",
+    "idempotency_scope_draft"
   ],
   "notes": [
-    "DRAFT / PROBE ONLY — not a frozen schema and not a live contract.",
-    "Reason-code alignment: the public reason_code is grounded in the existing Dixie-local refusal family, NOT a coined 'unsupported_admission_shape' or 'unsafe_*' public code. A malformed envelope maps to 'ingress.invalid_request' (HTTP-400-shaped at ingress); an unsupported assertion class would instead map to 'seam.class_validation_failed'. These exact strings exist today in app/src/services/straylight-recall-intake/refusal-mapping.ts and are Dixie-owned (not Straylight-owned).",
-    "No-leak seal: the unsafe input lives only in the 'input' and 'audit' sections and carries a generic synthetic 'unsafe_marker:' token (NOT the Freeside-local sentinel string). The public_response must contain no unsafe_marker, no raw payload, no source material, and no stack trace. The validator proves this by deep-walking public_response.",
-    "Public/audit split: admission decides its own split explicitly and does NOT inherit the recall default. raw_reasons that could carry internal/unsafe material are OMITTED from the public body and retained only on the audit object — mirroring the Phase 32K storage_unavailable posture, applied here by deliberate choice.",
-    "No admitted assertion is minted on the fail-closed path."
+    "DRAFT v1 / PROBE ONLY — Phase 33E vocabulary hardening over the Phase 33C draft v0 probe. NOT a frozen schema, NOT canonical, NOT a live route contract.",
+    "Reason-code alignment (hardened): the PUBLIC reason_code is the stable Dixie-local ingress.invalid_request family, NOT a coined 'unsupported_admission_shape' or 'unsafe_*' public code. A malformed envelope maps to 'ingress.invalid_request'; an unsupported assertion class would instead map to 'seam.class_validation_failed'. These exact strings exist today in app/src/services/straylight-recall-intake/refusal-mapping.ts and are Dixie-owned (not Straylight-owned). A finer PRIVATE reason family may live on the audit object (audit.private_reason_family) without ever reaching the public body.",
+    "No-leak seal (hardened): the unsafe input lives only in the private 'input' and 'audit' sections and carries a generic synthetic 'unsafe_marker:' token (NOT the Freeside-local sentinel string). The public_response must contain NO unsafe_marker, NO raw payload, NO source material, NO stack trace, and no tenant/estate/actor id, candidate_payload, raw_reasons, or audit-only receipt detail. The validator proves this by deep-walking public_response.",
+    "Receipt/audit split (hardened): NO public receipt is minted on the fail-closed path (receipt_split.public_receipt_ref is null); the refusal is recorded on the private audit object only (audit_private:true, public_audit_detail:false).",
+    "Idempotency (draft, non-final): even a fail-closed write attempt carries idempotency_key_draft / idempotency_scope_draft / idempotency_final:false so a retried malformed submission coalesces rather than minting duplicate refusal state. Final semantics are NOT decided here.",
+    "Authority (draft): NO authority/signer field is asserted because NO admission transition occurs on the fail-closed path — the request is refused at ingress before any transition. No admitted assertion is minted. Identity binding is synthetic-only and non-final."
   ],
   "input": {
     "tenant_id": "tenant_demo",
@@ -35,8 +46,19 @@
     "candidate_payload": "unsafe_marker:malformed-body-demo-005",
     "source_ref": "unsafe_marker:source-ref-demo-005"
   },
+  "idempotency": {
+    "idempotency_key_draft": "idem_demo_005",
+    "idempotency_scope_draft": "per_tenant_candidate_write_draft",
+    "idempotency_final": false
+  },
   "admission_transition": null,
   "admitted_assertion": null,
+  "receipt_split": {
+    "public_receipt_ref": null,
+    "audit_receipt_ref": "rcpt_demo_005",
+    "audit_private": true,
+    "public_audit_detail": false
+  },
   "recall_projection": {
     "ordinary_recall_members": [],
     "explanation": "Input failed closed before any admission; no assertion exists and nothing enters ordinary recall."
@@ -49,7 +71,9 @@
     "public_summary": "The admission request was malformed and was refused. No candidate detail is echoed."
   },
   "audit": {
+    "receipt_id": "rcpt_demo_005",
     "refusal_class": "ingress.invalid_request",
+    "private_reason_family": "ingress.invalid_request.malformed_envelope_draft",
     "raw_reasons": [
       "unsafe_marker:malformed-body-demo-005",
       "draft_probe_validation: proposed_assertion_class not in canonical AssertionClass union"
