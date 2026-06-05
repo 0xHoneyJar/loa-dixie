@@ -1,13 +1,20 @@
 {
   "probe_kind": "admission_wedge_contract_probe",
-  "probe_version": "dixie_admission_wedge_probe_v0",
-  "scenario": "draft_contract_probe",
+  "probe_version": "dixie_admission_wedge_probe_v1",
+  "status": "draft_contract_probe",
   "scenario_id": "candidate_pending_not_recallable",
   "schema_final": false,
+  "canonical_schema": false,
+  "route_contract": false,
   "runtime_enabled": false,
   "production_admission": false,
   "public_safe": true,
-  "intent": "A candidate proposal exists but no admission transition has occurred; it is not recallable and its payload is never echoed in the public projection.",
+  "hardening_phase": "33E",
+  "identity_binding_final": false,
+  "synthetic_binding": true,
+  "straylight_primitive_review": "required_before_route_design",
+  "straylight_primitive_review_complete": false,
+  "intent": "A candidate proposal exists but no admission transition has occurred; it is proposed/pending, it is not recallable, and its payload is never echoed in the public projection.",
   "invariant_refs": [
     "inv1_candidate_is_not_admitted",
     "inv2_candidate_not_recallable_before_admission",
@@ -20,13 +27,19 @@
     "candidate_state",
     "recall_eligible",
     "rendered_candidate_payload",
-    "admission_transition"
+    "admission_transition",
+    "idempotency_key_draft",
+    "idempotency_scope_draft",
+    "audit_receipt_ref"
   ],
   "notes": [
-    "DRAFT / PROBE ONLY — not a frozen schema and not a live contract.",
+    "DRAFT v1 / PROBE ONLY — Phase 33E vocabulary hardening over the Phase 33C draft v0 probe. NOT a frozen schema, NOT canonical, NOT a live route contract.",
     "Canonical alignment: the pre-admission state uses the canonical Straylight AssertionStatus 'proposed' (Straylight-owned), NOT the Freeside-local proof label 'candidate_pending'. The scenario_id keeps the descriptive name 'candidate_pending_not_recallable' purely as a scenario label, never as a status value.",
-    "Pending-vs-denied distinction: a candidate with NO admission_transition is simply 'proposed'. This is deliberately distinct from a denied candidate (see reject-candidate-no-assertion.json, which carries a 'transition_denied' audit event). The two must not be collapsed.",
-    "Field names under draft_vocab_used are directional proposals subject to cross-repo reconciliation; only the canonical_vocab_used terms are treated as upstream-owned."
+    "Pending-vs-denied distinction (hardened): a candidate with NO admission_transition is simply 'proposed'. The public outcome 'accepted_as_proposed' must NOT use denied/rejected/transition_denied vocabulary. This is deliberately distinct from the explicit denial case (reject-candidate-no-assertion.json, which carries a 'transition_denied' audit event). The two must not be collapsed.",
+    "Idempotency (draft, non-final): the candidate-intake write attempt carries a draft idempotency placeholder (idempotency_key_draft / idempotency_scope_draft / idempotency_final:false). Final idempotency semantics (candidate-id-keyed vs header-keyed vs both) are NOT decided here.",
+    "Receipt/audit split (hardened): no public receipt is minted for a mere proposal (receipt_split.public_receipt_ref is null); the audit receipt reference is audit-private (audit_private:true, public_audit_detail:false).",
+    "Identity binding is synthetic-only and non-final (synthetic_binding:true, identity_binding_final:false). tenant/estate/actor ids are short synthetic labels confined to the private input/audit sections, never the public_response.",
+    "Field names under draft_vocab_used are directional proposals subject to cross-repo reconciliation; only canonical_vocab_used terms are treated as upstream-owned. A Straylight primitive/vocabulary review is required before any route design and has NOT been performed."
   ],
   "input": {
     "candidate_id": "cand_demo_001",
@@ -38,8 +51,19 @@
     "source_kind": "synthetic_probe",
     "source_ref": "unsafe_marker:source-ref-demo-001"
   },
+  "idempotency": {
+    "idempotency_key_draft": "idem_demo_001",
+    "idempotency_scope_draft": "per_tenant_candidate_write_draft",
+    "idempotency_final": false
+  },
   "admission_transition": null,
   "admitted_assertion": null,
+  "receipt_split": {
+    "public_receipt_ref": null,
+    "audit_receipt_ref": "rcpt_demo_001",
+    "audit_private": true,
+    "public_audit_detail": false
+  },
   "recall_projection": {
     "ordinary_recall_members": [],
     "explanation": "No admitted, active assertion exists; the proposed candidate is excluded from ordinary recall."

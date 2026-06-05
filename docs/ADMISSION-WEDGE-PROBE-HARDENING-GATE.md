@@ -432,3 +432,45 @@ This Phase 33D succeeds if **all** of the following hold:
 - ADR-022E (durable-store gate, still held), ADR-026C / ADR-026D
   (capability/route guardrails) — any future admission storage/route must clear
   these.
+
+---
+
+## 12. Phase 33E status note (implemented)
+
+> **Phase 33E — Admission Wedge probe hardening draft v1 / vocabulary
+> refinement (added later).** Phase 33E acted on the §7 recommended lane and
+> implemented the **draft v1 / vocabulary hardening only**. It is a Dixie-side
+> **docs + non-runtime fixture/probe/validator** slice.
+
+- **What it changed.** It updated `docs/admission-wedge/fixtures/README.md`, the
+  five Phase 33C probe JSONs, and `docs/admission-wedge/fixtures/validate-fixtures.mjs`.
+  The probes are bumped to `probe_version: dixie_admission_wedge_probe_v1`
+  (`status: draft_contract_probe`, `hardening_phase: "33E"`) and gain explicit
+  non-final markers (`schema_final: false`, `canonical_schema: false`,
+  `route_contract: false`), a draft `idempotency` placeholder
+  (`idempotency_final: false`), draft signer/authority fields
+  (`authority_signer_type_draft` / `authority_scope_draft` /
+  `authority_binding_final: false`), a `receipt_split` public/private boundary,
+  synthetic-only identity markers (`synthetic_binding: true` /
+  `identity_binding_final: false`), and a Straylight primitive-review marker
+  (`straylight_primitive_review: "required_before_route_design"` /
+  `straylight_primitive_review_complete: false`). The validator was hardened to
+  enforce all of the above plus a stronger no-leak / pending-vs-denied sweep.
+- **What it preserved.** All five Phase 33C semantic scenarios
+  (`candidate_pending_not_recallable`, `accept_candidate_to_admitted_assertion`,
+  `reject_candidate_no_assertion`, `supersede_with_corrected_assertion`,
+  `malformed_or_unsafe_payload_fail_closed`) are preserved unchanged in meaning;
+  none was removed, renamed, or split, and **no sixth probe was added**. The
+  public-surface values the freeside-characters Phase 45F adapter reads are
+  preserved, so the gated mirror refresh maps cleanly.
+- **What it did NOT do.** It added **no** live admission route, **no** route
+  design, **no** storage writes, **no** auth implementation, **no** live calls,
+  and **no** production admission/storage/auth/consent. It touched no app
+  source, route, config, package, or lockfile, and did not edit
+  `../freeside-characters`. It **did not freeze a final/canonical/production
+  schema**, and does **not** claim Phase 33E produces a final schema, a live
+  Dixie admission route, completed Straylight primitive review, final
+  idempotency semantics, or production signer/identity binding. The draft fields
+  are placeholders only.
+- **Validation.** `git diff --check` clean; `node
+  docs/admission-wedge/fixtures/validate-fixtures.mjs` → PASS (5/5).
