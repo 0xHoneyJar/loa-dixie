@@ -119,6 +119,12 @@ PASS/FAIL summary and exits non-zero on any failure.
 
 ## Provenance
 
+> **Phase 33D status note (added later).** Phase 33D
+> ([`docs/ADMISSION-WEDGE-PROBE-HARDENING-GATE.md`](../../ADMISSION-WEDGE-PROBE-HARDENING-GATE.md))
+> accepts these probes as valid **draft v0** semantic probes and decides **not**
+> to mutate any probe JSON or this validator — any hardening is deferred to a
+> future, separately-gated Phase 33E that must preserve all five scenarios.
+
 - [`docs/ADMISSION-WEDGE-FIXTURE-PROBE-ALIGNMENT-DECISION.md`](../../ADMISSION-WEDGE-FIXTURE-PROBE-ALIGNMENT-DECISION.md) — Phase 33B Dixie-first ownership decision and minimum probe set (§6) / schema surfaces (§7) / vocabulary directions (§8).
 - [`docs/ADMISSION-WEDGE-CONTRACT-RESPONSE.md`](../../ADMISSION-WEDGE-CONTRACT-RESPONSE.md) — Phase 33A contract response: the core invariant, draft v0 vocabulary, and reconciliation directions.
 - [`docs/integration/phase-32e-recall-wedge-route-contract.md`](../../integration/phase-32e-recall-wedge-route-contract.md) — the Recall Wedge route contract and BFF/Straylight ownership split this probe set assumes (but does not mutate).

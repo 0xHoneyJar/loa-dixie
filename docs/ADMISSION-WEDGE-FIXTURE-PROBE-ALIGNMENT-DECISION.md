@@ -507,6 +507,14 @@ This Phase 33B succeeds if **all** of the following hold:
 > schema. Future Freeside Characters reconciliation against these probes remains a
 > separate, separately-gated effort.
 
+> **Phase 33D status note (added later).** Phase 33D
+> (`docs/ADMISSION-WEDGE-PROBE-HARDENING-GATE.md`) accepts the Phase 33C probes
+> as valid **draft v0** semantic probes, records the hardening topics that must
+> be decided before any route design (§5 there), and **decides not to mutate**
+> any probe JSON or the validator in that phase — deferring any probe/validator
+> hardening to a future, separately-gated Phase 33E. It freezes no schema and
+> authorizes no route, storage, auth, or live admission.
+
 - `docs/ADMISSION-WEDGE-CONTRACT-RESPONSE.md` — Dixie Phase 33A contract response
   / acceptance gate (PR #118). Its §10 pre-listed this Phase 33B as "contract
   fixture / probe alignment"; this doc is that decision. Gains a single minimal
