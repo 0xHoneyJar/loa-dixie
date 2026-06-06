@@ -211,6 +211,17 @@ production identity binding.
 
 ## Provenance
 
+> **Phase 33F status note (added later).** Phase 33F
+> ([`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-READINESS-GATE.md`](../../ADMISSION-WEDGE-ROUTE-CONTRACT-READINESS-GATE.md))
+> is a **docs/decision-only route-contract readiness gate**. It reads these draft
+> v1 probes **read-only** — it mutates no probe JSON and does not change the
+> validator. It assesses that the probes are a mature enough *semantic*
+> foundation to begin a future **docs-only route-contract design** phase, while
+> confirming they remain **draft v1, not a production schema, not a route
+> contract**, and that the **Straylight primitive review is still required and
+> not complete** (`straylight_primitive_review_complete: false`). It authorizes no
+> route, storage, auth, consent, live behavior, or schema freeze.
+
 > **Phase 33E status note (added later).** Phase 33E
 > ([`docs/ADMISSION-WEDGE-PROBE-HARDENING-GATE.md`](../../ADMISSION-WEDGE-PROBE-HARDENING-GATE.md))
 > implemented the draft v1 / vocabulary hardening the Phase 33D gate selected

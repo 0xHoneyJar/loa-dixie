@@ -474,3 +474,26 @@ This Phase 33D succeeds if **all** of the following hold:
   are placeholders only.
 - **Validation.** `git diff --check` clean; `node
   docs/admission-wedge/fixtures/validate-fixtures.mjs` → PASS (5/5).
+
+---
+
+## 13. Phase 33F status note (route-contract readiness gate)
+
+> **Phase 33F — Admission Wedge route-contract readiness gate (added later).**
+> Phase 33F is a Dixie-side **docs/decision-only** gate
+> ([`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-READINESS-GATE.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-READINESS-GATE.md))
+> that reads the Phase 33E draft v1 probes (read-only) and the freeside-characters
+> Phase 45J acceptance, and **decides whether route-contract design may begin**.
+
+- **Decision.** The draft v1 probes are a mature enough **semantic foundation**
+  to support a future **docs-only route-contract *design*** phase, but are **not**
+  strong enough to authorize route *implementation*. Two preconditions gate even
+  the design step's finalization: the **Straylight primitive review**
+  (`straylight_primitive_review_complete: false`, still required) and
+  **idempotency semantics** (`idempotency_final: false`, undecided).
+- **Next lane.** Phase 33F selects a **docs-only Phase 33G — Admission Wedge
+  route-contract design** (with a primitive-review-request-first alternative).
+- **What it did NOT do.** Phase 33F designs/implements no route, mutates no probe
+  JSON or this validator, writes no storage/auth/consent, freezes no schema, and
+  does not claim the Phase 33E probes are a production schema or that the
+  Straylight review is complete.
