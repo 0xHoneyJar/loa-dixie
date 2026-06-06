@@ -468,6 +468,21 @@ This document is acceptable if:
 
 ## 15. Cross-references
 
+> **Phase 33G status note (added later).** Phase 33G
+> ([`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md))
+> is the **docs-only route-contract design** lane this gate selected (§11–§12).
+> It proposes — on paper only — a route identity (`POST /api/admission/intake`),
+> a draft request/response envelope with a public/private split, a draft
+> idempotency sketch, a draft `admission.*` refusal taxonomy, storage/auth/
+> consent preconditions, and route-contract test vectors mapped from the five
+> Phase 33E probes. It **does not** implement a route, mutate the probes or
+> validator, write storage, add auth, or freeze a schema, and it keeps the
+> Straylight primitive review **required and not complete**. It selects a
+> docs/decision-only **Phase 33H** acceptance gate as the next lane.
+
+- [`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md)
+  — Phase 33G draft route-contract design produced from this gate's selected
+  lane (read-only against the Phase 33E probes; designs no live behavior).
 - [`docs/ADMISSION-WEDGE-PROBE-HARDENING-GATE.md`](ADMISSION-WEDGE-PROBE-HARDENING-GATE.md)
   — Phase 33D hardening-decision gate and the Phase 33E status note; the source
   of the draft v1 probes this gate assesses.
