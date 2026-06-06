@@ -211,6 +211,20 @@ production identity binding.
 
 ## Provenance
 
+> **Phase 33G status note (added later).** Phase 33G
+> ([`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md`](../../ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md))
+> is a **docs-only route-contract design**. It reads these draft v1 probes
+> **read-only** — it mutates no probe JSON and does not change the validator —
+> and maps their five `public_response` shapes into paper-only route-contract
+> test vectors, alongside a draft route identity, request/response envelope,
+> idempotency sketch, and refusal taxonomy. It freezes **no** schema, implements
+> **no** route, writes **no** storage, adds **no** auth, and keeps the Straylight
+> primitive review **required and not complete**. (One reconciliation item it
+> flags: the public-receipt reference appears here under two spellings —
+> `public_receipt_ref` in `receipt_split` and `receipt_public_ref` in
+> `public_response`; the design defers picking one canonical name to a later
+> reconciliation.)
+
 > **Phase 33F status note (added later).** Phase 33F
 > ([`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-READINESS-GATE.md`](../../ADMISSION-WEDGE-ROUTE-CONTRACT-READINESS-GATE.md))
 > is a **docs/decision-only route-contract readiness gate**. It reads these draft
@@ -228,9 +242,13 @@ production identity binding.
 > (its §7): it updated this README, the five probe JSONs, and the validator,
 > preserved all five Phase 33C semantic scenarios, added **no** sixth probe, and
 > did **not** add a live route, route design, storage, or auth — and it froze no
-> schema. The Freeside Characters Phase 45F local mirrors / adapter refresh
-> against `dixie_admission_wedge_probe_v1` remains a separate, separately-gated
-> effort on that repository; Phase 33E does not edit Freeside Characters.
+> schema. On the Freeside Characters side (separate repository, separately
+> gated): Phase 45F was the earlier **v0** no-op adapter / validator proof; Phase
+> 45I later refreshed the Freeside local mirrors to Dixie **v1**
+> (`dixie_admission_wedge_probe_v1`) and updated adapter compatibility
+> (test-only); and Phase 45J accepted that proof and recommended Dixie Phase 33F.
+> None of that authorizes any new Freeside runtime/live/package/export behavior,
+> and Phase 33E does not edit Freeside Characters.
 
 > **Phase 33D status note.** Phase 33D
 > ([`docs/ADMISSION-WEDGE-PROBE-HARDENING-GATE.md`](../../ADMISSION-WEDGE-PROBE-HARDENING-GATE.md))
