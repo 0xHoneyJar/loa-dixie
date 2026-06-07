@@ -501,6 +501,21 @@ This phase succeeds if:
 > the next lane. It implements no route, mutates no probe or validator, writes no
 > storage, adds no auth, and freezes no schema.
 
+> **Phase 33I status note (added later).** The selected next lane was executed as
+> Phase 33I
+> ([`docs/ADMISSION-WEDGE-IMPLEMENTATION-READINESS-DECOMPOSITION-GATE.md`](ADMISSION-WEDGE-IMPLEMENTATION-READINESS-DECOMPOSITION-GATE.md)),
+> a **docs/decision-only** decomposition gate. Phase 33I carries this gate's §8
+> blocker table forward 1:1 (A–N, closing none), adds two synthesis meta-blocker
+> rows (O route-implementation acceptance criteria; P production-readiness
+> criteria), orders the blockers into future lanes (33J Straylight primitive
+> review → 33K storage/auth/consent design → 33L route test-vector fixtures →
+> 33M dev/operator-only spike **authorization** → 33N possible spike, **not
+> authorized**), defines the evidence required before any route handler, and
+> **selects Phase 33J (Straylight primitive review request)** as the next lane —
+> with 33K permitted to proceed in parallel against draft vocabulary. It
+> implements no route, mutates no probe or validator, and authorizes no spike,
+> storage, auth, consent, or schema freeze.
+
 - [`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md)
   — Phase 33G draft route-contract design accepted (with the two §3 corrections)
   and assessed here. Carries a 33H correction note in its §9.1.
