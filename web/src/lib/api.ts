@@ -50,6 +50,19 @@ export const api = {
     return apiFetch<T>(path);
   },
 
+  /** Generic POST request */
+  post<T>(path: string, body?: unknown): Promise<T> {
+    return apiFetch<T>(path, {
+      method: 'POST',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  },
+
+  /** Generic DELETE request */
+  delete<T>(path: string): Promise<T> {
+    return apiFetch<T>(path, { method: 'DELETE' });
+  },
+
   sendChat(prompt: string, sessionId?: string): Promise<ChatResponse> {
     return apiFetch('/api/chat', {
       method: 'POST',
