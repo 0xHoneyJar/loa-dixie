@@ -680,6 +680,21 @@ This phase succeeds if:
 
 ## 17. Cross-references
 
+> **Phase 33J status note (added later).** Phase 33J
+> ([`docs/ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-GATE.md`](ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-GATE.md))
+> is the **docs/decision-only Straylight primitive-review request / vocabulary
+> dependency gate** this gate selected as the next lane (§6 Lane 1, §7, §13). It
+> reads the probes and validator **read-only** — it mutates **no** probe JSON and
+> does **not** change the validator. It builds a fifteen-item review register, a
+> primitive dependency matrix, and a term-ownership classification grounded
+> read-only against Straylight (`@loa/straylight`) primitive sources, drafts a
+> reusable cross-repo handoff to the Straylight primitive owner, and selects
+> **Phase 33K (storage/auth/consent precondition design)** as the next lane — with
+> the unresolved Straylight review answers treated as explicit exit criteria. It
+> **confirms no completed Straylight Admission-Wedge primitive-review artifact
+> exists**, keeps the review **required and not complete**, and authorizes no
+> route, route spike, storage, auth, consent, live behavior, or schema freeze.
+
 - [`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md)
   — Phase 33H acceptance gate whose §8 blocker table (A–N) this gate decomposes
   and whose §10 selected this decomposition lane. Gains a minimal 33I status note.

@@ -211,6 +211,23 @@ production identity binding.
 
 ## Provenance
 
+> **Phase 33J status note (added later).** Phase 33J
+> ([`docs/ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-GATE.md`](../../ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-GATE.md))
+> is a **docs/decision-only** Straylight primitive-review request / vocabulary
+> dependency gate. It reads these draft v1 probes and the validator **read-only** —
+> it mutates **no** probe JSON and does **not** change the validator. It builds a
+> review register, a primitive dependency matrix, and a term-ownership
+> classification (Straylight-owned vs. Dixie-local draft vs. Freeside-local proof
+> vs. shared vs. unresolved) grounded read-only against Straylight
+> (`@loa/straylight`) primitive sources, drafts a reusable cross-repo handoff to
+> the Straylight primitive owner, and selects **Phase 33K (storage/auth/consent
+> precondition design)** as the next lane with the unresolved review answers as
+> exit criteria. It **confirms no completed Straylight Admission-Wedge
+> primitive-review artifact exists** and keeps the Straylight primitive review
+> **required and not complete** (`straylight_primitive_review_complete: false`). It
+> authorizes no route, route spike, storage, auth, consent, live behavior, or
+> schema freeze.
+
 > **Phase 33I status note (added later).** Phase 33I
 > ([`docs/ADMISSION-WEDGE-IMPLEMENTATION-READINESS-DECOMPOSITION-GATE.md`](../../ADMISSION-WEDGE-IMPLEMENTATION-READINESS-DECOMPOSITION-GATE.md))
 > is a **docs/decision-only** implementation-readiness decomposition gate. It reads
