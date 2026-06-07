@@ -211,6 +211,19 @@ production identity binding.
 
 ## Provenance
 
+> **Phase 33I status note (added later).** Phase 33I
+> ([`docs/ADMISSION-WEDGE-IMPLEMENTATION-READINESS-DECOMPOSITION-GATE.md`](../../ADMISSION-WEDGE-IMPLEMENTATION-READINESS-DECOMPOSITION-GATE.md))
+> is a **docs/decision-only** implementation-readiness decomposition gate. It reads
+> these draft v1 probes and the validator **read-only** — it mutates **no** probe
+> JSON and does **not** change the validator. It decomposes the Phase 33H blockers
+> into ordered future lanes (33J Straylight primitive review → 33K
+> storage/auth/consent design → 33L route test-vector fixtures → 33M
+> dev/operator-only spike authorization → 33N possible spike), defines the evidence
+> required before any route handler, and selects **Phase 33J (Straylight primitive
+> review request)** as the next lane. It authorizes no route, route spike, storage,
+> auth, consent, live behavior, or schema freeze, and keeps the Straylight
+> primitive review **required and not complete**.
+
 > **Phase 33H status note (added later).** Phase 33H
 > ([`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md`](../../ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md))
 > is a **docs/decision-only** acceptance / implementation-readiness gate. It reads
