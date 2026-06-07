@@ -350,8 +350,23 @@ May include (drawn from the probe `public_response` shapes):
 > public-receipt reference under **two spellings**: `public_receipt_ref` (in
 > `receipt_split`) and `receipt_public_ref` (in `public_response`). This contract
 > must pick **one** canonical public field name during reconciliation; it is
-> flagged here rather than silently resolved, because the probes are draft v1 and
-> the validator currently tolerates both.
+> flagged here rather than silently resolved, because the probes are draft v1.
+> The validator does **not** treat the two spellings as interchangeable: it pins
+> each section to its own spelling — `receipt_split.public_receipt_ref` and
+> `public_response.receipt_public_ref` — and cross-checks them for equality
+> (`validate-fixtures.mjs:324`), so a `public_response` that used
+> `public_receipt_ref` would fail. The reconciliation debt is that two distinct
+> names coexist across the two sections, not that either field is unvalidated.
+
+> **Phase 33H correction note (added later).** Two factual corrections were
+> applied to this design by the Phase 33H acceptance gate
+> ([`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md)):
+> (1) §11 previously called the existing Dixie refusal namespace "three-part" —
+> it is **two-part** (`category.specific_reason`, one dot); (2) §9.1 previously
+> said "the validator currently tolerates both" receipt spellings — the validator
+> is **strict per section** (see the paragraph above). Both were docs-only wording
+> fixes; no probe, validator, or source code changed, and the design's bounded
+> scope is unchanged.
 
 ### 9.2 Private / audit response (internal only, draft)
 
@@ -428,7 +443,9 @@ refusal codes** (`ingress.invalid_request`, `seam.class_validation_failed`) that
 the probes already adopt and that live in
 `app/src/services/straylight-recall-intake/refusal-mapping.ts`. Admission-specific
 outcomes are proposed under a new `admission.*` family, styled to match the
-existing three-part dotted namespace (`category.specific_reason`). Per 33A §5.J,
+existing two-part dotted namespace (`category.specific_reason` — a single
+`ingress`/`guard`/`seam` category prefix joined by one dot to a single
+underscore-reason). Per 33A §5.J,
 the admission taxonomy is decided **explicitly** and does **not** silently
 inherit recall's `seam.*` codes by default.
 

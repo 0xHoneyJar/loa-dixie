@@ -211,6 +211,20 @@ production identity binding.
 
 ## Provenance
 
+> **Phase 33H status note (added later).** Phase 33H
+> ([`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md`](../../ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md))
+> is a **docs/decision-only** acceptance / implementation-readiness gate. It reads
+> these draft v1 probes and the validator **read-only** — it mutates **no** probe
+> JSON and does **not** change the validator. It **accepts** the Phase 33G route
+> contract as a bounded docs-only draft (with two minor docs-only wording
+> corrections to the 33G text only — refusal namespace is **two-part**; the
+> receipt-split validator is **strict per-section**, see `validate-fixtures.mjs`
+> `:321-335`), renders a **not-implementation-ready** verdict, inventories the
+> blockers, and selects a docs-only **Phase 33I implementation-readiness
+> decomposition gate**. It authorizes no route, storage, auth, consent, live
+> behavior, or schema freeze, and keeps the Straylight primitive review **required
+> and not complete**.
+
 > **Phase 33G status note (added later).** Phase 33G
 > ([`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md`](../../ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md))
 > is a **docs-only route-contract design**. It reads these draft v1 probes
