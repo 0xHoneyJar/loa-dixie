@@ -754,6 +754,16 @@ A concise threat table. **Mitigations are design requirements, not implementatio
   app/runtime imports** (the existing validator is pure Node built-ins, imports
   nothing from `app/`).
 
+> **Phase 33L status note (added later).** Phase 33L added **non-runtime
+> route-contract test-vector fixtures** under
+> [`docs/admission-wedge/route-contract-test-vectors/`](admission-wedge/route-contract-test-vectors/README.md)
+> (five vectors mapped from the Phase 33G §16 vectors A–E, plus a docs-bound,
+> Node-built-ins-only validator). It **did not mutate the Phase 33E probes** or
+> their validator, and it **did not implement a route, storage, auth, or
+> consent**. It carries the genuinely unresolved rows (E, G, H, K, N, O) and the
+> review-dependent/non-final row (J) forward as markers. **Phase 33M remains a
+> future authorization gate; Phase 33N remains not authorized.**
+
 ---
 
 ## 17. Impact on Phase 33M / 33N route spike path

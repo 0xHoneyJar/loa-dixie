@@ -1,0 +1,96 @@
+{
+  "vector_kind": "dixie_admission_wedge_route_contract_test_vector",
+  "vector_version": "dixie_admission_wedge_route_vector_draft_v0",
+  "phase": "33L",
+  "scenario_id": "accept_candidate_to_admitted_assertion",
+  "maps_to_route_contract_design_vector": "B",
+  "source_probe_version": "dixie_admission_wedge_probe_v1",
+  "source_probe_phase": "33E",
+  "source_route_contract_phase": "33G",
+  "schema_final": false,
+  "route_contract_final": false,
+  "runtime_enabled": false,
+  "route_implemented": false,
+  "route_spike_authorized": false,
+  "storage_writes_performed": false,
+  "auth_implemented": false,
+  "consent_implemented": false,
+  "production_admission": false,
+  "straylight_primitive_review_complete": false,
+  "public_safe": true,
+  "notes": [
+    "DRAFT v0 ROUTE-CONTRACT TEST VECTOR / NON-RUNTIME — Phase 33L. This is a docs-bound route-contract test-vector draft, NOT an executable route test. It does not prove a route exists, does not authorize route implementation, storage writes, auth, or consent, and does not define a production schema.",
+    "It maps the Phase 33G route-contract design vector B (ADMISSION-WEDGE-ROUTE-CONTRACT-DESIGN.md §16.B) one layer closer to a possible future route contract; it does NOT replace or mutate the Phase 33E draft v1 probe accept-candidate-to-admitted-assertion.json.",
+    "Canonical alignment (draft): the ACT of admission mirrors the canonical Straylight transition 'admit_assertion' and audit event 'assertion_admitted'; the resulting STATUS is canonical 'active'. 'admitted' is a public outcome label only, not a canonical status. The admitted active assertion can become recall-eligible after admission, but the exact RecallUseInstruction projection remains review-dependent (row E).",
+    "Authority/signer and idempotency are draft and non-final (signer/authority semantics are not production auth; idempotency keying is undecided, row J). Unresolved Straylight primitive-review rows (E, G, H, K, N, O) are carried forward as markers and are NOT treated as resolved."
+  ],
+  "scenario_review_dependency_rows": ["B", "C", "E", "F", "L", "H"],
+  "request_vector": {
+    "method": "POST",
+    "path": "/api/admission/intake",
+    "route_exists": false,
+    "route_authorized": false,
+    "candidate_envelope_class": "candidate_proposal_with_admit_transition_draft",
+    "transition_intent": "admit_assertion_accept_draft",
+    "idempotency_key_policy": "draft_required_for_future_write_attempt_not_final",
+    "auth_assumption": "draft_non_implemented",
+    "consent_assumption": "draft_non_implemented_or_dev_only_marker",
+    "storage_assumption": "draft_no_write_performed"
+  },
+  "expected_public_response": {
+    "outcome_class": "admitted",
+    "admitted_assertion_status_class": "active",
+    "public_receipt_ref_policy": "public_safe_receipt_reference_draft",
+    "recall_eligible": true,
+    "recall_use_instruction_public_signal": "usable_draft_review_dependent",
+    "rendered_candidate_payload": false,
+    "safe_reason_code": null,
+    "must_not_include": [
+      "raw_candidate_payload",
+      "source_material",
+      "raw_reasons",
+      "private_audit_fields",
+      "operational_tenant_estate_actor_ids",
+      "idempotency_key",
+      "authority_signature_material",
+      "tokens_secrets_urls",
+      "stack_traces_debug_internals",
+      "storage_internals",
+      "long_operational_ids"
+    ]
+  },
+  "expected_private_or_audit_effect": {
+    "effect_class": "admission_transition_intent_plus_admitted_assertion_intent_plus_receipt_audit_intent_draft",
+    "storage_write_intent": "draft_expected_future_effect_not_performed",
+    "audit_record_intent": "draft_expected_future_effect_not_performed",
+    "private_fields_allowed_only_in_audit": true,
+    "audit_event_class": "assertion_admitted_draft",
+    "candidate_to_transition_to_assertion_chain_intent": true
+  },
+  "expected_recall_projection": {
+    "candidate_recallable_before_admission": false,
+    "admitted_assertion_recallable_after_admission": true,
+    "ordinary_recall_includes": ["admitted_active_assertion_draft_placeholder"],
+    "ordinary_recall_excludes": [],
+    "recall_use_instruction_policy": "draft_usable_after_admission_review_dependent"
+  },
+  "idempotency_expectation": "accepted_transition_retry_must_not_create_duplicate_assertion_draft",
+  "unresolved_review_markers": {
+    "genuinely_unresolved_rows": ["E", "G", "H", "K", "N", "O"],
+    "review_dependent_non_final_rows": ["J"],
+    "notes": "Carried from Phase 33J §5/§6 (review register A-O) and Phase 33K §5/§16. The exact RecallUseInstruction projection (E), receipt/audit naming (H), and idempotency keying (J) are not resolved by this vector."
+  },
+  "storage_auth_consent_assumptions": {
+    "storage_model": "draft_non_implemented",
+    "service_auth_model": "draft_non_implemented",
+    "end_user_consent_model": "draft_non_implemented",
+    "dev_operator_scope": "not_authorized_by_phase_33l"
+  },
+  "no_leak_assertions": {
+    "public_response_contains_private_material": false,
+    "public_response_contains_operational_ids": false,
+    "public_response_contains_raw_candidate": false,
+    "public_response_contains_idempotency_key": false,
+    "public_response_contains_authority_material": false
+  }
+}
