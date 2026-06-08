@@ -686,3 +686,18 @@ This phase succeeds if:
   acceptance that **recommended Dixie Phase 33F**; its mirror/adapter proof remains
   **test-only**, not exported, wired to no runtime path, and its proof labels are
   Freeside-local vocabulary (§7 callout). **Not edited by this phase.**
+
+> **Phase 33K status note (added later).** Phase 33K
+> ([`docs/ADMISSION-WEDGE-STORAGE-AUTH-CONSENT-PRECONDITION-DESIGN-GATE.md`](ADMISSION-WEDGE-STORAGE-AUTH-CONSENT-PRECONDITION-DESIGN-GATE.md))
+> is the **docs/decision-only** storage/auth/consent precondition design gate this
+> gate's §14 selected. It reads this review register **read-only** and carries the
+> §5 fifteen-item register (A–O) forward as **explicit exit criteria / design
+> assumptions, not as solved facts** — flagging the genuinely unresolved matrix
+> rows (E, G, H, K, N, O), plus the review-dependent/non-final idempotency row (J),
+> for the future Phase 33L test-vector draft. It designs draft
+> storage record categories, service-auth and end-user-consent model *options*, a
+> dev/operator-only scope option, an idempotency precondition, a no-leak posture, and
+> a threat model — and selects **Phase 33L (route-contract test-vector fixture draft,
+> docs/non-runtime)** as the next lane. It **does not complete the Straylight
+> primitive review**, implements no storage/auth/consent, mutates no probe or
+> validator, and authorizes no route, route spike, live behavior, or schema freeze.
