@@ -211,6 +211,22 @@ production identity binding.
 
 ## Provenance
 
+> **Phase 33K status note (added later).** Phase 33K
+> ([`docs/ADMISSION-WEDGE-STORAGE-AUTH-CONSENT-PRECONDITION-DESIGN-GATE.md`](../../ADMISSION-WEDGE-STORAGE-AUTH-CONSENT-PRECONDITION-DESIGN-GATE.md))
+> is a **docs/decision-only** storage/auth/consent precondition design gate. It reads
+> these draft v1 probes and the validator **read-only** — it mutates **no** probe JSON
+> and does **not** change the validator. It designs (on paper) the storage record
+> categories, service-authentication and end-user-consent model *options*, a
+> dev/operator-only scope option, an idempotency precondition, a no-leak public/private
+> posture, and a threat model that must be satisfied **before** any Admission Wedge
+> route implementation or route spike. It carries the Phase 33J §5 primitive-review
+> register (A–O) forward as **explicit exit criteria / design assumptions, not solved
+> facts**, and selects **Phase 33L (route-contract test-vector fixture draft,
+> docs/non-runtime)** as the next lane. It **confirms the Straylight primitive review
+> is still required and not complete** (`straylight_primitive_review_complete: false`),
+> implements no storage/auth/consent, and authorizes no route, route spike, storage
+> write, auth, consent, live behavior, or schema freeze.
+
 > **Phase 33J status note (added later).** Phase 33J
 > ([`docs/ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-GATE.md`](../../ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-GATE.md))
 > is a **docs/decision-only** Straylight primitive-review request / vocabulary
