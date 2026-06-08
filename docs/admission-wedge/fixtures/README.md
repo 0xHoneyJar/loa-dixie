@@ -211,6 +211,18 @@ production identity binding.
 
 ## Provenance
 
+> **Phase 33L status note (added later).** Phase 33L
+> ([`docs/admission-wedge/route-contract-test-vectors/README.md`](../route-contract-test-vectors/README.md))
+> added **non-runtime route-contract test-vector fixtures** (five vectors mapped
+> from the Phase 33G §16 design vectors A–E, plus a docs-bound, Node-built-ins-only
+> validator). It **did not mutate these Phase 33E probes** or this validator, and
+> it **did not implement a route, storage, auth, or consent**. The route vectors
+> sit one layer closer to a possible future route contract while staying aligned to
+> the same five scenario ids, and they carry the Phase 33J unresolved rows
+> (E, G, H, K, N, O) and the review-dependent/non-final row (J) forward as markers.
+> **Phase 33M remains a future authorization gate; Phase 33N remains not
+> authorized.**
+
 > **Phase 33K status note (added later).** Phase 33K
 > ([`docs/ADMISSION-WEDGE-STORAGE-AUTH-CONSENT-PRECONDITION-DESIGN-GATE.md`](../../ADMISSION-WEDGE-STORAGE-AUTH-CONSENT-PRECONDITION-DESIGN-GATE.md))
 > is a **docs/decision-only** storage/auth/consent precondition design gate. It reads
