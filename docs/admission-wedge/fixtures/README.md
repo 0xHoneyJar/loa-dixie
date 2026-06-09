@@ -211,6 +211,23 @@ production identity binding.
 
 ## Provenance
 
+> **Phase 33M status note (added later).** Phase 33M
+> ([`../../ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md`](../../ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md))
+> is a **docs/decision-only** dev/operator-only route-spike authorization gate. It
+> reads these draft v1 probes and the validator **read-only** — it mutates **no**
+> probe JSON and does **not** change the validator. It evaluates the Phase 33J/33K/33L
+> evidence and **authorizes only a future Phase 33N dev/operator-only,
+> disabled-by-default route spike under strict constraints** — with the unresolved
+> Straylight primitive review (A–O) **explicitly deferred for the synthetic spike
+> only, never for production**, and carrying the unresolved markers (E, G, H, K, N, O)
+> and review-dependent row (J) forward. It **implements no** route, storage, auth,
+> consent, migration, or runtime test; **authorizes no** production admission,
+> production storage/auth/consent, public `remember-this`, Discord ingestion,
+> user-chat-to-memory, Freeside runtime integration, or package export; and **freezes
+> no** schema. It keeps the Straylight primitive review **required and not complete**
+> (`straylight_primitive_review_complete: false`). **Phase 33N remains not
+> implemented.**
+
 > **Phase 33L status note (added later).** Phase 33L
 > ([`docs/admission-wedge/route-contract-test-vectors/README.md`](../route-contract-test-vectors/README.md))
 > added **non-runtime route-contract test-vector fixtures** (five vectors mapped
