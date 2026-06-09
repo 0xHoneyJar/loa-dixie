@@ -270,6 +270,19 @@ production schema; the Phase 33G route contract is **not** final; Phase 33H did
 route spike; Phase 33J did **not** complete the Straylight primitive review; and
 Phase 33K did **not** implement storage/auth/consent.
 
+> **Phase 33M status note (added later).** Phase 33M
+> ([`../../ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md`](../../ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md))
+> is a **docs/decision-only** route-spike authorization gate. It reads these route
+> vectors and their validator **read-only** — it mutates **no** vector JSON and does
+> **not** change the validator. It evaluates the Phase 33J/33K/33L evidence and
+> **authorizes only a future Phase 33N dev/operator-only, disabled-by-default route
+> spike under strict constraints** (with the unresolved Straylight review (A–O)
+> explicitly deferred for the synthetic spike only, never for production), requiring
+> the spike to inherit this validator's no-leak denylist as its runtime baseline. It
+> **does not** implement a route, storage, auth, consent, or runtime tests, **does
+> not** authorize production / public rollout / Freeside runtime integration, and
+> **does not** freeze a schema. **Phase 33N remains not implemented.**
+
 ---
 
 ## 12. Provenance / cross-references
