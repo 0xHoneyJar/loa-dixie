@@ -759,3 +759,66 @@ This phase succeeds if:
   acceptance; its mirror/adapter proof is a pure, fixture-bound semantic mapping layer
   with **no live Dixie call**, test-only, not exported, not runtime-wired (§8, §18).
   **Not edited by this phase.**
+
+---
+
+## 21. Phase 33N implementation status note (added later)
+
+> **Phase 33N — dev/operator-only Admission Wedge route spike implementation.**
+> Implemented locally under the strict §7–§15 constraints of this gate. This note
+> records what was built; it does **not** relax any block in §8 / §17 / §18.
+
+- **What it is.** A single **dev/operator-only**, **disabled-by-default**,
+  **NON-PRODUCTION** route spike at `POST /api/admission/intake` (the Phase 33G
+  draft path — unchanged), distinct from the live `POST /api/recall/intake` seam.
+- **Disabled by default / explicit env gate.** The route is **not registered at
+  all** unless `DIXIE_ADMISSION_INTAKE_ENABLED === 'true'` (conditional mount in
+  `app/src/server.ts`, mirroring the recall route's default-off mount). All spike
+  config defaults to off/empty (`app/src/config.ts`).
+- **Dev/operator gate (NOT production auth).** A service token
+  (`DIXIE_ADMISSION_INTAKE_SERVICE_TOKEN`, checked constant-time against the
+  dedicated `x-admission-service-token` header — deliberately **not**
+  `Authorization`, to avoid colliding with the global `/api/*` allowlist gate
+  that already consumes `Authorization` and is not exempt for `/api/admission`)
+  and/or an operator-id allowlist (`DIXIE_ADMISSION_INTAKE_OPERATOR_IDS`, checked
+  against the `x-admission-operator-id` header). **With both empty, the enabled
+  spike rejects all calls** (fail-closed; no production default). The route also
+  sits behind the global allowlist gate, so the dev/operator gate is layered on
+  top of it (defense-in-depth). No token/operator-id is logged or echoed
+  publicly; refusals never reveal which gate failed or whether a credential
+  almost matched.
+- **Storage Option A (no durable storage).** No durable Admission Wedge storage,
+  **no database writes, no migrations**. The handler is a pure classifier +
+  public-response builder that returns **safe future-intent receipts / public-safe
+  outcomes only**. Rollback is trivial: there is no durable state to roll back.
+- **Five frozen Phase 33L scenarios.** The classifier recognizes only the five
+  `transition_intent` forms carried by the Phase 33L route-contract vectors
+  (pending / accept / reject / supersede / malformed) behind a synthetic
+  non-production marker, and **fails closed** for any unsupported shape. No sixth
+  scenario.
+- **No-leak boundary.** The public response is built purely from the classified
+  scenario plus fixed synthetic placeholders (so it can carry no request-controlled
+  material), and a runtime no-leak guard mirroring this gate's §14 / the Phase 33L
+  validator denylist deep-walks every public body as defense-in-depth.
+- **Partial-failure posture (§13.1).** Any internal partial failure fails closed to
+  the stable `ingress.invalid_request` refusal — no recallable assertion, no
+  duplicate, no partially-admitted residue (there is no durable state under Option
+  A), and no leak.
+- **Files (local edits only; not staged/committed/pushed; no PR).**
+  `app/src/config.ts` (env gate + parsing), `app/src/server.ts` (conditional
+  mount), `app/src/routes/admission-intake.ts` (route handler), and
+  `app/src/services/admission-wedge-spike/` (`classifier.ts`, `public-response.ts`,
+  `no-leak.ts`, `auth-gate.ts`, `index.ts`), plus tests under
+  `app/tests/unit/admission-wedge-spike/` and
+  `app/tests/integration/admission-intake/`. A runbook note is at
+  `docs/admission-wedge/PHASE-33N-DEV-SPIKE-RUNBOOK.md`.
+- **What Phase 33N still does NOT do (unchanged from §8 / §17 / §18).** It does
+  **not** authorize or implement production admission, production
+  storage/auth/consent, Freeside runtime/client integration, Discord ingestion,
+  user chat becoming memory, a public `remember-this`, package exports, or LLM /
+  voice / Finn wiring; it does **not** freeze a final schema; it does **not**
+  complete the Straylight primitive review (A–O remain unresolved; E, G, H, K, N, O
+  and review-dependent J are carried forward as draft markers); it makes **no**
+  final idempotency / signer / authority / production identity-binding claim; and
+  it is **not** production-ready. The Phase 33E probe JSONs, the Phase 33L route
+  vector JSONs, and both docs validators were **not** mutated.

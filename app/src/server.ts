@@ -25,6 +25,7 @@ import { createIdentityRoutes } from './routes/identity.js';
 import { createWsTicketRoutes } from './routes/ws-ticket.js';
 import { createMemoryRoutes } from './routes/memory.js';
 import { createRecallIntakeRoutes } from './routes/recall-intake.js';
+import { createAdmissionIntakeRoutes } from './routes/admission-intake.js';
 import {
   createCapabilityHolder,
   createBoundedEstateStore,
@@ -609,6 +610,36 @@ export function createDixieApp(config: DixieConfig): DixieApp {
         perEstateMutex: recallMutex,
         perTenantRateLimit: recallRateLimit,
         intakeLog: recallIntakeLog,
+        emitAudit: (ev) => log('info', { ...ev }),
+      }),
+    );
+  }
+
+  // --- Phase 33N: dev/operator-only Admission Wedge route SPIKE (default OFF) ---
+  // Conditional mount. When disabled (the default), the route is NOT registered
+  // at all — a request to POST /api/admission/intake falls through to the SPA
+  // fallback / 404. Authorized NARROWLY by Phase 33M
+  // (docs/ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md §7–§15)
+  // as a NON-PRODUCTION, dev/operator-only spike using Storage Option A (no
+  // durable Admission Wedge storage, no DB writes, no migrations — safe
+  // future-intent receipts / public-safe outcomes only). This is NOT production
+  // admission and does NOT authorize production storage/auth/consent, Freeside
+  // runtime integration, Discord ingestion, public remember-this, a final
+  // schema, or a completed Straylight primitive review. The dev/operator gate
+  // (service token + operator-id allowlist) fails closed when both are empty.
+  if (config.admissionIntakeSpikeEnabled) {
+    log('warn', {
+      event: 'admission_intake_spike_active',
+      note: 'dev/operator-only Admission Wedge route spike enabled — NOT production admission',
+    });
+    app.route(
+      '/api/admission/intake',
+      createAdmissionIntakeRoutes({
+        enabled: true,
+        gate: {
+          serviceToken: config.admissionIntakeSpikeServiceToken,
+          operatorIds: config.admissionIntakeSpikeOperatorIds,
+        },
         emitAudit: (ev) => log('info', { ...ev }),
       }),
     );

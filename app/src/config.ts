@@ -91,6 +91,28 @@ export interface DixieConfig {
   recallIntakeDevSeedEnabled: boolean;
   /** Synthetic dev/operator tenant id to seed (empty when disabled). */
   recallIntakeDevSeedTenantId: string;
+
+  // Phase 33N: dev/operator-only Admission Wedge route spike (default OFF;
+  // NON-PRODUCTION). Authorized narrowly by Phase 33M
+  // (docs/ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md
+  // §7–§15). Uses Storage Option A — no durable Admission Wedge storage, no DB
+  // writes, no migrations; safe future-intent receipts / public-safe outcomes
+  // only. The route is mounted in server.ts ONLY when this flag is true. This
+  // does NOT authorize production admission/storage/auth/consent, Freeside
+  // runtime integration, Discord ingestion, public remember-this, a final
+  // schema, or a completed Straylight primitive review.
+  admissionIntakeSpikeEnabled: boolean;
+  /** Dev/operator service token, checked constant-time against the dedicated
+   *  `x-admission-service-token` header — NOT `Authorization: Bearer`. The
+   *  global `/api/*` allowlist gate already owns `Authorization` (JWT wallet or
+   *  `Bearer dxk_` key) and is not exempt for `/api/admission`, so the admission
+   *  dev gate is layered behind that allowlist via a dedicated header to avoid
+   *  collision. '' when unset. NOT production auth; never logged or echoed
+   *  publicly. */
+  admissionIntakeSpikeServiceToken: string;
+  /** Dev/operator id allowlist (checked against the `x-admission-operator-id`
+   *  header); [] when unset. An empty token AND empty allowlist rejects all. */
+  admissionIntakeSpikeOperatorIds: string[];
 }
 
 /**
@@ -156,6 +178,23 @@ const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
  *                                          identity format. Enabled + missing/invalid → throws
  *                                          at startup (fail-closed; never silently seed nothing).
  *                                          Provide via env/secret — do NOT commit a live id.
+ *
+ * Phase 33N additions (dev/operator-only Admission Wedge route SPIKE; default OFF; NON-PRODUCTION):
+ * DIXIE_ADMISSION_INTAKE_ENABLED         (optional) — when 'true', mount the dev/operator-only
+ *                                          POST /api/admission/intake route SPIKE. Default 'false';
+ *                                          when off the route is NOT registered at all. dev/operator
+ *                                          ONLY — NOT production admission. Uses no durable storage
+ *                                          (Storage Option A). Authorized narrowly by Phase 33M.
+ * DIXIE_ADMISSION_INTAKE_SERVICE_TOKEN   (optional) — dev/operator service token checked against
+ *                                          the dedicated `x-admission-service-token` header
+ *                                          (constant-time); NOT `Authorization` (avoids colliding
+ *                                          with the global /api/* allowlist gate). Empty when
+ *                                          unset. NOT production auth; never logged/echoed.
+ * DIXIE_ADMISSION_INTAKE_OPERATOR_IDS    (optional) — comma-separated dev/operator id allowlist
+ *                                          checked against the `x-admission-operator-id` header.
+ *                                          Empty when unset. With BOTH the token and the operator
+ *                                          allowlist empty, the enabled spike rejects ALL calls
+ *                                          (fail-closed; no production default).
  */
 export function loadConfig(): DixieConfig {
   const finnUrl = process.env.FINN_URL;
@@ -349,5 +388,20 @@ export function loadConfig(): DixieConfig {
         recallIntakeDevSeedTenantId: tenantId,
       };
     })(),
+
+    // Phase 33N: dev/operator-only Admission Wedge route spike (default off,
+    // NON-PRODUCTION). The gate is the explicit enable flag; all spike config
+    // defaults to off/false/empty. The token and operator-id allowlist are
+    // parsed unconditionally (so they are inert when the spike is disabled);
+    // the route handler enforces the fail-closed "empty token AND empty
+    // allowlist rejects all" rule, and the route is only mounted in server.ts
+    // when admissionIntakeSpikeEnabled is true. No production defaults.
+    admissionIntakeSpikeEnabled: process.env.DIXIE_ADMISSION_INTAKE_ENABLED === 'true',
+    admissionIntakeSpikeServiceToken:
+      process.env.DIXIE_ADMISSION_INTAKE_SERVICE_TOKEN ?? '',
+    admissionIntakeSpikeOperatorIds: (process.env.DIXIE_ADMISSION_INTAKE_OPERATOR_IDS ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0),
   };
 }
