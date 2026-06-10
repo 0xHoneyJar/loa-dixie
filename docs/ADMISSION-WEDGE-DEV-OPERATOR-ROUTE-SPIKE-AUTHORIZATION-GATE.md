@@ -822,3 +822,43 @@ This phase succeeds if:
   final idempotency / signer / authority / production identity-binding claim; and
   it is **not** production-ready. The Phase 33E probe JSONs, the Phase 33L route
   vector JSONs, and both docs validators were **not** mutated.
+
+---
+
+## 22. Phase 33O acceptance status note (added later)
+
+> **Phase 33O — Admission Wedge dev/operator-only route-spike acceptance gate.**
+> Phase 33O
+> ([`ADMISSION-WEDGE-ROUTE-SPIKE-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ROUTE-SPIKE-ACCEPTANCE-GATE.md))
+> is a **docs/decision-only** acceptance gate. It assesses the Phase 33N
+> implementation **read-only** against this gate's §7–§15 authorization and
+> **ACCEPTS Phase 33N only as a bounded, disabled-by-default, dev/operator-only
+> route spike for MVP 2 — the Admissible Layer / Admission Wedge.** It mutates
+> **no** route handler, source, test, validator, probe, or fixture/vector JSON.
+
+- **Accepted (bounded).** The Phase 33N spike stays within this gate's
+  authorization on every axis checked: default-off mount, defense-in-depth
+  disabled check, dev/operator gate behind the global allowlist, dedicated
+  `x-admission-service-token` header, strict synthetic five-scenario shape,
+  fail-closed otherwise, Storage Option A (no durable writes / no migrations),
+  one guarded no-leak send path over every response, draft markers asserted
+  false, carried-forward unresolved A–O markers, and the required tests/static
+  guards.
+- **Not accepted as more than a spike.** Phase 33O does **not** accept Phase 33N
+  as production route readiness, a final schema, durable-storage readiness, or
+  Freeside/client integration readiness. **Phase 33N does not complete MVP 2**
+  (its missing proof is the full governed transition: candidate → an admitted
+  assertion actually exists → assertion has status/provenance/receipt → recall
+  can include it → pending/rejected/malformed cannot be recalled).
+- **Blocks preserved.** Production admission, durable Admission Wedge storage,
+  migrations, production auth/consent, public `remember-this`, Discord
+  ingestion, user chat becoming memory, Freeside runtime/client integration,
+  package exports, final schema freeze, a completed Straylight primitive review,
+  final idempotency/signer/authority semantics, and production tenant/estate/
+  actor identity binding all remain blocked.
+- **Next lane.** Phase 33O selects **Phase 33P — Admission Wedge storage /
+  receipt hardening decision gate (docs/decision-only)**, which must decide
+  whether the next implementation lane remains Option A, introduces a dev-only
+  bounded synthetic admitted-assertion store, or decomposes
+  storage/receipt/idempotency/signer/authority into smaller gates — and **must
+  not implement storage**.

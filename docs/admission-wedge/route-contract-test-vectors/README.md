@@ -317,6 +317,22 @@ Phase 33K did **not** implement storage/auth/consent.
 > schema. Phase 33L itself implemented **no** route; the route spike is solely
 > Phase 33N's, authorized narrowly by Phase 33M.
 
+> **Phase 33O status note (added later).** Phase 33O
+> ([`../../ADMISSION-WEDGE-ROUTE-SPIKE-ACCEPTANCE-GATE.md`](../../ADMISSION-WEDGE-ROUTE-SPIKE-ACCEPTANCE-GATE.md))
+> is a **docs/decision-only** acceptance gate. It reads these vectors and their
+> validator **read-only** — it mutates **no** vector JSON and does **not** change
+> the validator. It **accepts the Phase 33N spike only as a bounded,
+> disabled-by-default, dev/operator-only route spike for MVP 2** (the Admissible
+> Layer / Admission Wedge), confirming the spike's classifier and runtime no-leak
+> guard are built against these five vectors and this validator's denylist. It
+> does **not** accept Phase 33N as production route readiness, a final schema,
+> durable-storage readiness, or Freeside/client integration readiness; **Phase
+> 33N does not complete MVP 2**; and it preserves every production / public /
+> Freeside / Discord / chat-to-memory block. Phase 33O selects **Phase 33P —
+> Admission Wedge storage / receipt hardening decision gate (docs/decision-only)**
+> as the next lane. These route-contract vectors remain **non-final / draft
+> evidence**; Phase 33O freezes no schema and mutates nothing here.
+
 ---
 
 ## 12. Provenance / cross-references
