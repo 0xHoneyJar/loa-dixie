@@ -333,6 +333,25 @@ Phase 33K did **not** implement storage/auth/consent.
 > as the next lane. These route-contract vectors remain **non-final / draft
 > evidence**; Phase 33O freezes no schema and mutates nothing here.
 
+> **Phase 33P status note (added later).** Phase 33P
+> ([`../../ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md`](../../ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md))
+> is a **docs/decision-only** storage / receipt hardening decision gate. It reads
+> these vectors and their validator **read-only** — it mutates **no** vector JSON
+> and does **not** change the validator. It decides the storage/receipt posture
+> after the Phase 33N no-store route spike: it **selects Option B** — authorizing a
+> *possible future* Phase 33Q dev-only, disabled-by-default, non-production,
+> **bounded synthetic** admitted-assertion store — and **explicitly rejects
+> production-like durable storage**. It names these five vectors' no-leak denylist
+> (and this validator's `FORBIDDEN_PUBLIC_KEYS` / substring / regex / UUID /
+> opaque-run rules) as the boundary a future Phase 33Q's store-backed
+> status/provenance/receipt projections must still satisfy. Phase 33P itself
+> **implements no store, performs no storage write, adds no migration, and changes
+> no route handler**; it freezes **no** schema, keeps the Straylight primitive
+> review (A–O) **unresolved**, and preserves every production / public / Freeside /
+> Discord / chat-to-memory block. These route-contract vectors remain **non-final /
+> draft evidence**; Phase 33P mutates nothing here. **Phase 33Q remains not
+> implemented**, authorized only if the 33P doc lands cleanly within its boundary.
+
 ---
 
 ## 12. Provenance / cross-references
