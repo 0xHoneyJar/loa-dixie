@@ -915,6 +915,24 @@ This phase succeeds if:
 
 ## 22. Cross-references
 
+> **Phase 33P status note (added later).** Phase 33P
+> ([`ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md`](ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md))
+> is a **docs/decision-only storage / receipt hardening decision gate** that
+> follows the Phase 33N no-store route spike and the Phase 33O acceptance gate. It
+> reads this gate's §6 draft storage record categories (6.1–6.11), §6.6/§6.7
+> receipt/audit split, §6.8 idempotency record, §7 storage boundary rules, §8
+> idempotency precondition, §11 binding assumptions, and §13 no-leak preconditions
+> **read-only** as the design basis for its decision — it mutates **no** probe,
+> fixture, or vector JSON and changes **no** validator. It **selects Option B** —
+> authorizing a *possible future* Phase 33Q dev-only, disabled-by-default,
+> non-production, **bounded synthetic** admitted-assertion store — and **rejects
+> production-like durable storage**. Phase 33P **implements no storage, adds no
+> migration, auth, or consent**, keeps the unresolved Phase 33J answers (A–O) and
+> the held ADR-022E durable-store gate **in force**, freezes **no** schema, and
+> keeps every storage/auth/consent implementation lane **blocked**. **Phase 33Q
+> remains not implemented** and is authorized only if the 33P doc lands cleanly
+> within its §8 boundary.
+
 - [`docs/ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-GATE.md`](ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-GATE.md)
   — Phase 33J primitive-review request that selected this lane (its §5 register
   A–O, §10 impact, §14/§15 next-lane selection). Gains a minimal 33K status note.

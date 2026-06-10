@@ -695,6 +695,23 @@ This phase succeeds if:
 > exists**, keeps the review **required and not complete**, and authorizes no
 > route, route spike, storage, auth, consent, live behavior, or schema freeze.
 
+> **Phase 33P status note (added later).** Phase 33P
+> ([`docs/ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md`](ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md))
+> is the **docs/decision-only storage / receipt hardening decision gate** that runs
+> after the lanes this gate ordered have executed (33J → 33K → 33L → 33M → 33N) and
+> the Phase 33O acceptance gate. It reads this decomposition gate's §5 blocker
+> matrix **read-only** — in particular storage blocker A (no admission write path
+> exists; only the in-process non-durable `BoundedEstateStore`; the PostgreSQL
+> stores are governance/reputation/fleet, not admission) grounds its §5 "why
+> storage/receipt hardening is the next bottleneck". It **selects Option B** —
+> authorizing a *possible future* Phase 33Q dev-only, disabled-by-default,
+> non-production, **bounded synthetic** admitted-assertion store — and **rejects
+> production-like durable storage**. It mutates **no** probe JSON and **no**
+> validator, **implements no storage, migration, auth, or consent**, keeps the
+> Straylight primitive review (A–O) **unresolved** and the held ADR-022E
+> durable-store gate **in force**, freezes **no** schema, and keeps every live /
+> runtime / implementation lane **blocked**.
+
 - [`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md)
   — Phase 33H acceptance gate whose §8 blocker table (A–N) this gate decomposes
   and whose §10 selected this decomposition lane. Gains a minimal 33I status note.

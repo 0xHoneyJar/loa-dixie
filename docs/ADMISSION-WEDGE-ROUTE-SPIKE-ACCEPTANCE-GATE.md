@@ -501,6 +501,25 @@ This phase succeeds if:
 
 ## 12. Cross-references
 
+> **Phase 33P status note (added later).** Phase 33P
+> ([`ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md`](ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md))
+> is the **docs/decision-only storage / receipt hardening decision gate** this gate
+> selected as the next lane (§9). It reads this acceptance gate and the Phase 33N
+> source **read-only** — it mutates **no** source, test, validator, probe, fixture,
+> or vector JSON. It decides the storage/receipt posture after the Phase 33N
+> no-store spike: it **selects Option B** — authorizing a *possible future* Phase
+> 33Q dev-only, disabled-by-default, non-production, **bounded synthetic**
+> admitted-assertion store (mirroring the Recall `BoundedEstateStore` shape) — and
+> **explicitly rejects production-like durable storage (Option D)**. Phase 33P
+> itself **implements no store, performs no storage write, adds no migration,
+> auth, or consent, and changes no route handler**; it defines the proof cases a
+> Phase 33Q would have to demonstrate against synthetic state, the receipt/audit
+> and no-leak hardening requirements, and the non-final
+> idempotency/signer/authority/binding caveats. It **preserves every blocked lane**
+> (its §13), keeps the Straylight primitive review (A–O) **unresolved**, freezes
+> **no** schema, and authorizes Phase 33Q **only if** the 33P doc lands cleanly and
+> stays within its §8 boundary.
+
 - [`docs/ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md`](ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md)
   — Phase 33M authorization gate; its §7 scope, §8 unauthorized list, §9
   acceptance criteria, §10 tests, §11 idempotency, §12 auth/consent, §13/§13.1
