@@ -1,0 +1,285 @@
+// Phase 33N — POST /api/admission/intake (dev/operator-only route SPIKE).
+//
+// NON-PRODUCTION. Authorized NARROWLY by Phase 33M
+// (docs/ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md §7–§15):
+// a single, disabled-by-default, dev/operator-only route spike behind an
+// explicit env gate + operator/service allowlist, using Storage Option A (no
+// durable Admission Wedge storage, no DB writes, no migrations — safe
+// future-intent receipts / public-safe outcomes only). Rollback is trivial:
+// there is no durable state to roll back.
+//
+// This route does NOT authorize and does NOT implement: production admission;
+// production storage/auth/consent; Freeside runtime/client integration; Discord
+// ingestion; user chat becoming memory; a public `remember-this`; a final
+// schema; final idempotency/signer/authority semantics; production
+// tenant/estate/actor identity binding; or a completed Straylight primitive
+// review. It mounts ONLY when DIXIE_ADMISSION_INTAKE_ENABLED === 'true'
+// (server.ts conditional mount; default off → route not registered at all).
+//
+// Import discipline: this file imports ONLY Dixie-local service primitives and
+// `hono`. It performs NO `@loa/straylight` import and NO Freeside import.
+
+import { Hono, type Context } from 'hono';
+import { getRequestContext } from '../validation.js';
+import {
+  authorizeAdmissionSpike,
+  classifyAdmissionSpike,
+  AdmissionSpikeUnsupportedShapeError,
+  buildAdmissionSpikePublicResponse,
+  findAdmissionPublicLeaks,
+  ADMISSION_SPIKE_FAIL_CLOSED,
+  ADMISSION_SPIKE_SHAPE_REFUSAL_CODE,
+  type AdmissionSpikeClassification,
+  type AdmissionSpikeGateConfig,
+} from '../services/admission-wedge-spike/index.js';
+
+/** Header carrying the dev/operator id (checked against the allowlist). */
+const OPERATOR_ID_HEADER = 'x-admission-operator-id';
+
+/** Dedicated header carrying the dev/operator service token. NOT
+ *  `Authorization` — see auth-gate.ts for the rationale (avoids colliding with
+ *  the global /api/* allowlist gate, which is not exempt for /api/admission). */
+const SERVICE_TOKEN_HEADER = 'x-admission-service-token';
+
+/** Endpoint-local body cap. The dev-spike body is tiny; this is well under the
+ *  global /api/* 100KB limit and bounds the read before JSON.parse. */
+const DEFAULT_BODY_MAX_BYTES = 8_192;
+
+export interface AdmissionSpikeAuditEvent {
+  event:
+    | 'admission_intake_spike.disabled'
+    | 'admission_intake_spike.unauthorized'
+    | 'admission_intake_spike.refused'
+    | 'admission_intake_spike.outcome';
+  /** Public-safe scenario id (or undefined for gate/auth refusals). */
+  scenario_id?: string;
+  /** Public-safe outcome class (or undefined). */
+  outcome_class?: string;
+  request_id?: string;
+}
+
+export interface AdmissionSpikeRouteDeps {
+  /** Defense-in-depth: when false, the handler returns a safe disabled refusal
+   *  even if mounted. server.ts only mounts the route when enabled is true. */
+  enabled: boolean;
+  gate: AdmissionSpikeGateConfig;
+  bodyMaxBytes?: number;
+  /** Audit emit hook (defaults to no-op). Receives ONLY public-safe fields —
+   *  never raw body, tokens, or operator ids. */
+  emitAudit?: (event: AdmissionSpikeAuditEvent) => void;
+  /** Test seam (Phase 33M §10 partial-failure): invoked after classification,
+   *  before the public response is finalized. Throwing simulates a partial
+   *  internal failure; the handler MUST fail closed (no durable state under
+   *  Option A; no recallable / partially-admitted residue). */
+  beforeFinalize?: (classification: AdmissionSpikeClassification) => void;
+  /** Runtime no-leak guard (DI seam). Defaults to `findAdmissionPublicLeaks`.
+   *  EVERY public response — disabled, unauthorized, malformed, oversized,
+   *  classifier-error, partial-failure, and all classified outcomes — is
+   *  deep-walked through this guard before it is sent; a non-empty result fails
+   *  closed to a hardcoded known-safe fallback (Phase 33M §14). Injectable so
+   *  tests can prove the guard is invoked on every response path and that a
+   *  forced leak fails closed without leaking the guard's own findings. */
+  noLeakGuard?: (body: unknown) => string[];
+}
+
+/** Stable public-safe refusal body for the disabled gate. Leaks nothing. */
+function disabledRefusalBody() {
+  return {
+    spike: 'dev_operator_only_non_production' as const,
+    outcome_class: 'refused' as const,
+    error: 'admission.spike_disabled',
+    message: 'admission intake dev spike is disabled',
+  };
+}
+
+/** Stable public-safe refusal body for an unauthorized caller. Reveals nothing
+ *  about which gate failed or whether a credential almost matched. */
+function unauthorizedRefusalBody() {
+  return {
+    spike: 'dev_operator_only_non_production' as const,
+    outcome_class: 'refused' as const,
+    error: 'admission.unauthorized_dev_operator',
+    message: 'dev/operator authorization required',
+  };
+}
+
+/** Stable public-safe fail-closed refusal body (malformed / unsupported /
+ *  partial-failure). Uses the existing stable Dixie shape-failure code; never
+ *  leaks the hidden reason. */
+function failClosedRefusalBody() {
+  const c = ADMISSION_SPIKE_FAIL_CLOSED;
+  return {
+    spike: 'dev_operator_only_non_production' as const,
+    outcome_class: c.outcome_class,
+    scenario_id: 'malformed_or_unsafe_payload_fail_closed',
+    recall_eligible: false as const,
+    recall_projection: { ordinary_recall_includes: [], ordinary_recall_excludes: [] },
+    public_receipt_ref: null,
+    safe_reason_code: ADMISSION_SPIKE_SHAPE_REFUSAL_CODE,
+    error: ADMISSION_SPIKE_SHAPE_REFUSAL_CODE,
+    message: 'admission intake request refused',
+  };
+}
+
+/** Hardcoded, known-safe fail-closed body returned ONLY when the runtime
+ *  no-leak guard rejects (or throws on) an outgoing body — a never-expected
+ *  event, since every public body is built structurally safe. It is a FIXED
+ *  literal of short, safe strings, deliberately NOT re-run through the guard
+ *  (no recursion), and it carries NONE of the guard's findings, so the failure
+ *  detail never reaches the client. Proven safe by the no-leak unit test. */
+function guardFailedFallbackBody() {
+  return {
+    spike: 'dev_operator_only_non_production' as const,
+    outcome_class: 'refused' as const,
+    error: 'admission.fail_closed',
+    message: 'admission intake request refused',
+  };
+}
+
+/** Public HTTP statuses the spike ever emits (all ContentfulStatusCode). */
+type AdmissionSpikeStatus = 200 | 400 | 403 | 404 | 500;
+
+export function createAdmissionIntakeRoutes(deps: AdmissionSpikeRouteDeps): Hono {
+  const app = new Hono();
+  const emit = deps.emitAudit ?? (() => undefined);
+  const bodyMaxBytes = deps.bodyMaxBytes ?? DEFAULT_BODY_MAX_BYTES;
+  const noLeakGuard = deps.noLeakGuard ?? findAdmissionPublicLeaks;
+
+  /**
+   * THE single send path for the route. Every public response — without
+   * exception — is finalized here: the body is deep-walked through the runtime
+   * no-leak guard (Phase 33M §14) BEFORE it is serialized. If the guard reports
+   * any finding (or throws), the response collapses to a hardcoded known-safe
+   * fail-closed fallback at HTTP 500; that fallback is NOT re-guarded (no
+   * recursion) and carries none of the guard's findings, so the failure detail
+   * never reaches the client. This makes the docs claim ("every public body is
+   * deep-walked") a runtime invariant, not just a comment.
+   *
+   * `onSend` (the per-path public-safe audit event) is emitted ONLY when the
+   * guard passes and the intended body is actually sent. A guard failure emits
+   * exactly one `admission_intake_spike.refused` instead.
+   */
+  function sendPublicResponse(
+    c: Context,
+    status: AdmissionSpikeStatus,
+    body: Record<string, unknown>,
+    requestId: string | undefined,
+    onSend: AdmissionSpikeAuditEvent,
+  ): Response {
+    let leaks: string[];
+    try {
+      leaks = noLeakGuard(body);
+    } catch {
+      // A guard that throws is treated exactly like a detected leak: fail
+      // closed. Never surface the thrown error.
+      leaks = ['guard_threw'];
+    }
+    if (leaks.length > 0) {
+      // NOTE: deliberately do NOT include `leaks` in the response — the guard's
+      // own findings can describe the rejected (potentially sensitive) body.
+      emit({ event: 'admission_intake_spike.refused', request_id: requestId });
+      return c.json(guardFailedFallbackBody(), 500);
+    }
+    emit(onSend);
+    return c.json(body, status);
+  }
+
+  app.post('/', async (c) => {
+    const { requestId } = getRequestContext(c);
+
+    // (0) Disabled gate — defense-in-depth fail-closed (Phase 33M §9).
+    if (!deps.enabled) {
+      return sendPublicResponse(c, 404, disabledRefusalBody(), requestId, {
+        event: 'admission_intake_spike.disabled',
+        request_id: requestId,
+      });
+    }
+
+    // (1) Dev/operator auth gate — NOT production auth (Phase 33M §12). One
+    // stable refusal for missing/invalid/non-operator; never reveals which
+    // gate failed or whether a credential almost matched.
+    const authorized = authorizeAdmissionSpike(deps.gate, {
+      serviceToken: c.req.header(SERVICE_TOKEN_HEADER),
+      operatorId: c.req.header(OPERATOR_ID_HEADER),
+    });
+    if (!authorized) {
+      return sendPublicResponse(c, 403, unauthorizedRefusalBody(), requestId, {
+        event: 'admission_intake_spike.unauthorized',
+        request_id: requestId,
+      });
+    }
+
+    // (2) Bounded body read + parse. Any read/parse problem fails closed with
+    // the stable shape-failure refusal (no leak of the hidden reason).
+    const refused: AdmissionSpikeAuditEvent = {
+      event: 'admission_intake_spike.refused',
+      request_id: requestId,
+    };
+    let raw: unknown;
+    try {
+      const contentLengthHeader = c.req.header('content-length');
+      if (contentLengthHeader) {
+        const len = Number.parseInt(contentLengthHeader, 10);
+        if (Number.isFinite(len) && len > bodyMaxBytes) {
+          return sendPublicResponse(c, 400, failClosedRefusalBody(), requestId, refused);
+        }
+      }
+      const text = await c.req.raw.clone().text();
+      if (Buffer.byteLength(text, 'utf8') > bodyMaxBytes) {
+        return sendPublicResponse(c, 400, failClosedRefusalBody(), requestId, refused);
+      }
+      raw = text.length === 0 ? null : JSON.parse(text);
+    } catch {
+      return sendPublicResponse(c, 400, failClosedRefusalBody(), requestId, refused);
+    }
+
+    // (3) Pure classification (Approach C — only the five Phase 33L scenario
+    // forms; everything else throws and fails closed). Mints nothing durable.
+    let classification: AdmissionSpikeClassification;
+    try {
+      classification = classifyAdmissionSpike(raw);
+    } catch (err) {
+      // Unsupported shape (or any classifier error) → identical public-safe
+      // fail-closed refusal as the explicit malformed scenario.
+      if (!(err instanceof AdmissionSpikeUnsupportedShapeError)) {
+        // Defensive: any unexpected classifier error also fails closed.
+      }
+      return sendPublicResponse(c, 400, failClosedRefusalBody(), requestId, refused);
+    }
+
+    // (4) Partial-failure posture (Phase 33M §13.1). Any internal partial
+    // failure during finalization fails closed: under Option A there is NO
+    // durable state to roll back, NO recallable assertion is created, and NO
+    // duplicate/partially-admitted residue can exist. The response collapses
+    // to the stable public-safe refusal.
+    try {
+      deps.beforeFinalize?.(classification);
+    } catch {
+      return sendPublicResponse(c, 400, failClosedRefusalBody(), requestId, refused);
+    }
+
+    // (5) Build the deterministic public-safe body. The runtime no-leak guard
+    // runs inside sendPublicResponse (as it does for EVERY response path), so a
+    // (never-expected) leak fails closed to the known-safe fallback there. The
+    // outcome audit event is emitted only when the guard passes and the body is
+    // actually sent.
+    const body = buildAdmissionSpikePublicResponse(classification);
+    return sendPublicResponse(
+      c,
+      classification.http_status,
+      body as unknown as Record<string, unknown>,
+      requestId,
+      {
+        event:
+          classification.outcome_class === 'refused'
+            ? 'admission_intake_spike.refused'
+            : 'admission_intake_spike.outcome',
+        scenario_id: body.scenario_id,
+        outcome_class: body.outcome_class,
+        request_id: requestId,
+      },
+    );
+  });
+
+  return app;
+}

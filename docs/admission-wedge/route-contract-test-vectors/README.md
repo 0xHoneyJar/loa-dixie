@@ -283,6 +283,40 @@ Phase 33K did **not** implement storage/auth/consent.
 > not** authorize production / public rollout / Freeside runtime integration, and
 > **does not** freeze a schema. **Phase 33N remains not implemented.**
 
+> **Phase 33N status note (added later).** Phase 33N implemented the
+> dev/operator-only, **disabled-by-default**, **NON-PRODUCTION** route spike that
+> Phase 33M authorized (see
+> [`../../ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md`](../../ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md)
+> §21 and [`../PHASE-33N-DEV-SPIKE-RUNBOOK.md`](../PHASE-33N-DEV-SPIKE-RUNBOOK.md)).
+> It uses **these five route vectors as the fixture contract evidence**: the
+> spike's classifier reads each vector's `request_vector.transition_intent` and is
+> tested against each vector's `expected_public_response` /
+> `expected_recall_projection`. It reads these vectors **read-only as test
+> fixtures** — it **mutates no vector JSON** and does **not** change this
+> validator (which stays Node-built-ins-only, not imported into runtime). It uses
+> **Storage Option A** (no durable storage / no DB writes / no migrations), adds
+> **no** package export, performs **no** Freeside or `@loa/straylight` import, and
+> claims **no** final schema, completed Straylight primitive review, final
+> idempotency, or production admission/auth/consent. The unresolved rows
+> (E, G, H, K, N, O) and review-dependent row (J) are carried forward as draft
+> markers.
+>
+> **Phase 33N current-state corrections (vs. the Phase 33L-era statements
+> above).** Some statements earlier in this document describe the Phase 33L
+> world and are no longer literally current; they are preserved as accurate
+> *Phase 33L-time* history. For the avoidance of doubt, as of Phase 33N:
+> (1) Dixie now has a disabled-by-default, dev/operator-only admission route
+> spike (`POST /api/admission/intake`) — it did **not** exist at Phase 33L, is
+> **not** enabled by default, and is **not** production-ready; (2) `app/src/config.ts`
+> and `app/src/server.ts` are now **modified by Phase 33N** for the gated
+> dev-spike wiring (they were unmodified at Phase 33L); (3) Phase 33N still does
+> **not** authorize production admission / storage / auth / consent; (4) Phase
+> 33N still does **not** mutate the Phase 33L vector JSONs or the Phase 33L
+> validator; and (5) these route-contract vectors remain **non-final / draft
+> evidence** — Phase 33N consumes them read-only as test fixtures and freezes no
+> schema. Phase 33L itself implemented **no** route; the route spike is solely
+> Phase 33N's, authorized narrowly by Phase 33M.
+
 ---
 
 ## 12. Provenance / cross-references
@@ -307,14 +341,20 @@ Phase 33K did **not** implement storage/auth/consent.
   mutated). These vectors stay aligned to those five scenarios.
 - [`../../integration/phase-32e-recall-wedge-route-contract.md`](../../integration/phase-32e-recall-wedge-route-contract.md)
   — the Recall Wedge route contract these gates are modelled on structurally;
-  `POST /api/recall/intake` is the live seam the proposed (non-existent) admission
-  route must stay distinct from.
+  `POST /api/recall/intake` is the live seam from which the admission route
+  (which, **at Phase 33L time**, did not yet exist) must stay distinct. (Phase
+  33N has since added a disabled-by-default dev/operator-only admission route
+  spike — see the §11 Phase 33N status note below.)
 - `app/src/routes/recall-intake.ts`,
   `app/src/services/straylight-recall-intake/refusal-mapping.ts`,
-  `app/src/config.ts`, `app/src/server.ts` — inspected **read-only** to ground the
-  route seam (there is **no** `/api/admission` route in Dixie today) and the
-  stable refusal code `ingress.invalid_request` the fail-closed vector reuses.
-  None is modified.
+  `app/src/config.ts`, `app/src/server.ts` — inspected **read-only** at Phase 33L
+  time to ground the route seam (**at Phase 33L there was no `/api/admission`
+  route in Dixie**, and `config.ts` / `server.ts` were unmodified by Phase 33L)
+  and the stable refusal code `ingress.invalid_request` the fail-closed vector
+  reuses. **Phase 33L modified none of these.** (Phase 33N has since modified
+  `config.ts` and `server.ts` to wire the gated dev-spike — see the §11 Phase
+  33N status note below; the recall-intake and refusal-mapping files remain
+  unmodified.)
 - `@loa/straylight` — canonical primitive/substrate owner of the assertion
   lifecycle. **No completed Straylight Admission-Wedge primitive review exists**
   (Phase 33J §4). Not edited.
