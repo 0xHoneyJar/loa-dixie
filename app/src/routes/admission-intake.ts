@@ -31,6 +31,8 @@ import {
   ADMISSION_SPIKE_SHAPE_REFUSAL_CODE,
   type AdmissionSpikeClassification,
   type AdmissionSpikeGateConfig,
+  type AdmittedAssertionLedger,
+  type SyntheticAdmissionTransition,
 } from '../services/admission-wedge-spike/index.js';
 
 /** Header carrying the dev/operator id (checked against the allowlist). */
@@ -80,6 +82,89 @@ export interface AdmissionSpikeRouteDeps {
    *  tests can prove the guard is invoked on every response path and that a
    *  forced leak fails closed without leaking the guard's own findings. */
   noLeakGuard?: (body: unknown) => string[];
+  /** Phase 33Q — OPTIONAL dev-only synthetic admitted-assertion ledger (DI seam).
+   *  Disabled-by-default: when undefined (the production/server default — server.ts
+   *  injects NO ledger), the route behaves EXACTLY as the Phase 33N no-store
+   *  Option A spike. When injected (tests only), an accepted/superseded synthetic
+   *  candidate is recorded into the bounded, process-local, NON-DURABLE ledger so
+   *  the candidate → admitted-assertion → recall transition's stateful effect can
+   *  be proven over SYNTHETIC material (Phase 33P §7–§12). The ledger's records
+   *  and ids are NEVER surfaced in the public body; any ledger throw fails closed
+   *  to the same stable public-safe refusal as a partial failure.
+   *
+   *  The ledger write is attempted ONLY when BOTH a ledger AND a synthetic
+   *  (tenant, estate) scope are injected (`admittedAssertionTenantId` +
+   *  `admittedAssertionEstateId`); a partial injection (missing either) records
+   *  nothing — the route stays the no-store Option A path. */
+  admittedAssertionLedger?: AdmittedAssertionLedger;
+  /** Synthetic tenant id the spike records under when a ledger is injected. The
+   *  spike request body carries NO tenant/estate/candidate ids, so the tenant is
+   *  a fixed synthetic dev constant (never request-derived). The ledger binds
+   *  every access to BOTH this tenant and the estate below; this is a SPIKE
+   *  isolation constant, NOT the final production tenant-binding semantics
+   *  (Phase 33P §12 — those stay unresolved). */
+  admittedAssertionTenantId?: string;
+  /** Synthetic estate id the spike records into when a ledger is injected. The
+   *  spike request body carries NO tenant/estate/candidate ids, so the estate is
+   *  a fixed synthetic dev constant (never request-derived). */
+  admittedAssertionEstateId?: string;
+}
+
+/** Fixed synthetic identity constants for the dev-only ledger seam. These are
+ *  short synthetic labels — never request-derived, never UUID/long-opaque. The
+ *  spike body carries only `spike` + `transition_intent`, so the transition is
+ *  built from these constants alone; no request-controlled material is placed in
+ *  it. The ledger ALSO validates every field to a bounded synthetic shape before
+ *  storing it, so this no-raw-payload property is enforced, not merely assumed
+ *  (Phase 33P §8 no-raw-payload; §11 no-leak). */
+const SYNTH_SOURCE_CANDIDATE_ID = 'cand-synthetic-dev';
+const SYNTH_ADMIT_TRANSITION_ID = 'txn-admit-synthetic-dev';
+const SYNTH_ADMITTED_ASSERTION_ID = 'assn-active-synthetic-dev';
+const SYNTH_SUPERSEDE_TRANSITION_ID = 'txn-supersede-synthetic-dev';
+const SYNTH_CORRECTED_ASSERTION_ID = 'assn-corrected-synthetic-dev';
+const SYNTH_ASSERTION_CLASS = 'preference';
+
+/**
+ * Derive a SYNTHETIC admission transition from a classified scenario plus fixed
+ * synthetic constants — NEVER from request-controlled material (the spike body
+ * carries only `spike` + `transition_intent`). Returns null for any scenario
+ * that mints no admitted assertion (pending / reject / malformed), so the route
+ * only touches the ledger for `accept` and `supersede` (Phase 33P §9 cases 1–6).
+ *
+ * For `supersede` the transition references a prior synthetic active assertion
+ * (the one an earlier `accept` would have minted) so the ledger can repoint
+ * recall to the corrected active assertion while preserving the prior's
+ * audit/provenance.
+ */
+function synthTransitionFor(
+  classification: AdmissionSpikeClassification,
+): SyntheticAdmissionTransition | null {
+  switch (classification.scenario) {
+    case 'accept':
+      return {
+        kind: 'admit',
+        source_candidate_id: SYNTH_SOURCE_CANDIDATE_ID,
+        admission_transition_id: SYNTH_ADMIT_TRANSITION_ID,
+        admitted_assertion_id: SYNTH_ADMITTED_ASSERTION_ID,
+        assertion_class: SYNTH_ASSERTION_CLASS,
+        replay_key: `admit:${SYNTH_SOURCE_CANDIDATE_ID}`,
+      };
+    case 'supersede':
+      return {
+        kind: 'supersede',
+        source_candidate_id: SYNTH_SOURCE_CANDIDATE_ID,
+        admission_transition_id: SYNTH_SUPERSEDE_TRANSITION_ID,
+        admitted_assertion_id: SYNTH_CORRECTED_ASSERTION_ID,
+        assertion_class: SYNTH_ASSERTION_CLASS,
+        replay_key: `supersede:${SYNTH_SOURCE_CANDIDATE_ID}`,
+        supersedes_assertion_id: SYNTH_ADMITTED_ASSERTION_ID,
+      };
+    case 'pending':
+    case 'reject':
+    case 'malformed':
+    default:
+      return null;
+  }
 }
 
 /** Stable public-safe refusal body for the disabled gate. Leaks nothing. */
@@ -247,13 +332,37 @@ export function createAdmissionIntakeRoutes(deps: AdmissionSpikeRouteDeps): Hono
       return sendPublicResponse(c, 400, failClosedRefusalBody(), requestId, refused);
     }
 
-    // (4) Partial-failure posture (Phase 33M §13.1). Any internal partial
-    // failure during finalization fails closed: under Option A there is NO
-    // durable state to roll back, NO recallable assertion is created, and NO
-    // duplicate/partially-admitted residue can exist. The response collapses
-    // to the stable public-safe refusal.
+    // (4) Partial-failure posture (Phase 33M §13.1; Phase 33Q ledger seam). Any
+    // internal partial failure during finalization fails closed. With NO ledger
+    // injected (the production/server default) this is the Phase 33N Option A
+    // path verbatim: nothing durable to roll back, no recallable assertion, no
+    // duplicate/partially-admitted residue. With the OPTIONAL dev-only synthetic
+    // ledger injected (tests only), an accept/supersede records into the
+    // bounded, process-local, NON-DURABLE ledger here — inside the SAME guarded
+    // try, so a ledger throw (capacity / scope / replay-conflict) collapses to
+    // the identical stable public-safe refusal and the bounded ledger is left
+    // exactly as it was (atomic; no partially-admitted / recallable residue —
+    // Phase 33P §9 case-8). The ledger result is intentionally discarded: it is
+    // NEVER surfaced in the public body, which stays the deterministic
+    // public-safe response built in step (5).
     try {
       deps.beforeFinalize?.(classification);
+      if (
+        deps.admittedAssertionLedger &&
+        deps.admittedAssertionTenantId &&
+        deps.admittedAssertionEstateId
+      ) {
+        const transition = synthTransitionFor(classification);
+        if (transition) {
+          deps.admittedAssertionLedger.record(
+            {
+              tenant_id: deps.admittedAssertionTenantId,
+              estate_id: deps.admittedAssertionEstateId,
+            },
+            transition,
+          );
+        }
+      }
     } catch {
       return sendPublicResponse(c, 400, failClosedRefusalBody(), requestId, refused);
     }
