@@ -915,6 +915,29 @@ This phase succeeds if:
 
 ## 22. Cross-references
 
+> **Phase 33V status note (added later).** Phase 33V
+> ([`ADMISSION-WEDGE-STORAGE-AUTH-CONSENT-DESIGN-FINALIZATION-GATE.md`](ADMISSION-WEDGE-STORAGE-AUTH-CONSENT-DESIGN-FINALIZATION-GATE.md))
+> is the **docs/decision-only storage/auth/consent design-finalization gate** that
+> **finalizes/refines this Phase 33K design** against the now-confirmed Straylight
+> vocabulary — after Phase 33U (PR #139) intook the Straylight primitive-review
+> response (`loa-straylight` PR #65) and reconciled the A–O dispositions. It consumes
+> this gate's §5 exit criteria, §6 record shapes, §7 boundary rules, §8 idempotency
+> precondition, §9 auth options, §10 consent options, §11 binding assumptions, §13
+> no-leak preconditions, and §14 threat model **read-only** as the design basis, and
+> turns them into a concrete storage design-finalization checklist (its §4) and
+> auth/consent design-finalization checklist (its §5) plus a final-decisions /
+> open-blockers table (its §7). It records the vocabulary-grounded corrections — drop
+> `assertion_superseded` as a canonical audit event (re-relate Dixie-locally to
+> `assertion_linked` + `superseded` via `supersedes_refs`); adopt `public_receipt_ref`
+> and split the synthetic record into `AuditEvent` + `TransitionReceipt`; treat
+> `recall_eligible` as a per-request `RecallDisposition` projection; keep `tenant_id`
+> host-layer; keep endpoint idempotency Dixie-owned — while keeping ADR-022E gate #8
+> (durable store) **held**. Phase 33V **implements no storage, auth, consent, route,
+> migration, or runtime behaviour**, does **not** finalize the route contract, freezes
+> **no** schema, flips **no** runtime marker, and keeps every implementation lane
+> **blocked**. It selects **Phase 33W** (route-contract readiness update;
+> docs/decision-only).
+
 > **Phase 33P status note (added later).** Phase 33P
 > ([`ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md`](ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md))
 > is a **docs/decision-only storage / receipt hardening decision gate** that
