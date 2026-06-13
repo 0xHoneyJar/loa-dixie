@@ -266,3 +266,16 @@ this synthetic ledger slice (mirroring the 33N → 33O acceptance pattern) —
 blocked behind the Straylight primitive review (A–O), the held ADR-022E
 durable-store gate, a final route contract, and production auth/consent, and
 requires its own separately-named gate.
+
+> **Phase 33R status note (added later).** Phase 33R
+> ([`../ADMISSION-WEDGE-BOUNDED-LEDGER-ACCEPTANCE-GATE.md`](../ADMISSION-WEDGE-BOUNDED-LEDGER-ACCEPTANCE-GATE.md))
+> is the **docs/decision-only acceptance / hardening gate** this section
+> anticipated. It reads this runbook and the Phase 33Q source **read-only** and
+> **accepts Phase 33Q only as a bounded, non-production, test-seam-only synthetic
+> admitted-assertion ledger proof** for MVP 2 — **not** as production admission,
+> durable storage, a final schema, or production route readiness. **Phase 33Q
+> does not complete MVP 2.** Phase 33R preserves every blocked lane (§10), keeps
+> the Straylight primitive review (A–O) **unresolved**, and selects **Phase 33S —
+> a docs/decision-only route-spike + bounded-ledger acceptance decomposition
+> gate** as the next lane (explicitly **not** production rollout). It mutates no
+> source, test, config, fixture, or vector.

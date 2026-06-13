@@ -352,6 +352,30 @@ Phase 33K did **not** implement storage/auth/consent.
 > draft evidence**; Phase 33P mutates nothing here. **Phase 33Q remains not
 > implemented**, authorized only if the 33P doc lands cleanly within its boundary.
 
+> **Phase 33Q + Phase 33R status note (added later).** Phase 33Q (PR #135)
+> implemented the Phase 33P Option B lane: a **bounded, process-local,
+> non-durable, fail-closed, synthetic-only** admitted-assertion ledger, exposed
+> **only** as a route dependency-injection / **test-seam** (no server wiring, no
+> env flag, no package export), proving the candidate → admitted-assertion →
+> recall transition's *stateful effect* over synthetic state behind the existing
+> default-off gate (see
+> [`../PHASE-33Q-DEV-STORE-RUNBOOK.md`](../PHASE-33Q-DEV-STORE-RUNBOOK.md)). It
+> reads **these five vectors read-only as the fixture contract** and keeps the
+> public response byte-identical to the Phase 33N no-store path; the ledger's
+> public projection and error messages still satisfy this validator's no-leak
+> denylist (`FORBIDDEN_PUBLIC_KEYS` / substring / regex / UUID / opaque-run
+> rules) via the runtime `findAdmissionPublicLeaks` guard. It **mutates no vector
+> JSON** and does **not** change this validator. Phase 33R
+> ([`../../ADMISSION-WEDGE-BOUNDED-LEDGER-ACCEPTANCE-GATE.md`](../../ADMISSION-WEDGE-BOUNDED-LEDGER-ACCEPTANCE-GATE.md))
+> is the **docs/decision-only** acceptance / hardening gate that **accepts Phase
+> 33Q only as a bounded, non-production, test-seam-only synthetic ledger proof**
+> for MVP 2 — **not** as production admission, durable storage, a final schema, or
+> production route readiness — preserves every blocked lane, keeps the Straylight
+> primitive review (A–O) **unresolved**, and selects **Phase 33S** (a
+> docs/decision-only decomposition gate, **not** production rollout) as the next
+> lane. These route-contract vectors remain **non-final / draft evidence**;
+> Phases 33Q and 33R freeze no schema and mutate nothing here.
+
 ---
 
 ## 12. Provenance / cross-references

@@ -775,6 +775,26 @@ resolved.
 
 ## 16. Cross-references
 
+> **Phase 33R status note (added later).** Phase 33R
+> ([`ADMISSION-WEDGE-BOUNDED-LEDGER-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-BOUNDED-LEDGER-ACCEPTANCE-GATE.md))
+> is the **docs/decision-only bounded-ledger acceptance / hardening gate** that
+> accepts the Phase 33Q implementation this gate authorized. It reads this gate
+> and the Phase 33Q source **read-only** — it mutates **no** source, test,
+> validator, probe, fixture, or vector JSON. It **accepts Phase 33Q only as a
+> bounded, non-production, test-seam-only synthetic admitted-assertion ledger
+> proof** for MVP 2, confirming read-only that the implementation stays within
+> this gate's §8 boundary and §9 proof cases (including the case-8 ten-bullet
+> bounded-store safety obligations) and inherits the Phase 33N safety floor
+> unchanged: `server.ts` unwired, no env flag, no package export, route-DI/
+> test-seam-only, no raw candidate payload persisted, replay/de-dup spike-scoped,
+> `idempotency_final` still false. It does **not** accept Phase 33Q as production
+> admission, durable storage, a final schema, production route readiness, or
+> Freeside/client integration; **Phase 33Q does not complete MVP 2**; it
+> preserves every blocked lane (its §10) and keeps the Straylight primitive review
+> (A–O) **unresolved**. Phase 33R selects **Phase 33S — a docs/decision-only
+> route-spike + bounded-ledger acceptance decomposition gate** as the next lane
+> and **does not select production rollout**.
+
 - [`docs/ADMISSION-WEDGE-ROUTE-SPIKE-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ROUTE-SPIKE-ACCEPTANCE-GATE.md)
   — Phase 33O acceptance gate; its §4 (what 33N proves), §5 (what 33N does not
   prove), §6 (MVP 2 gap), and §9 (selected this Phase 33P) are the direct inputs to
