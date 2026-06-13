@@ -728,16 +728,23 @@ This phase succeeds if:
 
 ## 12. Cross-references
 
-> **Phase 33S status note (added later).** *(reserved)* Phase 33S
-> (`ADMISSION-WEDGE-…-DECOMPOSITION-GATE.md`, filename TBD) is the
-> **docs/decision-only route-spike + bounded-ledger acceptance decomposition
-> gate** this gate selected as the next lane (§9). It will read this acceptance
-> gate, the Phase 33O route-spike acceptance, the Phase 33P storage/receipt
-> hardening decision, and the Phase 33Q source **read-only** — mutating **no**
-> source, test, validator, probe, fixture, or vector JSON — and decide among
-> Options A–F (§9) without selecting production rollout, production storage, or
-> public/user-facing admission. *(This bullet is a placeholder; it confers no
-> authorization and will be completed when Phase 33S lands.)*
+> **Phase 33S status note (added later).** Phase 33S
+> ([`docs/ADMISSION-WEDGE-ROUTE-LEDGER-DECOMPOSITION-GATE.md`](ADMISSION-WEDGE-ROUTE-LEDGER-DECOMPOSITION-GATE.md))
+> is the **docs/decision-only route-spike + bounded-ledger acceptance
+> decomposition gate** this gate selected as the next lane (§9). It read this
+> acceptance gate, the Phase 33O route-spike acceptance, the Phase 33P
+> storage/receipt hardening decision, the Phase 33J review register, and the Phase
+> 33N/33Q source **read-only** — mutating **no** source, test, validator, probe,
+> fixture, or vector JSON — consolidated what the route surface (33N/33O) and the
+> synthetic stateful effect (33Q/33R) now prove, and analysed the §9 Options A–F.
+> It **selects Option D** — a Straylight primitive-review follow-up / consolidated
+> cross-repo review handoff (provisional Phase 33T) that re-issues/advances the §5
+> A–O register (rows E, G, H, K, N, O and review-dependent J) — and **rejects**
+> Options A, B, C, E, and F (recording **E as the documented D→E follow-on**, since
+> the storage/auth/consent decomposition is largely already done by 33K/33M and is
+> downstream of and conditional on the review). It selects **no** production
+> rollout, freezes **no** schema, finalizes **no** route contract, completes **no**
+> Straylight review, and preserves every blocked lane (§10).
 
 - [`docs/ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md`](ADMISSION-WEDGE-STORAGE-RECEIPT-HARDENING-GATE.md)
   — Phase 33P storage/receipt hardening decision gate; its §7 Option B selection,

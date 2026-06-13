@@ -520,6 +520,21 @@ This phase succeeds if:
 > **no** schema, and authorizes Phase 33Q **only if** the 33P doc lands cleanly and
 > stays within its §8 boundary.
 
+> **Phase 33S status note (added later).** Phase 33S
+> ([`docs/ADMISSION-WEDGE-ROUTE-LEDGER-DECOMPOSITION-GATE.md`](ADMISSION-WEDGE-ROUTE-LEDGER-DECOMPOSITION-GATE.md))
+> is the **docs/decision-only route-spike + bounded-ledger acceptance
+> decomposition gate** that runs after this acceptance gate (33O), the Phase 33P
+> storage/receipt hardening decision, and the Phase 33Q/33R bounded-ledger
+> implementation and acceptance. It reads this gate's §4 route-surface proven list
+> **read-only** to ground its "what the two accepted layers now prove" synthesis,
+> mutates **no** source, test, validator, probe, fixture, or vector JSON, and —
+> with the route surface (this gate) and the synthetic stateful effect (33R) both
+> accepted — analyses the Phase 33R §9 Options A–F. It **selects Option D** (a
+> Straylight primitive-review follow-up / consolidated cross-repo review handoff,
+> provisional Phase 33T), **rejects** the other options (recording E as the
+> documented D→E follow-on), selects **no** production rollout, freezes **no**
+> schema, and preserves every blocked lane.
+
 - [`docs/ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md`](ADMISSION-WEDGE-DEV-OPERATOR-ROUTE-SPIKE-AUTHORIZATION-GATE.md)
   — Phase 33M authorization gate; its §7 scope, §8 unauthorized list, §9
   acceptance criteria, §10 tests, §11 idempotency, §12 auth/consent, §13/§13.1

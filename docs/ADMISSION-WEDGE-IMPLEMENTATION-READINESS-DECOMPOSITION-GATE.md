@@ -712,6 +712,27 @@ This phase succeeds if:
 > durable-store gate **in force**, freezes **no** schema, and keeps every live /
 > runtime / implementation lane **blocked**.
 
+> **Phase 33S status note (added later).** Phase 33S
+> ([`docs/ADMISSION-WEDGE-ROUTE-LEDGER-DECOMPOSITION-GATE.md`](ADMISSION-WEDGE-ROUTE-LEDGER-DECOMPOSITION-GATE.md))
+> is the **second decomposition gate** on the Admission Wedge ladder and the
+> structural successor to this one: where Phase 33I decomposed the Phase 33H
+> blockers into the 33J→33N lanes (now executed), Phase 33S decomposes the *decision*
+> the Phase 33R bounded-ledger acceptance gate deferred to it (its §9 Options A–F),
+> after the route surface (33N/33O) and the synthetic stateful effect (33Q/33R) were
+> both accepted. It reads this gate's blocker/lane structure **read-only**, mutates
+> **no** probe / validator / fixture / vector / source, and **selects Option D** — a
+> Straylight primitive-review follow-up / consolidated cross-repo review handoff
+> (provisional Phase 33T) that re-issues/advances the §7 / 33J A–O review register
+> (rows E, G, H, K, N, O and review-dependent J), the **highest-leverage vocabulary
+> prerequisite** — the upstream gate whose resolution most clarifies the downstream
+> design, **not** the only production gate (the ADR-022E durable store / production
+> storage architecture, production auth/consent, and final route-contract acceptance
+> remain independent, unresolved production gates; resolving the Straylight review
+> alone does **not** make production admission ready). It **rejects** the other
+> options (recording E as the documented D→E follow-on), selects **no** production
+> rollout, freezes **no** schema, completes **no** Straylight review, and keeps every
+> implementation lane **blocked**.
+
 - [`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md)
   — Phase 33H acceptance gate whose §8 blocker table (A–N) this gate decomposes
   and whose §10 selected this decomposition lane. Gains a minimal 33I status note.
