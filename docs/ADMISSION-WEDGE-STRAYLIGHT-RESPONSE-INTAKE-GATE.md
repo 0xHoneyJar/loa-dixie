@@ -577,18 +577,27 @@ all of the following hold:
 - nothing is staged or committed by this phase (the branch's commit/merge is a
   separate, explicitly-authorized step).
 
-> The repo defines **no markdown/docs lint command** (its `package.json` scripts are
-> typecheck / build / test / demo / export only), so only diff/whitespace/scope
-> validation and the two existing docs validators are applicable to this docs-only
-> decision artifact.
+> The repository package manifests define no Markdown/docs lint script; existing lint
+> scripts do not target Markdown, so only diff/whitespace/scope validation and the two
+> existing docs validators are applicable to this docs-only decision artifact.
 
 ---
 
 ## 10. Cross-references
 
-> **Phase 33V status note (added later, when 33V exists).** When the Phase 33V
-> storage/auth/consent design-finalization follow-on lands, add a one-line note here
-> pointing to it as the lane this gate selected.
+> **Phase 33V status note (added later).** Phase 33V
+> ([`ADMISSION-WEDGE-STORAGE-AUTH-CONSENT-DESIGN-FINALIZATION-GATE.md`](ADMISSION-WEDGE-STORAGE-AUTH-CONSENT-DESIGN-FINALIZATION-GATE.md))
+> is the **storage/auth/consent design-finalization** follow-on this gate selected (§6).
+> It consumes this gate's §4 A–O reconciliation as exit criteria and finalizes/refines
+> the Phase 33K design in vocabulary-compatible terms — the `assertion_superseded`
+> re-relation, the `public_receipt_ref` / audit-split, the `RecallDisposition`
+> projection, the `tenant_id` host-layer binding, the Dixie-owned endpoint idempotency,
+> and the ADR-022E gate #8-held durable-store boundary — as concrete storage (§4) and
+> auth/consent (§5) checklists plus a decisions/open-blockers table (§7). It is
+> **docs/decision-only**: it finalizes the *design*, flips **no** runtime marker,
+> mutates **no** probe / validator / fixture / vector / source, does **not** finalize
+> the route contract, and keeps every implementation lane **blocked**. It selects
+> **Phase 33W** (route-contract readiness update; docs/decision-only).
 
 - [`docs/ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-FOLLOWUP.md`](ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-FOLLOWUP.md)
   — Phase 33T / PR #138, the cross-repo review **request** this gate intakes the
