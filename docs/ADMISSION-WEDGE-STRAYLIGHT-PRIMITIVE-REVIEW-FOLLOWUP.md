@@ -859,6 +859,27 @@ all of the following hold:
 
 ## 13. Cross-references
 
+> **Phase 33U status note (added later).** Phase 33U
+> ([`docs/ADMISSION-WEDGE-STRAYLIGHT-RESPONSE-INTAKE-GATE.md`](ADMISSION-WEDGE-STRAYLIGHT-RESPONSE-INTAKE-GATE.md))
+> is the **docs/decision-only Straylight primitive-review response intake /
+> lane-decision gate** this follow-up selected as the next lane (its §10). Straylight
+> answered this review request in **`loa-straylight` PR #65 (merged)** —
+> `loa-straylight:docs/ADMISSION-WEDGE-PRIMITIVE-REVIEW-RESPONSE.md`. Phase 33U
+> **intakes** that response and reconciles the A–O dispositions using **only** the
+> response's accepted / rejected / delegated / unresolved verdicts: A, B, D, I, L, M,
+> N accepted; C accepted except **`assertion_superseded` rejected / re-related**
+> Dixie-locally to `assertion_linked` + `superseded` status; E/G/H/J/K carry
+> delegated-to-Dixie projections (recall-eligibility boolean, `tenant_id` binding,
+> `public_receipt_ref`, **endpoint idempotency Dixie-owned**, no-leak serializer); F
+> production authority, G production identity binding, J final endpoint keying, and O
+> durable store (**ADR-022E gate #8 held**) remain independent unresolved production
+> gates. It records that resolving the review **does not** make production admission
+> ready, flips **no** runtime marker (`straylight_primitive_review_complete` stays
+> `false`), and selects **Phase 33V** (storage/auth/consent design-finalization
+> follow-on — the documented D→E follow-on; docs/decision-only). It mutates **no**
+> probe / validator / fixture / vector / source and keeps every implementation lane
+> **blocked**.
+
 - [`docs/ADMISSION-WEDGE-ROUTE-LEDGER-DECOMPOSITION-GATE.md`](ADMISSION-WEDGE-ROUTE-LEDGER-DECOMPOSITION-GATE.md)
   — Phase 33S decomposition gate that **selected this Option-D lane** (its §6–§7
   analysis, §7 D→E follow-on, §11 recommended acceptance criteria). Its §4 evidence

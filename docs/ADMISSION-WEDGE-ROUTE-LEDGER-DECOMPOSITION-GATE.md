@@ -724,6 +724,21 @@ criteria* a future Phase 33T would have to meet (it must implement nothing):
 > review alone makes production admission ready **nor** that Straylight owns endpoint
 > idempotency, freezes **no** schema, and keeps every implementation lane **blocked**.
 
+> **Phase 33U status note (added later).** Phase 33U
+> ([`docs/ADMISSION-WEDGE-STRAYLIGHT-RESPONSE-INTAKE-GATE.md`](ADMISSION-WEDGE-STRAYLIGHT-RESPONSE-INTAKE-GATE.md))
+> **intakes the Straylight-side answer** to the Phase 33T review request this gate
+> selected (Option D). Straylight answered in **`loa-straylight` PR #65 (merged)**.
+> Phase 33U reconciles the A–O dispositions using **only** the response's verdicts
+> (A, B, D, I, L, M, N accepted; C accepted except `assertion_superseded`
+> **rejected / re-related** Dixie-locally; E/G/H/J/K delegated-to-Dixie projections
+> with **endpoint idempotency Dixie-owned**; F/G production semantics, J final
+> endpoint keying, and O durable store under **ADR-022E gate #8** remain held), and
+> routes to the **documented D→E follow-on** this gate recorded (§7): **Phase 33V**
+> (storage/auth/consent design-finalization against the now-confirmed vocabulary,
+> docs/decision-only). It records that the review answer **does not** make production
+> admission ready, flips **no** runtime marker, mutates **no** probe / validator /
+> fixture / vector / source, and keeps every implementation lane **blocked**.
+
 - [`docs/ADMISSION-WEDGE-BOUNDED-LEDGER-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-BOUNDED-LEDGER-ACCEPTANCE-GATE.md)
   — Phase 33R bounded-ledger acceptance gate; its §4 proven list and §5 not-proven
   list seed §4, its §9 Options A–F are the decision space §6 analyses, and it

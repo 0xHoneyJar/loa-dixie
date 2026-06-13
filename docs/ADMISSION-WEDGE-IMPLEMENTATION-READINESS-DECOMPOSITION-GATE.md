@@ -750,6 +750,24 @@ This phase succeeds if:
 > Straylight owns endpoint idempotency, freezes **no** schema, and keeps every
 > implementation lane **blocked**.
 
+> **Phase 33U status note (added later).** Phase 33U
+> ([`docs/ADMISSION-WEDGE-STRAYLIGHT-RESPONSE-INTAKE-GATE.md`](ADMISSION-WEDGE-STRAYLIGHT-RESPONSE-INTAKE-GATE.md))
+> **closes the cross-repo round-trip** on this gate's §5 prerequisite blocker ("all ↔
+> the Straylight review"): Straylight answered the Phase 33T review request in
+> **`loa-straylight` PR #65 (merged)**, and Phase 33U intakes that response and
+> reconciles the A–O dispositions using **only** Straylight's verdicts (A, B, D, I, L,
+> M, N accepted; C accepted except `assertion_superseded` **rejected / re-related**
+> Dixie-locally; E/G/H/J/K delegated-to-Dixie projections with **endpoint idempotency
+> Dixie-owned**; F/G production semantics, J final endpoint keying, and O durable
+> store under **ADR-022E gate #8** still held). The vocabulary prerequisite is now
+> *answered by Straylight*, but the **independent** production gates this decomposition
+> identified (durable store, production auth/consent, final route contract, identity
+> binding) remain **held** — resolving the review alone does **not** make production
+> admission ready. Phase 33U selects **Phase 33V** (the documented D→E
+> storage/auth/consent design-finalization follow-on; docs/decision-only), flips **no**
+> runtime marker, mutates **no** probe / validator / fixture / vector / source, and
+> keeps every implementation lane **blocked**.
+
 - [`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md)
   — Phase 33H acceptance gate whose §8 blocker table (A–N) this gate decomposes
   and whose §10 selected this decomposition lane. Gains a minimal 33I status note.
