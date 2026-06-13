@@ -733,6 +733,23 @@ This phase succeeds if:
 > rollout, freezes **no** schema, completes **no** Straylight review, and keeps every
 > implementation lane **blocked**.
 
+> **Phase 33T status note (added later).** Phase 33T
+> ([`docs/ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-FOLLOWUP.md`](ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-FOLLOWUP.md))
+> is the **docs/decision-only Straylight primitive-review follow-up** the Phase 33S
+> decomposition gate (the structural successor to this gate) selected as Option D. It
+> advances the **same** Straylight primitive review (this gate's §5 prerequisite
+> blocker — "all ↔ the Straylight review") that Phase 33J first requested abstractly,
+> now grounded in the **concrete** Phase 33N route surface and Phase 33Q ledger: it
+> re-issues the genuinely-unresolved rows (E, G, H, K, N, O) and the review-dependent
+> row (J), separates Straylight-owned primitive vocabulary from the Dixie-owned
+> endpoint route contract (endpoint idempotency is **Dixie-owned**) and Freeside-owned
+> client integration, defines the expected Straylight response shape, and selects
+> **Phase 33U** (review-response intake / lane-decision gate). It mutates **no** probe
+> / validator / fixture / vector / source, **completes no** Straylight review, claims
+> **neither** that the review alone makes production admission ready **nor** that
+> Straylight owns endpoint idempotency, freezes **no** schema, and keeps every
+> implementation lane **blocked**.
+
 - [`docs/ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-ACCEPTANCE-GATE.md)
   — Phase 33H acceptance gate whose §8 blocker table (A–N) this gate decomposes
   and whose §10 selected this decomposition lane. Gains a minimal 33I status note.

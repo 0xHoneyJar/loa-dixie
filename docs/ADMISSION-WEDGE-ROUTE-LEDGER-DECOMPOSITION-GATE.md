@@ -703,6 +703,27 @@ criteria* a future Phase 33T would have to meet (it must implement nothing):
 
 ## 12. Cross-references
 
+> **Phase 33T status note (added later).** Phase 33T
+> ([`docs/ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-FOLLOWUP.md`](ADMISSION-WEDGE-STRAYLIGHT-PRIMITIVE-REVIEW-FOLLOWUP.md))
+> is the **docs/decision-only Straylight primitive-review follow-up / consolidated
+> cross-repo review handoff** this gate selected as the next lane (its §7 Option D,
+> §11 recommended acceptance criteria). It **re-issues / advances** the §7 / 33J A–O
+> review register — the genuinely-unresolved rows (E, G, H, K, N, O) and the
+> review-dependent row (J) — now grounded in the **concrete** Phase 33N route surface
+> and Phase 33Q ledger (the `active`/`superseded` status model, `recall_eligible`
+> flag, `SyntheticAuditRecord`, and replay/idempotency behavior) with `file:line`
+> citations, turning the abstract 33J handoff into a "does this concrete synthetic
+> shape match your canonical primitives?" request. It separates Straylight-owned
+> primitive vocabulary from Dixie-owned endpoint route contract (endpoint idempotency
+> is **Dixie-owned** — Straylight confirms delegation only) and Freeside-owned client
+> integration, defines the expected Straylight response shape, and selects **Phase
+> 33U** (review-response intake / lane-decision gate, which runs only after a
+> Straylight response exists and invents no answers if none does). It mutates **no**
+> probe / validator / fixture / vector / source, **completes no** Straylight review
+> (`straylight_primitive_review_complete` stays `false`), claims **neither** that the
+> review alone makes production admission ready **nor** that Straylight owns endpoint
+> idempotency, freezes **no** schema, and keeps every implementation lane **blocked**.
+
 - [`docs/ADMISSION-WEDGE-BOUNDED-LEDGER-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-BOUNDED-LEDGER-ACCEPTANCE-GATE.md)
   — Phase 33R bounded-ledger acceptance gate; its §4 proven list and §5 not-proven
   list seed §4, its §9 Options A–F are the decision space §6 analyses, and it
