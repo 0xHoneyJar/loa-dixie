@@ -39,7 +39,7 @@
   },
   "expected_public_response": {
     "outcome_class": "denied",
-    "public_receipt_ref_policy": "public_safe_receipt_reference_draft",
+    "public_receipt_ref": "public_safe_receipt_reference_draft",
     "recall_eligible": false,
     "rendered_candidate_payload": false,
     "safe_reason_code": "admission_transition_denied_draft_non_final",

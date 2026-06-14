@@ -40,7 +40,7 @@
   "expected_public_response": {
     "outcome_class": "admitted",
     "admitted_assertion_status_class": "active",
-    "public_receipt_ref_policy": "public_safe_receipt_reference_draft",
+    "public_receipt_ref": "public_safe_receipt_reference_draft",
     "recall_eligible": true,
     "recall_use_instruction_public_signal": "usable_draft_review_dependent",
     "rendered_candidate_payload": false,

@@ -40,7 +40,7 @@
   },
   "expected_public_response": {
     "outcome_class": "refused",
-    "public_receipt_ref_policy": "none_minted_draft",
+    "public_receipt_ref": null,
     "recall_eligible": false,
     "rendered_candidate_payload": false,
     "safe_reason_code": "ingress.invalid_request",

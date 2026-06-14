@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Phase 33L — Admission Wedge route-contract test-vector (draft v0) validator.
+// Phase 33Z route-vector alignment — see the §"Phase 33Z alignment" block below.
 //
 // DOCS-ONLY / NON-RUNTIME. This script is an isolated, dependency-free shape /
 // no-leak / non-final-marker validator over the JSON route-contract test-vector
@@ -7,6 +8,29 @@
 // It is NOT wired into the application, NOT imported by any route, and exercises
 // NO live admission behavior. It freezes no schema and authorizes no route,
 // route spike, storage, auth, consent, or live admission.
+//
+// Phase 33Z alignment (docs + route-contract test-vector / validator alignment lane,
+// non-runtime; authorized by Phase 33Y §10). Phase 33Z aligns these five vectors and
+// this validator to the ACCEPTED Phase 33X / 33Y draft route-contract baseline and the
+// source-real Phase 33N spike shape, WITHOUT freezing the route contract or final
+// schema and WITHOUT authorizing any runtime/route/storage/auth/consent work:
+//   * the public envelope is standardized on `public_receipt_ref` (string public-safe
+//     DRAFT reference, or null where no public receipt is minted) — REPLACING the
+//     pre-33Z `public_receipt_ref_policy` abstraction (33X §7.1; 33Y §5/§9;
+//     source-real at public-response.ts:44,:104);
+//   * the retired `public_receipt_ref_policy` and `receipt_public_ref` tokens are
+//     rejected on the public surface;
+//   * there is NO public `admission.duplicate_replay` code and no `duplicate_replay`
+//     token anywhere (identical replay returns the prior public envelope; private
+//     telemetry only — 33X §8 / 33Y §5,§9);
+//   * class-validation rejection (malformed) uses the source-real `ingress.invalid_request`
+//     (NOT `admission.unsupported_transition`, NOT dotted `admission.transition_denied`);
+//   * policy denial (reject) uses the source-real underscored
+//     `admission_transition_denied_draft_non_final` (the dotted code is draft-only / absent
+//     from source and is rejected on the public surface);
+//   * the five scenarios are preserved (no sixth); the unresolved-review markers,
+//     draft-status flags, and the private TransitionReceipt / AuditEvent no-leak
+//     boundary are unchanged.
 //
 // These vectors are route-contract test-vector DRAFTS, not executable route
 // tests. They do not prove a route exists. This validator only checks that the
@@ -48,6 +72,18 @@
 //      substrings / regex patterns / private keys.
 //   7. All identifier-shaped values are short synthetic placeholders (no long
 //      opaque/operational IDs anywhere in the document).
+//   8. (Phase 33Z) The public envelope carries `public_receipt_ref` (string
+//      public-safe DRAFT reference, or null for pending/malformed where no public
+//      receipt is minted); the retired `public_receipt_ref_policy` and
+//      `receipt_public_ref` tokens are absent from the public surface.
+//   9. (Phase 33Z) The per-scenario public refusal taxonomy matches the source-real
+//      codes: malformed -> `ingress.invalid_request`; reject ->
+//      `admission_transition_denied_draft_non_final`; pending/accept/supersede ->
+//      null. The draft-only / source-absent dotted `admission.transition_denied`,
+//      `admission.unsupported_transition`, and `admission.duplicate_replay` codes
+//      never appear on the public surface.
+//  10. (Phase 33Z) No `duplicate_replay` token appears anywhere in any vector
+//      (identical replay returns the prior public envelope; private telemetry only).
 //
 // It emits a deterministic pass/fail summary and exits non-zero on any failure.
 
@@ -94,9 +130,65 @@ const FALSE_FLAGS = [
 
 // The only stable PUBLIC reason code a vector may carry on its public surface is
 // the existing Dixie-local refusal-family code (grounded in
-// app/src/services/straylight-recall-intake/refusal-mapping.ts). Other vectors
-// either carry null or a clearly draft/non-final admission reason marker.
+// app/src/services/straylight-recall-intake/refusal-mapping.ts:12 and reused by
+// the Phase 33N spike classifier at
+// app/src/services/admission-wedge-spike/classifier.ts:64). Other vectors either
+// carry null or the underscored draft/non-final admission denial marker.
 const STABLE_PUBLIC_REASON_CODES = new Set(['ingress.invalid_request']);
+
+// Phase 33Z per-scenario safe_reason_code taxonomy (aligned to the accepted Phase
+// 33X / 33Y draft baseline AND the source-real Phase 33N spike classifier):
+//   * malformed/unsafe class-validation rejection -> the source-real, stable Dixie
+//     ingress code `ingress.invalid_request` (33Y §9: class-validation rejection
+//     uses ingress.invalid_request, NOT admission.unsupported_transition and NOT
+//     admission.transition_denied) — classifier.ts:64;
+//   * policy denial (reject) -> the source-real underscored draft denial marker
+//     `admission_transition_denied_draft_non_final` — classifier.ts:68 (the dotted
+//     `admission.transition_denied` is a DRAFT-ONLY prose code, absent from source,
+//     so it must NOT appear on the public test surface);
+//   * pending / accept / supersede -> null (no public refusal code).
+const EXPECTED_SAFE_REASON_CODE = {
+  candidate_pending_not_recallable: null,
+  accept_candidate_to_admitted_assertion: null,
+  reject_candidate_no_assertion: 'admission_transition_denied_draft_non_final',
+  supersede_with_corrected_assertion: null,
+  malformed_or_unsafe_payload_fail_closed: 'ingress.invalid_request',
+};
+
+// Phase 33Z public-receipt-representation alignment. The accepted Phase 33X / 33Y
+// baseline standardizes the public envelope on `public_receipt_ref` (33X §7.1,
+// 33Y §5/§9), `null` where no public receipt is minted; the Phase 33N runtime
+// spike already uses `public_receipt_ref: string | null` (public-response.ts:44,
+// :104, gated by classifier `mints_public_receipt_ref`). Phase 33Z REPLACES the
+// prior vector-level `public_receipt_ref_policy` abstraction with that field.
+//   * scenarios that mint a public-safe receipt (accept / reject / supersede) carry
+//     a non-null public-safe DRAFT placeholder string;
+//   * scenarios that mint none (pending / malformed) carry `null`.
+const RECEIPT_NULL_SCENARIOS = new Set([
+  'candidate_pending_not_recallable',
+  'malformed_or_unsafe_payload_fail_closed',
+]);
+
+// Retired / never-allowed public-surface receipt tokens. `public_receipt_ref_policy`
+// is the pre-33Z vector abstraction that Phase 33Z replaces; `receipt_public_ref`
+// is retired from the public envelope by 33V/33X/33Y (legacy debt lives only in the
+// separately-gated Phase 33E fixtures). Either appearing on a route vector is a
+// stale-state regression.
+const RETIRED_RECEIPT_KEYS = new Set(['public_receipt_ref_policy', 'receipt_public_ref']);
+
+// Public reason codes that are DRAFT-ONLY prose in the 33G/33X/33V/33Y design docs
+// and ABSENT from runtime source — they must never appear on the public test
+// surface (the vectors align to source-real codes only).
+const FORBIDDEN_DRAFT_REASON_CODES = new Set([
+  'admission.transition_denied',
+  'admission.unsupported_transition',
+  'admission.duplicate_replay',
+]);
+
+// Identical-replay returns the prior public envelope with NO new public code; any
+// duplicate-replay classification is private telemetry only (33X §8 / 33Y §5,§9).
+// The token must therefore appear nowhere in a route vector.
+const FORBIDDEN_REPLAY_TOKEN = 'duplicate_replay';
 
 // Substrings that must never appear in a public-facing surface (keys or string
 // values), mirroring the Phase 33E probe validator's defensive set.
@@ -161,7 +253,45 @@ const FORBIDDEN_PUBLIC_KEYS = new Set([
   'policy_reason',
   'private_reason_family',
   'receipt_id',
+  'receiptId',
   'audit_receipt_ref',
+  // Private `TransitionReceipt` / `AuditEvent` / private-receipt shapes. Only the
+  // public-safe `public_receipt_ref` (and its `null`) may cross to the public
+  // surface (33X §7.1/§7.2, 33V §4/§7, 33Y §5/§9). The private TransitionReceipt,
+  // the AuditEvent (incl. its class), the private/internal receipt reference, the
+  // transition id, signer/signature material, opaque policy detail, and a raw
+  // `metadata` bag must NEVER appear on the public surface — they belong to the
+  // private `expected_private_or_audit_effect` block (which `publicSurface()`
+  // excludes from this walk), not to the caller-observable response. snake_case
+  // and camelCase spellings are both forbidden so a serializer rename cannot leak.
+  'transition_receipt',
+  'transitionReceipt',
+  'transition_receipt_ref',
+  'transitionReceiptRef',
+  'transition_id',
+  'transitionId',
+  'audit_event',
+  'auditEvent',
+  'audit_event_class',
+  'auditEventClass',
+  'audit_ref',
+  'auditRef',
+  'audit_id',
+  'auditId',
+  'receipt_ref',
+  'receiptRef',
+  'private_receipt_ref',
+  'privateReceiptRef',
+  'signer',
+  'signature',
+  'policy_details',
+  'policyDetails',
+  'metadata',
+  // `receipt_public_ref` is retired from the public envelope by Phase 33V/33X/33Y
+  // (the public field is now `public_receipt_ref`); its legacy spelling survives
+  // only in the separately-gated Phase 33E fixtures. It must never appear on a
+  // route-vector public surface.
+  'receipt_public_ref',
   'idempotency_key',
   'idempotency_key_draft',
   'authority_signer_type_draft',
@@ -300,6 +430,41 @@ function syntheticIdFailures(vec) {
   return failures;
 }
 
+// Retired receipt-spelling lock (global, recursive). Phase 33Z retired the
+// vector-level `public_receipt_ref_policy` abstraction (replaced by the source-real
+// `public_receipt_ref`) and 33V/33X/33Y retired the `receipt_public_ref` spelling
+// from the public envelope. Neither may appear as an object KEY at ANY depth of a
+// route-contract vector — not just at the top of `expected_public_response`. A
+// shallow (direct-property) check let a nested reintroduction (e.g. inside a sub-
+// object on the public surface) slip through; this walk closes that escape. Exact
+// key match only, so the live `public_receipt_ref` field is never affected.
+function retiredReceiptKeyFailures(vec) {
+  const failures = [];
+  for (const node of walk(vec, '$', null)) {
+    if (node.kind === 'key' && RETIRED_RECEIPT_KEYS.has(node.value)) {
+      failures.push(`retired receipt key "${node.value}" present at ${node.path} — Phase 33Z standardizes the public envelope on "public_receipt_ref"; the retired token must not appear at any depth of a route vector`);
+    }
+  }
+  return failures;
+}
+
+// No public `admission.duplicate_replay` code, and no `duplicate_replay` token at
+// all. The accepted 33X §8 / 33Y §5,§9 baseline retires duplicate-replay from the
+// public taxonomy: identical replay returns the PRIOR public envelope unchanged
+// (no new public code), and any duplicate-replay classification is private
+// telemetry only. The token must therefore appear nowhere in a route vector (keys
+// or values). Each vector instead encodes replay semantics in its prose
+// `idempotency_expectation` string without a public code.
+function replayTokenFailures(vec) {
+  const failures = [];
+  for (const node of walk(vec, '$', null)) {
+    if (node.value.includes(FORBIDDEN_REPLAY_TOKEN)) {
+      failures.push(`forbidden "${FORBIDDEN_REPLAY_TOKEN}" token at ${node.path} — there is no public admission.duplicate_replay code; identical replay returns the prior public envelope (private telemetry only)`);
+    }
+  }
+  return failures;
+}
+
 // ---------------------------------------------------------------------------
 // Checks
 // ---------------------------------------------------------------------------
@@ -361,7 +526,7 @@ function checkRequestVector(vec, push) {
   if (typeof r.consent_assumption !== 'string' || !/^draft_/.test(r.consent_assumption)) push('request_vector.consent_assumption must be a draft_* marker');
 }
 
-function checkPublicResponse(vec, push) {
+function checkPublicResponse(vec, scenarioId, push) {
   const p = vec.expected_public_response;
   if (!p || typeof p !== 'object') {
     push('expected_public_response object is required');
@@ -371,9 +536,61 @@ function checkPublicResponse(vec, push) {
     push('expected_public_response.must_not_include must be a non-empty no-leak denylist');
   }
   if (p.rendered_candidate_payload !== false) push('expected_public_response.rendered_candidate_payload must be false');
-  // safe_reason_code: null OR a clearly-draft marker OR the one stable Dixie code.
+
+  // Phase 33Z public-receipt representation. The public envelope is standardized on
+  // `public_receipt_ref` (33X §7.1, 33Y §5/§9; source-real at public-response.ts:44).
+  // The retired `public_receipt_ref_policy` abstraction and the retired
+  // `receipt_public_ref` spelling must be gone from the public response.
+  for (const retired of RETIRED_RECEIPT_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(p, retired)) {
+      push(`expected_public_response must not carry the retired key "${retired}" — Phase 33Z standardizes the public envelope on "public_receipt_ref"`);
+    }
+  }
+  if (!Object.prototype.hasOwnProperty.call(p, 'public_receipt_ref')) {
+    push('expected_public_response.public_receipt_ref is required (string public-safe draft reference, or null where no public receipt is minted)');
+  } else {
+    const ref = p.public_receipt_ref;
+    const mustBeNull = RECEIPT_NULL_SCENARIOS.has(scenarioId);
+    if (mustBeNull) {
+      if (ref !== null) {
+        push(`${scenarioId}: expected_public_response.public_receipt_ref must be null (no public receipt is minted; got ${JSON.stringify(ref)})`);
+      }
+    } else if (typeof ref !== 'string' || ref.length === 0) {
+      push(`${scenarioId}: expected_public_response.public_receipt_ref must be a non-empty public-safe draft reference string (a public receipt is minted; got ${JSON.stringify(ref)})`);
+    } else if (!/draft|reference/.test(ref)) {
+      // It must stay an explicitly DRAFT, non-final public-safe placeholder — never a
+      // frozen/final value and never an operational id (the global opaque-run / no-leak
+      // walks additionally guard the value's shape).
+      push(`${scenarioId}: expected_public_response.public_receipt_ref must be an explicitly draft/non-final public-safe placeholder (got ${JSON.stringify(ref)}); Phase 33Z freezes no final schema`);
+    }
+  }
+
+  // Per-scenario safe_reason_code taxonomy (source-real codes only).
+  //
+  // `safe_reason_code` MUST be present on every vector's public response. A missing
+  // property is NOT equivalent to a null code: an omitted field would let a null-code
+  // scenario silently drop its explicit "no public refusal code" assertion. So the
+  // property must exist, and for the null scenarios its value must be the JSON literal
+  // `null` (never omitted, never any other falsy value).
+  const codePresent = Object.prototype.hasOwnProperty.call(p, 'safe_reason_code');
+  if (!codePresent) {
+    push('expected_public_response.safe_reason_code is required on every vector (must exist; null scenarios must carry the literal null, not omit the field)');
+  }
   const code = p.safe_reason_code;
-  if (code !== null && code !== undefined) {
+  if (typeof code === 'string' && FORBIDDEN_DRAFT_REASON_CODES.has(code)) {
+    push(`expected_public_response.safe_reason_code "${code}" is a draft-only prose code absent from source and must not appear on the public surface (class-validation rejection uses "ingress.invalid_request"; policy denial uses the source-real "admission_transition_denied_draft_non_final")`);
+  }
+  if (Object.prototype.hasOwnProperty.call(EXPECTED_SAFE_REASON_CODE, scenarioId)) {
+    // Exact scenario value enforcement: the property must exist AND strictly equal the
+    // expected value. For null scenarios this requires the literal `null` to be present
+    // (an omitted field — `code === undefined` — fails, since `undefined !== null`).
+    const expected = EXPECTED_SAFE_REASON_CODE[scenarioId];
+    if (!codePresent || code !== expected) {
+      push(`${scenarioId}: expected_public_response.safe_reason_code must be exactly ${JSON.stringify(expected)} and present (got ${codePresent ? JSON.stringify(code) : 'omitted'})`);
+    }
+  } else if (codePresent && code !== null) {
+    // Defensive fallback for any future scenario id: present, and either null, the
+    // stable Dixie code, or an explicit draft marker.
     if (typeof code !== 'string') {
       push('expected_public_response.safe_reason_code must be null or a string');
     } else if (!STABLE_PUBLIC_REASON_CODES.has(code) && !/draft|non_final/.test(code)) {
@@ -430,6 +647,31 @@ function checkRecallProjection(vec, scenarioId, push) {
   }
 }
 
+// Run the full per-vector check battery and return the accumulated failures. Shared
+// by the main validator and the `--self-check` negative-mutation harness so both
+// exercise byte-identical enforcement.
+function collectVectorFailures(vec, scenarioId) {
+  const failures = [];
+  const push = (m) => failures.push(m);
+
+  if (vec.scenario_id !== scenarioId) push(`scenario_id must be "${scenarioId}" (got ${JSON.stringify(vec.scenario_id)})`);
+
+  checkMetadata(vec, push);
+  checkUnresolvedMarkers(vec, push);
+  checkStorageAuthConsent(vec, push);
+  checkRequestVector(vec, push);
+  checkPublicResponse(vec, scenarioId, push);
+  checkNoLeakAssertions(vec, push);
+  checkRecallProjection(vec, scenarioId, push);
+
+  for (const f of noLeakFailures(publicSurface(vec))) push(f);
+  for (const f of syntheticIdFailures(vec)) push(f);
+  for (const f of replayTokenFailures(vec)) push(f);
+  for (const f of retiredReceiptKeyFailures(vec)) push(f);
+
+  return failures;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -445,8 +687,6 @@ function validate() {
   const extras = onDisk.filter((f) => !allowed.has(f));
 
   for (const [scenarioId, filename] of Object.entries(REQUIRED)) {
-    const failures = [];
-    const push = (m) => failures.push(m);
     const path = join(VECTORS_DIR, filename);
 
     if (!existsSync(path)) {
@@ -462,20 +702,7 @@ function validate() {
       continue;
     }
 
-    if (vec.scenario_id !== scenarioId) push(`scenario_id must be "${scenarioId}" (got ${JSON.stringify(vec.scenario_id)})`);
-
-    checkMetadata(vec, push);
-    checkUnresolvedMarkers(vec, push);
-    checkStorageAuthConsent(vec, push);
-    checkRequestVector(vec, push);
-    checkPublicResponse(vec, push);
-    checkNoLeakAssertions(vec, push);
-    checkRecallProjection(vec, scenarioId, push);
-
-    for (const f of noLeakFailures(publicSurface(vec))) push(f);
-    for (const f of syntheticIdFailures(vec)) push(f);
-
-    results.push({ scenarioId, filename, failures });
+    results.push({ scenarioId, filename, failures: collectVectorFailures(vec, scenarioId) });
   }
 
   return { results, extras };
@@ -528,5 +755,126 @@ function report({ results, extras }) {
   return ok;
 }
 
-const ok = report(validate());
+// ---------------------------------------------------------------------------
+// Negative-mutation self-check (`--self-check`)
+// ---------------------------------------------------------------------------
+//
+// Proves the validator FAILS CLOSED on the specific leak/omission shapes the Phase
+// 33Z hardening pass targets. Each case loads a known-good vector, applies one
+// mutation, runs the SAME `collectVectorFailures` battery the live validator uses,
+// and asserts a matching failure is raised. Node built-ins only; mutates no file on
+// disk (the on-disk vectors are read once and deep-cloned per case via JSON round-
+// trip). A case that does NOT fail closed is itself a self-check failure.
+
+function loadGoodVector(scenarioId) {
+  return JSON.parse(readFileSync(join(VECTORS_DIR, REQUIRED[scenarioId]), 'utf8'));
+}
+
+function deepClone(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
+const SELF_CHECK_CASES = [
+  {
+    name: 'nested public_receipt_ref_policy inside expected_public_response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.receipt_block_draft = {
+        public_receipt_ref_policy: 'public_safe_receipt_reference_draft',
+      };
+    },
+    expectSubstring: 'retired receipt key "public_receipt_ref_policy"',
+  },
+  {
+    name: 'omitted safe_reason_code in a null-code scenario (must be literal null)',
+    scenarioId: 'candidate_pending_not_recallable',
+    mutate: (v) => {
+      delete v.expected_public_response.safe_reason_code;
+    },
+    expectSubstring: 'safe_reason_code must be exactly null and present',
+  },
+  {
+    name: 'transition_receipt in expected_public_response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.transition_receipt = 'leaked_private_receipt_draft';
+    },
+    expectSubstring: '"transition_receipt" present on public surface',
+  },
+  {
+    name: 'audit_event_class in expected_public_response',
+    scenarioId: 'reject_candidate_no_assertion',
+    mutate: (v) => {
+      v.expected_public_response.audit_event_class = 'transition_denied_draft';
+    },
+    expectSubstring: '"audit_event_class" present on public surface',
+  },
+  {
+    name: 'private receipt_ref in expected_public_response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.receipt_ref = 'private_receipt_ref_draft';
+    },
+    expectSubstring: '"receipt_ref" present on public surface',
+  },
+];
+
+function selfCheck() {
+  const lines = [];
+  lines.push('Phase 33Z — route-contract test-vector validator NEGATIVE self-check');
+  lines.push('============================================================================');
+  lines.push('Each case mutates a known-good vector and asserts the validator fails closed.');
+  lines.push('');
+
+  let passed = 0;
+  let failed = 0;
+
+  for (const c of SELF_CHECK_CASES) {
+    // Baseline: the unmutated vector must validate clean, so any failure is the
+    // mutation's doing and not a pre-existing problem.
+    const baseline = collectVectorFailures(loadGoodVector(c.scenarioId), c.scenarioId);
+    if (baseline.length !== 0) {
+      failed++;
+      lines.push(`FAIL  ${c.name}`);
+      lines.push(`        - baseline vector "${c.scenarioId}" unexpectedly has ${baseline.length} failure(s) before mutation:`);
+      for (const f of baseline) lines.push(`            · ${f}`);
+      continue;
+    }
+
+    const mutated = deepClone(loadGoodVector(c.scenarioId));
+    c.mutate(mutated);
+    const failures = collectVectorFailures(mutated, c.scenarioId);
+    const matched = failures.filter((f) => f.includes(c.expectSubstring));
+
+    if (matched.length > 0) {
+      passed++;
+      lines.push(`PASS  ${c.name}`);
+      lines.push(`        fails closed → ${matched[0]}`);
+    } else {
+      failed++;
+      lines.push(`FAIL  ${c.name}`);
+      lines.push(`        - expected a failure containing: ${JSON.stringify(c.expectSubstring)}`);
+      lines.push(`        - actual failures (${failures.length}): ${failures.length ? '' : '(none — validator did NOT fail closed)'}`);
+      for (const f of failures) lines.push(`            · ${f}`);
+    }
+  }
+
+  lines.push('');
+  lines.push('----------------------------------------------------------------------------');
+  const ok = failed === 0;
+  if (ok) {
+    lines.push(`RESULT: PASS — ${passed}/${SELF_CHECK_CASES.length} negative mutations fail closed as required.`);
+  } else {
+    lines.push(`RESULT: FAIL — ${failed}/${SELF_CHECK_CASES.length} negative mutation(s) did NOT fail closed.`);
+  }
+
+  process.stdout.write(lines.join('\n') + '\n');
+  return ok;
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch
+// ---------------------------------------------------------------------------
+
+const ok = process.argv.includes('--self-check') ? selfCheck() : report(validate());
 process.exit(ok ? 0 : 1);
