@@ -342,21 +342,30 @@ made. Fixture spelling-debt reconciliation is left as **later, separately-gated*
 
 ## 9. Next lane selection
 
-> **Selected: Phase 34A — Admission Wedge route-vector alignment acceptance /
+> **Selected: Phase 46A — Admission Wedge route-vector alignment acceptance /
 > implementation-readiness decomposition gate (docs/decision-only; not runtime).**
 
-**Phase-numbering rationale.** The Admission Wedge arc has used a single-letter suffix
-on `33` (`33A` … `33Z`); that single-letter space is now **exhausted at `33Z`**. The
-safest sequential continuation that stays unambiguous and keeps a clean two-character
-label is to **roll the tens and start the next suffix block at `34A`** (rather than a
-double-letter `33AA`, which is easy to mis-sort and mis-type). `34A` does **not** signal
-a new product epoch or any scope expansion — it is the **same Admission Wedge arc, still
-docs/decision-only**, continuing past the exhausted `33` suffix space. The label is for
-ordering only.
+> **Next-lane label correction (added later — label/provenance only).** Phase 33Z
+> originally named **Phase 34A** as the next lane, but that label collides with the
+> already-completed stack-wide **Freeside Characters Phase 34A / PR #100**. The corrected
+> next lane is **Phase 46A — Admission Wedge route-vector alignment acceptance /
+> implementation-readiness decomposition gate**. This is a **label/provenance correction
+> only**: it does **not** change the 33Z vector/validator alignment, does **not** authorize
+> runtime implementation, does **not** reopen Phase 33Z's accepted technical scope, and
+> Phase 46A remains **docs/decision-only**.
 
-**What Phase 34A should be (recommended posture — docs/decision-only):**
+**Phase-numbering rationale (corrected).** The Admission Wedge arc has used a single-letter
+suffix on `33` (`33A` … `33Z`); that single-letter space is now **exhausted at `33Z`**.
+Phase 33Z originally rolled the tens to `34A`, but `34A` is **not free stack-wide** — it
+collides with the already-completed **Freeside Characters Phase 34A / PR #100**. The
+corrected continuation that stays unambiguous and does **not** reuse a completed stack-wide
+label is **`46A`**. `46A` does **not** signal a new product epoch or any scope expansion —
+it is the **same Admission Wedge arc, still docs/decision-only**, continuing past the
+exhausted `33` suffix space. The label is for ordering only.
 
-Phase 34A should **accept or patch** the Phase 33Z vector/validator alignment and decide
+**What Phase 46A should be (recommended posture — docs/decision-only):**
+
+Phase 46A should **accept or patch** the Phase 33Z vector/validator alignment and decide
 which readiness decomposition comes next. It should **not** jump to runtime
 implementation. It should explicitly decide among:
 
@@ -511,8 +520,10 @@ Phase 33Z succeeds if and only if:
    off the public response.
 7. **Both validators green** — the Phase 33E fixture validator and the Phase 33L
    route-contract test-vector validator both pass.
-8. **Next lane selected** — Phase 34A (docs/decision-only acceptance /
+8. **Next lane selected** — Phase 46A (docs/decision-only acceptance /
    implementation-readiness decomposition), with implementation explicitly not selected.
+   *(Originally named Phase 34A; corrected to 46A — 34A collides with the completed
+   stack-wide Freeside Characters Phase 34A / PR #100. Label/provenance correction only.)*
 9. **Blocked lanes preserved** — no production / durable / public / Freeside / package /
    schema-freeze / auth / consent / route-contract-freeze / runtime lane is authorized.
 10. **No production-readiness claim** — Phase 33Z aligns test artifacts to a **draft**
