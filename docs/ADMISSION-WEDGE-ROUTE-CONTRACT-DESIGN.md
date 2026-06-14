@@ -12,6 +12,21 @@
 > primitive review is complete. It does not finalize vocabulary, idempotency
 > semantics, signer/authority semantics, or identity binding.**
 
+> **Phase 33X revision note (added later).** This 33G draft's route purpose/non-goals,
+> request envelope, idempotency, response envelope, refusal taxonomy, recall
+> projection, and supersession refs have since been **revised on paper** by the
+> docs-only Phase 33X route-contract revision draft
+> ([`ADMISSION-WEDGE-ROUTE-CONTRACT-REVISION-DRAFT.md`](ADMISSION-WEDGE-ROUTE-CONTRACT-REVISION-DRAFT.md)),
+> against the confirmed Straylight vocabulary (loa-straylight PR #65), the Phase 33U
+> intake, the Phase 33V storage/auth/consent finalization, and the Phase 33W
+> readiness-update checklist (its §6). Phase 33X **did not rewrite the original
+> substantive 33G sections** — the revised positions live in the 33X doc, and the only
+> Phase 33X change to this file is this minimal status / forward-pointer note — and it
+> **froze nothing** (`route_contract_final: false`). The revised draft is **not**
+> accepted/final; its
+> acceptance and any vector/validator alignment are deferred to the separately-gated
+> Phase 33Y route-contract revision-acceptance / vector-readiness decision gate.
+
 This document is a **draft route-contract design** for a future Admission Wedge
 intake route. It proposes — on paper only — a route identity, a request
 envelope, a response envelope with a public/private split, an idempotency
