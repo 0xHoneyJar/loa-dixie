@@ -127,12 +127,15 @@ validator enforces this).
   via `maps_to_route_contract_design_vector` and
   `source_route_contract_phase: 33G`.
 - Each vector includes: a **request condition** (`request_vector`), an **expected
-  public response class** (`expected_public_response.outcome_class`), an
-  **expected private/audit effect** (`expected_private_or_audit_effect`), a
-  **recall eligibility result** (`expected_recall_projection`), an **idempotency
-  expectation** (`idempotency_expectation`), **no-leak assertions**
-  (`no_leak_assertions` + `expected_public_response.must_not_include`), and
-  **unresolved dependency markers** (`unresolved_review_markers`).
+  public response class** (`expected_public_response.outcome_class`), a
+  **public receipt reference** (`expected_public_response.public_receipt_ref` — a
+  public-safe draft string where a receipt is minted, `null` where none is; see the
+  Phase 33Z status note in §11), an **expected private/audit effect**
+  (`expected_private_or_audit_effect`), a **recall eligibility result**
+  (`expected_recall_projection`), an **idempotency expectation**
+  (`idempotency_expectation`), **no-leak assertions** (`no_leak_assertions` +
+  `expected_public_response.must_not_include`), and **unresolved dependency markers**
+  (`unresolved_review_markers`).
 - The Phase 33G design is a **draft design, not final** (33H accepted it as a
   bounded docs-only draft and rendered it not implementation-ready). These
   vectors do **not** make it final.
@@ -141,10 +144,32 @@ validator enforces this).
 
 ## 7. Relationship to Phase 33J primitive review
 
-- The **Straylight primitive review is not complete.** No completed Straylight
-  Admission-Wedge primitive-review artifact exists (Phase 33J §4). Every Phase
-  33E probe still carries `straylight_primitive_review_complete: false`, and
-  every Phase 33L vector mirrors that with the same flag set to `false`.
+> **Phase 33Z current-state correction (added later).** The bullets in this section
+> describe the **Phase 33L-time / Phase 33J-time** world and are preserved as accurate
+> *that-time* history. They are **no longer literally current**: the Straylight
+> primitive-review request (A–O) was **answered** by **`loa-straylight` PR #65
+> (merged)** and **reconciled** by **Dixie Phase 33U** (PR #139,
+> [`../../ADMISSION-WEDGE-STRAYLIGHT-RESPONSE-INTAKE-GATE.md`](../../ADMISSION-WEDGE-STRAYLIGHT-RESPONSE-INTAKE-GATE.md)
+> §4), each row dispositioned accepted / rejected / delegated. The rows
+> `E, G, H, K, N, O` and `J` below are therefore **preserved legacy vector/runtime
+> markers** (carried from `app/src/services/admission-wedge-spike/classifier.ts:73-74`),
+> **not** the current primitive-review resolution summary, and **not** evidence that the
+> review response is still outstanding. PR #65 clarified the *vocabulary/design* only;
+> the **independent production gates** it does **not** clear remain held — durable
+> storage / ADR-022E gate #8, production auth/consent, final idempotency, production
+> signer/authority, production tenant/estate/actor identity binding, the final route
+> contract, production deployment/readiness, and the final schema freeze. For that
+> reason `straylight_primitive_review_complete` stays `false` (the held production
+> gates), **not** because the review answer is missing. PR #65 authorized **no** Dixie
+> runtime implementation, production storage/auth/consent, or Freeside integration.
+
+- The **Straylight primitive review request was not yet answered at Phase 33L time.**
+  No completed Straylight Admission-Wedge primitive-review artifact existed when this
+  Phase 33L README was written (Phase 33J §4) — that changed later with PR #65 / Phase
+  33U (see the Phase 33Z current-state correction above). Every Phase 33E probe carries
+  `straylight_primitive_review_complete: false`, and every Phase 33L vector mirrors that
+  with the same flag set to `false` — and that flag **stays** `false` because the
+  independent production gates remain held, not because the review is unanswered.
 - **Genuinely unresolved matrix rows: E, G, H, K, N, O.** (Recall-eligibility
   representation; tenant/estate/actor binding; receipt/audit relationship;
   public/private projection boundary; corrected-active status-vs-relation;
@@ -232,6 +257,34 @@ It validates that:
   `review_dependent_non_final_rows == [J]`);
 - the **public-response no-leak denylist** is present and non-empty, and
   `rendered_candidate_payload` is false;
+- *(Phase 33Z)* the **public receipt reference** is present as
+  `expected_public_response.public_receipt_ref` — a public-safe **draft** string for
+  the receipt-minting scenarios (accept / reject / supersede) and `null` for the
+  no-receipt scenarios (pending / malformed) — and the **retired**
+  `public_receipt_ref_policy` and `receipt_public_ref` tokens are **absent** from the
+  vector. The retired-token check is **recursive**: both tokens are rejected as object
+  **keys at any depth** of a vector (not just as direct properties), so a **nested**
+  reintroduction on the public surface also fails;
+- *(Phase 33Z)* the **per-scenario public refusal taxonomy** is **required and exact** —
+  `safe_reason_code` must **exist** on every vector's public response (a missing
+  property is **not** treated as equivalent to `null`) and must match the source-real
+  code exactly: `ingress.invalid_request` for the malformed/class-validation refusal,
+  `admission_transition_denied_draft_non_final` (underscored) for the policy denial
+  (reject), and the literal `null` (present, not omitted) for pending / accept /
+  supersede — and the draft-only, source-absent dotted `admission.transition_denied`,
+  `admission.unsupported_transition`, and `admission.duplicate_replay` codes never
+  appear on the public surface;
+- *(Phase 33Z)* **no `duplicate_replay` token appears anywhere** in any vector
+  (identical replay returns the prior public envelope; private telemetry only);
+- *(Phase 33Z)* **private `TransitionReceipt` / `AuditEvent` / private-receipt shapes
+  never appear on the public surface** — only the public-safe `public_receipt_ref` (or
+  its `null`) may cross. The forbidden-public-key set rejects (snake_case **and**
+  camelCase) `transition_receipt(_ref)` / `transition_id`, `audit_event(_class)` /
+  `audit_ref` / `audit_id`, the private `receipt_ref` / `private_receipt_ref` /
+  `receipt_id`, and `signer` / `signature` / `policy_details` / `metadata`. The private
+  `expected_private_or_audit_effect` block (which legitimately carries e.g.
+  `audit_event_class`) is **excluded** from the public-surface walk, so those keys are
+  forbidden **only** on the caller-observable surface;
 - **route implementation is false** (`route_implemented`,
   `request_vector.route_exists`, `request_vector.route_authorized`);
 - **storage writes are expected effects only, not performed**
@@ -246,6 +299,18 @@ It validates that:
   runs anywhere in the document).
 
 It prints a deterministic PASS/FAIL summary and exits non-zero on any failure.
+
+*(Phase 33Z)* The validator also accepts a **`--self-check`** flag — a dependency-free
+negative-mutation harness that loads each known-good vector, applies one targeted
+mutation, runs the **same** check battery, and asserts the validator **fails closed**.
+It covers a nested `public_receipt_ref_policy`, an omitted `safe_reason_code` on a
+null-code scenario, and a `transition_receipt` / `audit_event_class` / private
+`receipt_ref` on the public response:
+
+```bash
+node docs/admission-wedge/route-contract-test-vectors/validate-route-contract-test-vectors.mjs --self-check
+```
+
 The Phase 33E probe validator
 ([`../fixtures/validate-fixtures.mjs`](../fixtures/validate-fixtures.mjs)) is a
 **separate** validator and is not modified or imported by this one.
@@ -376,6 +441,52 @@ Phase 33K did **not** implement storage/auth/consent.
 > lane. These route-contract vectors remain **non-final / draft evidence**;
 > Phases 33Q and 33R freeze no schema and mutate nothing here.
 
+> **Phase 33Z status note (added later — this is the vector-mutation lane).** Phase
+> 33Z
+> ([`../../ADMISSION-WEDGE-ROUTE-VECTOR-ALIGNMENT-GATE.md`](../../ADMISSION-WEDGE-ROUTE-VECTOR-ALIGNMENT-GATE.md))
+> is the bounded, **non-runtime** docs + route-contract test-vector / validator
+> alignment lane that Phase 33Y (PR #143,
+> [`../../ADMISSION-WEDGE-ROUTE-CONTRACT-REVISION-ACCEPTANCE-GATE.md`](../../ADMISSION-WEDGE-ROUTE-CONTRACT-REVISION-ACCEPTANCE-GATE.md)
+> §10) selected and authorized. **Unlike the earlier read-only status notes, Phase
+> 33Z does mutate these five vector JSONs and this validator** — but only to align the
+> *test surface* to the accepted Phase 33X / 33Y **draft** route-contract baseline (and
+> the source-real Phase 33N spike shape). It changes the following, and nothing else:
+>
+> - **Public receipt representation.** Phase 33Z **replaces** the prior vector-level
+>   `public_receipt_ref_policy` abstraction with the accepted draft public envelope
+>   field **`public_receipt_ref`** — a public-safe **draft** reference string for the
+>   receipt-minting scenarios (accept / reject / supersede) and **`null`** for the
+>   no-receipt scenarios (pending / malformed). This standardizes the represented
+>   public receipt on `public_receipt_ref` per Phase 33X §7.1 / Phase 33Y §5 & §9, and
+>   matches the existing Phase 33N public-response shape (`public_receipt_ref: string |
+>   null`, `public-response.ts:44,:104`). The retired `public_receipt_ref_policy` and
+>   `receipt_public_ref` tokens are now rejected on the public surface by the validator.
+> - **Refusal taxonomy (unchanged values, now strictly enforced).** Class-validation /
+>   malformed rejection keeps the **source-real** stable Dixie code
+>   **`ingress.invalid_request`**; policy denial (reject) keeps the **source-real**
+>   underscored draft marker **`admission_transition_denied_draft_non_final`**. The
+>   draft-only, source-absent dotted `admission.transition_denied`,
+>   `admission.unsupported_transition`, and `admission.duplicate_replay` codes are
+>   **not** introduced and are rejected on the public surface — Phase 33Z performs **no
+>   blind dotted-code rename**.
+> - **Duplicate replay.** There remains **no public `admission.duplicate_replay`
+>   code**, and the validator now asserts the `duplicate_replay` token appears nowhere:
+>   identical replay returns the **prior public envelope** unchanged (no new public
+>   code); any duplicate-replay classification is **private telemetry only**.
+>
+> Phase 33Z **preserves the five scenarios** (no sixth — the no-sixth-vector check
+> stands), keeps the **unresolved-review markers** (`E,G,H,K,N,O` / `J`) and all
+> **draft/non-final flags** unchanged, and keeps **private `TransitionReceipt` /
+> `AuditEvent` data off the public response** (the no-leak denylist, `no_leak_assertions`,
+> and `expected_private_or_audit_effect` boundary are unchanged). It is **non-runtime**:
+> it mutates **no** runtime source, route handler, storage, auth, consent, migration,
+> config, env, package, lockfile, CI, or generated file; it touches **no** Phase 33E
+> fixture JSON (the fixture two-spelling debt stays documented and **separately gated**);
+> and it keeps the validator **Node-built-ins-only**. **`public_receipt_ref` is a draft,
+> non-final field — Phase 33Z freezes no final route schema, does not finalize the route
+> contract, and authorizes no runtime/route/storage/auth/consent implementation.** These
+> route-contract vectors remain **non-final / draft evidence**.
+
 ---
 
 ## 12. Provenance / cross-references
@@ -394,6 +505,20 @@ Phase 33K did **not** implement storage/auth/consent.
   — Phase 33H acceptance gate (not implementation-ready verdict).
 - [`../../ADMISSION-WEDGE-IMPLEMENTATION-READINESS-DECOMPOSITION-GATE.md`](../../ADMISSION-WEDGE-IMPLEMENTATION-READINESS-DECOMPOSITION-GATE.md)
   — Phase 33I lane decomposition (33J → 33K → 33L → 33M → 33N).
+- [`../../ADMISSION-WEDGE-ROUTE-CONTRACT-REVISION-DRAFT.md`](../../ADMISSION-WEDGE-ROUTE-CONTRACT-REVISION-DRAFT.md)
+  — Phase 33X route-contract revision draft (PR #142); its §7.1 standardizes the
+  public envelope on `public_receipt_ref`, §8 retires the public
+  `admission.duplicate_replay` code and pins the refusal taxonomy, and §12 defers
+  the vector/validator alignment to this separate lane (Phase 33Z).
+- [`../../ADMISSION-WEDGE-ROUTE-CONTRACT-REVISION-ACCEPTANCE-GATE.md`](../../ADMISSION-WEDGE-ROUTE-CONTRACT-REVISION-ACCEPTANCE-GATE.md)
+  — Phase 33Y route-contract revision-acceptance / vector-readiness gate (PR #143);
+  accepts the 33X revision as a **draft baseline**, decides vector-readiness =
+  ready, and selects this Phase 33Z lane (its §8/§9 checklist and §10 selection are
+  the contract this alignment satisfies).
+- [`../../ADMISSION-WEDGE-ROUTE-VECTOR-ALIGNMENT-GATE.md`](../../ADMISSION-WEDGE-ROUTE-VECTOR-ALIGNMENT-GATE.md)
+  — Phase 33Z route-vector alignment gate decision/status doc (this lane); records
+  the grounded facts, the per-vector alignment decisions, and the next-lane
+  selection. See the §11 Phase 33Z status note above.
 - [`../fixtures/README.md`](../fixtures/README.md) /
   [`../fixtures/validate-fixtures.mjs`](../fixtures/validate-fixtures.mjs)
   — the Phase 33E draft v1 probes and their validator (read-only here; not
@@ -415,8 +540,19 @@ Phase 33K did **not** implement storage/auth/consent.
   33N status note below; the recall-intake and refusal-mapping files remain
   unmodified.)
 - `@loa/straylight` — canonical primitive/substrate owner of the assertion
-  lifecycle. **No completed Straylight Admission-Wedge primitive review exists**
-  (Phase 33J §4). Not edited.
+  lifecycle. At **Phase 33L time**, no completed Straylight Admission-Wedge
+  primitive-review artifact existed (Phase 33J §4). That has **since changed**: the
+  A–O primitive review was **answered** by **`loa-straylight` PR #65 (merged)** and
+  **reconciled** by **Dixie Phase 33U** (PR #139,
+  [`../../ADMISSION-WEDGE-STRAYLIGHT-RESPONSE-INTAKE-GATE.md`](../../ADMISSION-WEDGE-STRAYLIGHT-RESPONSE-INTAKE-GATE.md)
+  §4). The review answer clarified the *vocabulary/design* only and did **not** clear
+  the independent production gates (durable storage / ADR-022E gate #8, production
+  auth/consent, final idempotency, production signer/authority, production
+  tenant/estate/actor identity binding, final route contract, production
+  deployment/readiness, final schema freeze), so `straylight_primitive_review_complete`
+  stays `false` and the vectors' `E,G,H,K,N,O` / `J` arrays remain **preserved legacy
+  markers**. PR #65 authorized **no** Dixie runtime implementation, production
+  storage/auth/consent, or Freeside integration. Not edited.
 - freeside-characters Phase 45J / PR #177 (**verified merged on GitHub
   2026-06-06**) — the cross-repo acceptance; its mirror/adapter proof stays
   test-only, not exported, not runtime-wired. Not edited.
