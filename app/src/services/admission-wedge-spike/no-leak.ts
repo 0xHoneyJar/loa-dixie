@@ -10,6 +10,21 @@
 // dependency-free runtime module — the docs validator is NOT imported into
 // runtime (it stays Node-built-ins-only, docs-bound), per Phase 33M §10.
 //
+// Phase 46P — runtime forbidden-key parity restoration (authorized by Phase 46O
+// / PR #160). Phases 33Z and 46J hardened the docs validator's
+// FORBIDDEN_PUBLIC_KEYS to 114 keys, but the runtime mirror still carried only
+// the original 52, leaving a 62-key drift (25 Phase 33Z TransitionReceipt /
+// AuditEvent / signer / metadata key names + 37 Phase 46J canonical ref/hash /
+// consent / auth key names). That drift was latent debt, not a live leak — the
+// fixed public-response builder emits an 8-field allowlist containing none of
+// the missing keys — but the mirror is now brought back to exact parity so a
+// future durable-store serializer cannot surface a canonical ref/hash/consent
+// field under a short, safe-looking value that would slip the value-pattern
+// walls. The additions are EXACT-key only (Set.has) and snake_case + camelCase,
+// so legitimate request draft markers (`consent_assumption`, `auth_assumption`,
+// `consent_scope_assumption`, `consent_note_draft`, …) that merely share a
+// prefix are NOT over-matched. No substring/prefix matching is introduced.
+//
 // `findAdmissionPublicLeaks` deep-walks any public response object and returns
 // a list of human-readable leak findings (empty when clean). The route uses it
 // as a last-line assertion before serializing a public body; the tests use it
@@ -39,7 +54,42 @@ const FORBIDDEN_PUBLIC_KEYS = new Set<string>([
   'policy_reason',
   'private_reason_family',
   'receipt_id',
+  'receiptId',
   'audit_receipt_ref',
+  // Phase 33Z private `TransitionReceipt` / `AuditEvent` / private-receipt shapes
+  // (mirrors the Phase 33L validator). Only the public-safe `public_receipt_ref`
+  // (and its `null`) may cross to the public surface; the private TransitionReceipt,
+  // the AuditEvent (incl. its class), the private/internal receipt reference, the
+  // transition id, signer/signature material, opaque policy detail, and a raw
+  // `metadata` bag must NEVER appear publicly. snake_case + camelCase both forbidden
+  // so a serializer rename cannot leak.
+  'transition_receipt',
+  'transitionReceipt',
+  'transition_receipt_ref',
+  'transitionReceiptRef',
+  'transition_id',
+  'transitionId',
+  'audit_event',
+  'auditEvent',
+  'audit_event_class',
+  'auditEventClass',
+  'audit_ref',
+  'auditRef',
+  'audit_id',
+  'auditId',
+  'receipt_ref',
+  'receiptRef',
+  'private_receipt_ref',
+  'privateReceiptRef',
+  'signer',
+  'signature',
+  'policy_details',
+  'policyDetails',
+  'metadata',
+  // `receipt_public_ref` is retired from the public envelope by Phase 33V/33X/33Y
+  // (the public field is now `public_receipt_ref`); it must never appear on a
+  // route public surface.
+  'receipt_public_ref',
   'idempotency_key',
   'idempotency_key_draft',
   'authority_signer_type_draft',
@@ -73,6 +123,55 @@ const FORBIDDEN_PUBLIC_KEYS = new Set<string>([
   'stack_traces_debug_internals',
   'storage_internals',
   'storage_internal',
+  // Phase 46J consent/storage canonical key-name hardening (mirrors the Phase 33L
+  // validator). The exact canonical key names a future durable-store serializer must
+  // never surface publicly, in snake_case AND camelCase. EXACT-key match only — the
+  // legitimate request draft markers `consent_assumption` / `auth_assumption` (and
+  // siblings like `consent_scope_assumption` / `consent_note_draft`) are NOT exact
+  // matches for the bare `consent` / `auth_decision` keys and stay allowed.
+  //   (a) canonical Straylight Assertion ref arrays.
+  'supersedes_refs',
+  'supersedesRefs',
+  'linked_assertion_refs',
+  'linkedAssertionRefs',
+  //   (b) canonical TransitionReceipt / AuditEvent private refs + hash-chain links.
+  'signer_refs',
+  'signerRefs',
+  'audit_event_ref',
+  'auditEventRef',
+  'receipt_hash',
+  'receiptHash',
+  'audit_hash',
+  'auditHash',
+  'previous_audit_hash',
+  'previousAuditHash',
+  'policy_decision_ref',
+  'policyDecisionRef',
+  'assertion_refs',
+  'assertionRefs',
+  'target_refs',
+  'targetRefs',
+  //   (c) canonical candidate-subject mapping (subject maps to canonical subject_refs,
+  //       never a coined subject_actor_id).
+  'subject_refs',
+  'subjectRefs',
+  //   (d) consent / auth-decision key-name family. Bare `consent` / `auth_decision`
+  //       are forbidden by EXACT match only.
+  'consent',
+  'consent_ref',
+  'consentRef',
+  'consent_proof',
+  'consentProof',
+  'consent_receipt',
+  'consentReceipt',
+  'consent_subject',
+  'consentSubject',
+  'consent_grantor',
+  'consentGrantor',
+  'consent_scope',
+  'consentScope',
+  'auth_decision',
+  'authDecision',
 ]);
 
 /** Negative-assertion keys: legitimate ONLY as the boolean literal `false`. */
