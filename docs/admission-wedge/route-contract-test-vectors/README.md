@@ -300,12 +300,41 @@ It validates that:
 
 It prints a deterministic PASS/FAIL summary and exits non-zero on any failure.
 
-*(Phase 33Z)* The validator also accepts a **`--self-check`** flag — a dependency-free
+*(Phase 46J)* the **canonical consent/storage key-name forbidden-key hardening** is now
+enforced on the public surface. `FORBIDDEN_PUBLIC_KEYS` additionally rejects — as object
+keys at any depth of the public surface, in snake_case **and** camelCase — the canonical
+Straylight ref-array / signer / receipt / audit key names and the consent/auth key-name
+family that Phases 46F/46G/46H/46I each recorded as a documented (latent) hardening gap:
+the Assertion ref arrays `supersedes_refs` / `linked_assertion_refs`; the
+TransitionReceipt / AuditEvent refs and hash-chain links `signer_refs` / `audit_event_ref`
+/ `receipt_hash` / `audit_hash` / `previous_audit_hash` / `policy_decision_ref` /
+`assertion_refs` / `target_refs`; the canonical candidate-subject mapping `subject_refs`;
+and the consent/auth family `consent` / `consent_ref` / `consent_proof` / `consent_receipt`
+/ `consent_subject` / `consent_grantor` / `consent_scope` / `auth_decision`. The addition is
+**purely additive** (none of these appears on the public surface of the five current
+vectors, so all five still validate clean) and uses **exact-key matching only** — the
+legitimate public draft markers `request_vector.auth_assumption` /
+`request_vector.consent_assumption` share a prefix but are **not** exact matches and stay
+allowed. This **strengthens** the no-leak boundary; it freezes no schema, finalizes no
+route contract, and clears no gate. The matching **runtime** `no-leak.ts` mirror hardening
+is **deferred** to a future runtime durable-store lane (Phase 46J is non-runtime).
+
+*(Phase 33Z / 46J)* The validator also accepts a **`--self-check`** flag — a dependency-free
 negative-mutation harness that loads each known-good vector, applies one targeted
 mutation, runs the **same** check battery, and asserts the validator **fails closed**.
 It covers a nested `public_receipt_ref_policy`, an omitted `safe_reason_code` on a
-null-code scenario, and a `transition_receipt` / `audit_event_class` / private
-`receipt_ref` on the public response:
+null-code scenario, a `transition_receipt` / `audit_event_class` / private
+`receipt_ref` on the public response, **and (Phase 46J) one negative-mutation case per added
+forbidden key — every one of the 37 added consent/storage key names, covering each added family's
+snake_case AND camelCase spelling exhaustively**: the canonical Assertion ref arrays
+(`supersedes_refs`, `linked_assertion_refs`); the TransitionReceipt / AuditEvent refs + hash-chain
+links (`signer_refs`, `audit_event_ref`, `receipt_hash`, `audit_hash`, `previous_audit_hash`,
+`policy_decision_ref`, `assertion_refs`, `target_refs`); the subject mapping (`subject_refs`); the
+consent/auth family (`consent`, `consent_ref`, `consent_proof`, `consent_receipt`,
+`consent_subject`, `consent_grantor`, `consent_scope`, `auth_decision`); plus the camelCase variant
+of every one of those keys (the serializer-rename guards). Two further Phase 46J cases use
+a `no-overmatch` mode to prove the new **exact-key** additions do **not** over-match a
+legitimate, prefix-sharing public draft marker (the mutated vector must still validate clean):
 
 ```bash
 node docs/admission-wedge/route-contract-test-vectors/validate-route-contract-test-vectors.mjs --self-check
@@ -486,6 +515,49 @@ Phase 33K did **not** implement storage/auth/consent.
 > non-final field — Phase 33Z freezes no final route schema, does not finalize the route
 > contract, and authorizes no runtime/route/storage/auth/consent implementation.** These
 > route-contract vectors remain **non-final / draft evidence**.
+
+> **Phase 46J status note (added later — this is the validator-hardening lane).** Phase 46J
+> ([`../../ADMISSION-WEDGE-CONSENT-STORAGE-VECTOR-ALIGNMENT-GATE.md`](../../ADMISSION-WEDGE-CONSENT-STORAGE-VECTOR-ALIGNMENT-GATE.md))
+> is the bounded, **non-runtime** consent/storage vector/validator alignment lane that Phase
+> 46I (PR #154,
+> [`../../ADMISSION-WEDGE-DURABLE-STORE-ADR-022E-GATE.md`](../../ADMISSION-WEDGE-DURABLE-STORE-ADR-022E-GATE.md)
+> §13 step 6 / §9) selected and authorized. Phase 46J **changes the validator (and this
+> README), but mutates no vector JSON**, to **discharge the documented no-leak hardening
+> debt** that Phases 46F (§8/§11), 46G (§8), 46H (§9), and 46I (§9) each *recorded but did
+> not close*: the **canonical** Straylight ref-array / signer / receipt / audit key names and
+> the **consent/auth** key-name family were **absent** from `FORBIDDEN_PUBLIC_KEYS`, so a
+> future durable-store serializer could have surfaced one of them on the public response
+> under a short, safe-looking value that the value-pattern walls (UUID / long-hex / opaque /
+> JWT / Bearer) would not catch. Phase 46J adds those **exact key names** to
+> `FORBIDDEN_PUBLIC_KEYS` (snake_case **and** camelCase) and extends the `--self-check`
+> harness to prove the new coverage **fails closed** — plus two `no-overmatch` cases proving
+> the additions do **not** over-match the legitimate `consent_assumption` / `auth_assumption`
+> public draft markers. The exact added families are:
+>
+> - **canonical Assertion ref arrays** — `supersedes_refs`, `linked_assertion_refs`;
+> - **canonical TransitionReceipt / AuditEvent refs + hash-chain links** — `signer_refs`,
+>   `audit_event_ref`, `receipt_hash`, `audit_hash`, `previous_audit_hash`,
+>   `policy_decision_ref`, `assertion_refs`, `target_refs`;
+> - **canonical candidate-subject mapping** — `subject_refs`;
+> - **consent / auth-decision family** — `consent`, `consent_ref`, `consent_proof`,
+>   `consent_receipt`, `consent_subject`, `consent_grantor`, `consent_scope`, `auth_decision`.
+>
+> The change is **purely additive and only strengthens** the no-leak boundary (46I §9:
+> "adding those keys strengthens, never weakens, the no-leak boundary"): every added key is
+> verified **absent** from the public surface of all five current vectors, which therefore
+> **still validate clean** (no vector JSON is touched). Phase 46J **preserves the five
+> scenarios** (no sixth — the no-sixth-vector check stands), keeps the **unresolved-review
+> markers** (`E,G,H,K,N,O` / `J`) and all **draft/non-final flags** unchanged, keeps the
+> `expected_private_or_audit_effect` block as **documentation evidence only** (still **not**
+> validated — Phase 46J adds no enforcement of its contents), and keeps `recall_eligible`
+> **derived / non-authoritative**. It is **non-runtime**: it touches **no** runtime source,
+> route handler, storage, auth, consent, migration, config, env, package, lockfile, CI, or
+> generated file; it touches **no** Phase 33E fixture JSON; and it keeps the validator
+> **Node-built-ins-only**. The matching **runtime** `no-leak.ts` mirror hardening is
+> **deferred** to a future runtime durable-store lane. **Phase 46J freezes no final route
+> schema, does not finalize the route contract, authorizes no runtime/route/storage/auth/
+> consent implementation, and does not clear Straylight-repo ADR-022E durable-store gate
+> #8.** These route-contract vectors remain **non-final / draft evidence**.
 
 ---
 

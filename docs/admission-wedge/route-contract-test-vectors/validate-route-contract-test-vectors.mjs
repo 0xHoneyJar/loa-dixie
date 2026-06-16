@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Phase 33L — Admission Wedge route-contract test-vector (draft v0) validator.
 // Phase 33Z route-vector alignment — see the §"Phase 33Z alignment" block below.
+// Phase 46J consent/storage key-name hardening — see the §"Phase 46J alignment" block below.
 //
 // DOCS-ONLY / NON-RUNTIME. This script is an isolated, dependency-free shape /
 // no-leak / non-final-marker validator over the JSON route-contract test-vector
@@ -31,6 +32,41 @@
 //   * the five scenarios are preserved (no sixth); the unresolved-review markers,
 //     draft-status flags, and the private TransitionReceipt / AuditEvent no-leak
 //     boundary are unchanged.
+//
+// Phase 46J alignment (non-runtime consent/storage vector/validator alignment lane,
+// authorized by Phase 46I §13 step 6 / §9). Phase 46J discharges the documented,
+// accumulated no-leak hardening DEBT that Phases 46F/46G/46H/46I each recorded but did
+// NOT close: the canonical Straylight ref-array / signer / receipt / audit key names and
+// the consent/auth key-name family were ABSENT from FORBIDDEN_PUBLIC_KEYS, so a future
+// serializer that began emitting them under a short, safe-looking value would have slipped
+// the public-surface key check (the value-pattern walls only catch UUID/long-hex/opaque/
+// JWT/Bearer-shaped values, not the key NAMES). Phase 46J adds those exact key names to
+// FORBIDDEN_PUBLIC_KEYS (and proves the new coverage fails closed via --self-check). This:
+//   * is PURELY ADDITIVE — every key added is verified absent from the public surface of
+//     all five current vectors, so all five still validate clean (no vector JSON changes);
+//   * only ever STRENGTHENS the no-leak boundary (46I §9: "adding those keys strengthens,
+//     never weakens, the no-leak boundary") — it forbids more on the public surface, never
+//     less, and never affects the private `expected_private_or_audit_effect` block (which
+//     publicSurface() excludes) where these refs legitimately live as draft intent;
+//   * uses EXACT key matching only (Set.has) — the legitimate public draft markers
+//     `auth_assumption` / `consent_assumption` on the request_vector are NOT exact matches
+//     for the added bare `consent` / `auth_decision` keys and are therefore unaffected;
+//   * adds NO sixth vector, freezes NO schema, finalizes NO route contract, and does NOT
+//     clear ADR-022E gate #8. The added keys are the canonical NAMES the future durable
+//     store/serializer must never emit publicly; the consent/storage runtime no-leak.ts
+//     mirror hardening is DEFERRED to the future runtime durable-store lane (this lane is
+//     non-runtime and touches no runtime source). recall_eligible stays derived /
+//     non-authoritative; expected_private_or_audit_effect stays documentation evidence
+//     (still NOT validated by this validator — Phase 46J makes no claim that it is).
+//   The exact added families (all previously absent — 46F §8/§11, 46G §8, 46H §9, 46I §9):
+//     - canonical Assertion ref arrays: supersedes_refs, linked_assertion_refs;
+//     - canonical TransitionReceipt/AuditEvent refs/hashes: signer_refs, audit_event_ref,
+//       receipt_hash, audit_hash, previous_audit_hash, policy_decision_ref, assertion_refs,
+//       target_refs;
+//     - canonical subject mapping: subject_refs;
+//     - consent/auth key-name family: consent, consent_ref, consent_proof, consent_receipt,
+//       consent_subject, consent_grantor, consent_scope, auth_decision;
+//     plus the camelCase spelling of each so a serializer rename cannot leak.
 //
 // These vectors are route-contract test-vector DRAFTS, not executable route
 // tests. They do not prove a route exists. This validator only checks that the
@@ -325,6 +361,62 @@ const FORBIDDEN_PUBLIC_KEYS = new Set([
   'stack_traces_debug_internals',
   'storage_internals',
   'storage_internal',
+  // Phase 46J consent/storage canonical key-name hardening. These are the exact CANONICAL
+  // key names that Phases 46F/46G/46H/46I each recorded as ABSENT from this denylist (a
+  // documented hardening gap, latent because the fixed public-response builder emits none
+  // of them). Phase 46J closes that gap: each is forbidden as a public-surface object key
+  // at any depth, in snake_case AND camelCase, so a future durable-store serializer cannot
+  // surface a canonical ref/hash/consent field under a short, safe-looking value that would
+  // otherwise slip the value-pattern walls. They remain legitimate ONLY in the private
+  // `expected_private_or_audit_effect` block, which publicSurface() excludes. None of these
+  // appears on the public surface of the five current vectors, so this is purely additive.
+  //   (a) canonical Straylight Assertion ref arrays (46F §8/§11 gap).
+  'supersedes_refs',
+  'supersedesRefs',
+  'linked_assertion_refs',
+  'linkedAssertionRefs',
+  //   (b) canonical TransitionReceipt / AuditEvent private refs + hash-chain links
+  //       (46G §8 gap). audit_event_ref / receipt_hash / audit_hash / previous_audit_hash /
+  //       policy_decision_ref / assertion_refs / target_refs / signer_refs.
+  'signer_refs',
+  'signerRefs',
+  'audit_event_ref',
+  'auditEventRef',
+  'receipt_hash',
+  'receiptHash',
+  'audit_hash',
+  'auditHash',
+  'previous_audit_hash',
+  'previousAuditHash',
+  'policy_decision_ref',
+  'policyDecisionRef',
+  'assertion_refs',
+  'assertionRefs',
+  'target_refs',
+  'targetRefs',
+  //   (c) canonical candidate-subject mapping (46G §5.1: subject maps to canonical
+  //       subject_refs, never a coined subject_actor_id).
+  'subject_refs',
+  'subjectRefs',
+  //   (d) consent / auth-decision key-name family (46H §9 / 46I §9 gap). The bare `consent`
+  //       and `auth_decision` keys are forbidden by EXACT match only — the legitimate public
+  //       draft markers `auth_assumption` / `consent_assumption` on the request_vector are
+  //       NOT exact matches and stay allowed.
+  'consent',
+  'consent_ref',
+  'consentRef',
+  'consent_proof',
+  'consentProof',
+  'consent_receipt',
+  'consentReceipt',
+  'consent_subject',
+  'consentSubject',
+  'consent_grantor',
+  'consentGrantor',
+  'consent_scope',
+  'consentScope',
+  'auth_decision',
+  'authDecision',
 ]);
 
 // Negative-assertion keys: their presence on the public surface is legitimate
@@ -760,11 +852,15 @@ function report({ results, extras }) {
 // ---------------------------------------------------------------------------
 //
 // Proves the validator FAILS CLOSED on the specific leak/omission shapes the Phase
-// 33Z hardening pass targets. Each case loads a known-good vector, applies one
-// mutation, runs the SAME `collectVectorFailures` battery the live validator uses,
-// and asserts a matching failure is raised. Node built-ins only; mutates no file on
-// disk (the on-disk vectors are read once and deep-cloned per case via JSON round-
-// trip). A case that does NOT fail closed is itself a self-check failure.
+// 33Z hardening pass targets, AND on the Phase 46J canonical consent/storage key-name
+// additions to FORBIDDEN_PUBLIC_KEYS. Each case loads a known-good vector, applies one
+// mutation, runs the SAME `collectVectorFailures` battery the live validator uses, and
+// asserts a matching failure is raised. The two Phase 46J `mode: 'no-overmatch'` cases
+// invert that assertion — they prove the new EXACT-key additions do NOT over-match a
+// legitimate, prefix-sharing public draft marker (e.g. `consent_assumption`), so the
+// mutated vector must still validate clean. Node built-ins only; mutates no file on disk
+// (the on-disk vectors are read once and deep-cloned per case via JSON round-trip). A case
+// that does NOT behave as its mode requires is itself a self-check failure.
 
 function loadGoodVector(scenarioId) {
   return JSON.parse(readFileSync(join(VECTORS_DIR, REQUIRED[scenarioId]), 'utf8'));
@@ -817,13 +913,354 @@ const SELF_CHECK_CASES = [
     },
     expectSubstring: '"receipt_ref" present on public surface',
   },
+  // ---- Phase 46J consent/storage key-name hardening (fail-closed coverage) ----
+  // Every newly added FORBIDDEN_PUBLIC_KEYS entry — each added family's snake_case AND camelCase
+  // spelling — gets its OWN negative mutation case proving it fails closed when a (hypothetical
+  // future) serializer surfaces that canonical ref/hash/consent field on the public response.
+  // The cases below cover a first batch; the "exhaustive per-key coverage" block further down
+  // covers the remaining snake_case keys and every camelCase variant, so the coverage is
+  // exhaustive over all 37 added keys (not merely representative). Each mutation uses a short,
+  // safe-LOOKING value so the failure is attributable to the KEY-NAME check, not the
+  // value-pattern walls.
+  {
+    name: '(46J) canonical supersedes_refs array on the public response',
+    scenarioId: 'supersede_with_corrected_assertion',
+    mutate: (v) => {
+      v.expected_public_response.supersedes_refs = ['ref_a_draft'];
+    },
+    expectSubstring: '"supersedes_refs" present on public surface',
+  },
+  {
+    name: '(46J) canonical linked_assertion_refs array on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.linked_assertion_refs = ['ref_b_draft'];
+    },
+    expectSubstring: '"linked_assertion_refs" present on public surface',
+  },
+  {
+    name: '(46J) canonical signer_refs on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.signer_refs = ['signer_a_draft'];
+    },
+    expectSubstring: '"signer_refs" present on public surface',
+  },
+  {
+    name: '(46J) canonical audit_event_ref on the public response',
+    scenarioId: 'reject_candidate_no_assertion',
+    mutate: (v) => {
+      v.expected_public_response.audit_event_ref = 'audit_ev_draft';
+    },
+    expectSubstring: '"audit_event_ref" present on public surface',
+  },
+  {
+    name: '(46J) canonical receipt_hash on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.receipt_hash = 'short_hash_draft';
+    },
+    expectSubstring: '"receipt_hash" present on public surface',
+  },
+  {
+    name: '(46J) canonical audit_hash chain link on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.audit_hash = 'short_hash_draft';
+    },
+    expectSubstring: '"audit_hash" present on public surface',
+  },
+  {
+    name: '(46J) canonical policy_decision_ref on the public response',
+    scenarioId: 'reject_candidate_no_assertion',
+    mutate: (v) => {
+      v.expected_public_response.policy_decision_ref = 'pol_dec_draft';
+    },
+    expectSubstring: '"policy_decision_ref" present on public surface',
+  },
+  {
+    name: '(46J) canonical subject_refs on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.subject_refs = ['subj_a_draft'];
+    },
+    expectSubstring: '"subject_refs" present on public surface',
+  },
+  {
+    name: '(46J) bare consent key on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consent = 'granted_draft';
+    },
+    expectSubstring: '"consent" present on public surface',
+  },
+  {
+    name: '(46J) consent_proof on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consent_proof = 'proof_draft';
+    },
+    expectSubstring: '"consent_proof" present on public surface',
+  },
+  {
+    name: '(46J) consent_receipt on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consent_receipt = 'creceipt_draft';
+    },
+    expectSubstring: '"consent_receipt" present on public surface',
+  },
+  {
+    name: '(46J) consent_ref on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consent_ref = 'cref_draft';
+    },
+    expectSubstring: '"consent_ref" present on public surface',
+  },
+  {
+    name: '(46J) consent_subject on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consent_subject = 'subj_draft';
+    },
+    expectSubstring: '"consent_subject" present on public surface',
+  },
+  {
+    name: '(46J) consent_grantor on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consent_grantor = 'grantor_draft';
+    },
+    expectSubstring: '"consent_grantor" present on public surface',
+  },
+  {
+    name: '(46J) consent_scope on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consent_scope = 'scope_draft';
+    },
+    expectSubstring: '"consent_scope" present on public surface',
+  },
+  {
+    name: '(46J) auth_decision on the public response',
+    scenarioId: 'reject_candidate_no_assertion',
+    mutate: (v) => {
+      v.expected_public_response.auth_decision = 'allow_draft';
+    },
+    expectSubstring: '"auth_decision" present on public surface',
+  },
+  {
+    name: '(46J) camelCase consentProof on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consentProof = 'proof_draft';
+    },
+    expectSubstring: '"consentProof" present on public surface',
+  },
+  {
+    name: '(46J) camelCase auditEventRef on the public response (serializer-rename guard)',
+    scenarioId: 'reject_candidate_no_assertion',
+    mutate: (v) => {
+      v.expected_public_response.auditEventRef = 'audit_ev_draft';
+    },
+    expectSubstring: '"auditEventRef" present on public surface',
+  },
+  // ---- Phase 46J exhaustive per-key coverage: remaining snake_case keys ----
+  // The three snake_case keys not covered by a representative case above each get their own
+  // fail-closed mutation, so EVERY newly added snake_case FORBIDDEN_PUBLIC_KEYS entry is tested.
+  {
+    name: '(46J) canonical previous_audit_hash chain link on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.previous_audit_hash = 'prev_hash_draft';
+    },
+    expectSubstring: '"previous_audit_hash" present on public surface',
+  },
+  {
+    name: '(46J) canonical assertion_refs on the public response',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.assertion_refs = ['assn_a_draft'];
+    },
+    expectSubstring: '"assertion_refs" present on public surface',
+  },
+  {
+    name: '(46J) canonical target_refs on the public response',
+    scenarioId: 'supersede_with_corrected_assertion',
+    mutate: (v) => {
+      v.expected_public_response.target_refs = ['target_a_draft'];
+    },
+    expectSubstring: '"target_refs" present on public surface',
+  },
+  // ---- Phase 46J exhaustive per-key coverage: every camelCase serializer-rename variant ----
+  // A serializer rename to camelCase must not leak any canonical/consent ref/hash. Every added
+  // camelCase key (other than the two already covered above — consentProof / auditEventRef) gets
+  // its own fail-closed mutation, so EVERY newly added camelCase FORBIDDEN_PUBLIC_KEYS entry is
+  // tested, not just consentProof / auditEventRef.
+  {
+    name: '(46J) camelCase supersedesRefs on the public response (serializer-rename guard)',
+    scenarioId: 'supersede_with_corrected_assertion',
+    mutate: (v) => {
+      v.expected_public_response.supersedesRefs = ['ref_a_draft'];
+    },
+    expectSubstring: '"supersedesRefs" present on public surface',
+  },
+  {
+    name: '(46J) camelCase linkedAssertionRefs on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.linkedAssertionRefs = ['ref_b_draft'];
+    },
+    expectSubstring: '"linkedAssertionRefs" present on public surface',
+  },
+  {
+    name: '(46J) camelCase signerRefs on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.signerRefs = ['signer_a_draft'];
+    },
+    expectSubstring: '"signerRefs" present on public surface',
+  },
+  {
+    name: '(46J) camelCase receiptHash on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.receiptHash = 'short_hash_draft';
+    },
+    expectSubstring: '"receiptHash" present on public surface',
+  },
+  {
+    name: '(46J) camelCase auditHash chain link on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.auditHash = 'short_hash_draft';
+    },
+    expectSubstring: '"auditHash" present on public surface',
+  },
+  {
+    name: '(46J) camelCase previousAuditHash chain link on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.previousAuditHash = 'prev_hash_draft';
+    },
+    expectSubstring: '"previousAuditHash" present on public surface',
+  },
+  {
+    name: '(46J) camelCase policyDecisionRef on the public response (serializer-rename guard)',
+    scenarioId: 'reject_candidate_no_assertion',
+    mutate: (v) => {
+      v.expected_public_response.policyDecisionRef = 'pol_dec_draft';
+    },
+    expectSubstring: '"policyDecisionRef" present on public surface',
+  },
+  {
+    name: '(46J) camelCase assertionRefs on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.assertionRefs = ['assn_a_draft'];
+    },
+    expectSubstring: '"assertionRefs" present on public surface',
+  },
+  {
+    name: '(46J) camelCase targetRefs on the public response (serializer-rename guard)',
+    scenarioId: 'supersede_with_corrected_assertion',
+    mutate: (v) => {
+      v.expected_public_response.targetRefs = ['target_a_draft'];
+    },
+    expectSubstring: '"targetRefs" present on public surface',
+  },
+  {
+    name: '(46J) camelCase subjectRefs on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.subjectRefs = ['subj_a_draft'];
+    },
+    expectSubstring: '"subjectRefs" present on public surface',
+  },
+  {
+    name: '(46J) camelCase consentRef on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consentRef = 'cref_draft';
+    },
+    expectSubstring: '"consentRef" present on public surface',
+  },
+  {
+    name: '(46J) camelCase consentReceipt on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consentReceipt = 'creceipt_draft';
+    },
+    expectSubstring: '"consentReceipt" present on public surface',
+  },
+  {
+    name: '(46J) camelCase consentSubject on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consentSubject = 'subj_draft';
+    },
+    expectSubstring: '"consentSubject" present on public surface',
+  },
+  {
+    name: '(46J) camelCase consentGrantor on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consentGrantor = 'grantor_draft';
+    },
+    expectSubstring: '"consentGrantor" present on public surface',
+  },
+  {
+    name: '(46J) camelCase consentScope on the public response (serializer-rename guard)',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mutate: (v) => {
+      v.expected_public_response.consentScope = 'scope_draft';
+    },
+    expectSubstring: '"consentScope" present on public surface',
+  },
+  {
+    name: '(46J) camelCase authDecision on the public response (serializer-rename guard)',
+    scenarioId: 'reject_candidate_no_assertion',
+    mutate: (v) => {
+      v.expected_public_response.authDecision = 'allow_draft';
+    },
+    expectSubstring: '"authDecision" present on public surface',
+  },
+  // ---- Phase 46J exact-key non-over-match guards (must NOT fail closed) ----
+  // Proves the new bare `consent` / `auth_decision` entries are EXACT-match only and do not
+  // over-match the legitimate public draft markers that share a prefix. The mutated vector
+  // must still validate fully clean. `mode: 'no-overmatch'` flips the assertion: the case
+  // PASSES iff collectVectorFailures returns ZERO failures after the mutation.
+  {
+    name: '(46J) consent-prefixed non-exact public draft marker is NOT over-matched',
+    scenarioId: 'accept_candidate_to_admitted_assertion',
+    mode: 'no-overmatch',
+    mutate: (v) => {
+      // A sibling draft marker that shares the `consent` / `consent_scope` prefix but is not
+      // an exact forbidden key, and a public-safe draft value. Must stay allowed.
+      v.request_vector.consent_scope_assumption = 'draft_non_implemented';
+      v.request_vector.consent_note_draft = 'dev_only_marker_draft';
+    },
+  },
+  {
+    name: '(46J) baseline auth_assumption / consent_assumption markers stay allowed',
+    scenarioId: 'candidate_pending_not_recallable',
+    mode: 'no-overmatch',
+    // No mutation: the unmutated vector already carries request_vector.auth_assumption and
+    // request_vector.consent_assumption on its public surface. This case asserts the Phase
+    // 46J additions did not turn those legitimate draft markers into leaks.
+    mutate: () => {},
+  },
 ];
 
 function selfCheck() {
   const lines = [];
-  lines.push('Phase 33Z — route-contract test-vector validator NEGATIVE self-check');
+  lines.push('Phase 33Z / 46J — route-contract test-vector validator NEGATIVE self-check');
   lines.push('============================================================================');
-  lines.push('Each case mutates a known-good vector and asserts the validator fails closed.');
+  lines.push('Most cases mutate a known-good vector and assert the validator fails closed.');
+  lines.push("Cases tagged mode:'no-overmatch' assert the opposite: a near-miss draft marker");
+  lines.push('that only SHARES a prefix with a forbidden key must still validate clean (the');
+  lines.push('Phase 46J exact-key additions must not over-match legitimate public markers).');
   lines.push('');
 
   let passed = 0;
@@ -844,6 +1281,23 @@ function selfCheck() {
     const mutated = deepClone(loadGoodVector(c.scenarioId));
     c.mutate(mutated);
     const failures = collectVectorFailures(mutated, c.scenarioId);
+
+    if (c.mode === 'no-overmatch') {
+      // Inverted assertion: the mutation must NOT introduce any failure (the validator must
+      // not over-match a legitimate, prefix-sharing public draft marker). Passes iff clean.
+      if (failures.length === 0) {
+        passed++;
+        lines.push(`PASS  ${c.name}`);
+        lines.push('        does not over-match → vector still validates clean');
+      } else {
+        failed++;
+        lines.push(`FAIL  ${c.name}`);
+        lines.push(`        - expected NO failure (exact-key match must not over-match), but got ${failures.length}:`);
+        for (const f of failures) lines.push(`            · ${f}`);
+      }
+      continue;
+    }
+
     const matched = failures.filter((f) => f.includes(c.expectSubstring));
 
     if (matched.length > 0) {
@@ -862,10 +1316,12 @@ function selfCheck() {
   lines.push('');
   lines.push('----------------------------------------------------------------------------');
   const ok = failed === 0;
+  const negCount = SELF_CHECK_CASES.filter((c) => c.mode !== 'no-overmatch').length;
+  const overmatchCount = SELF_CHECK_CASES.length - negCount;
   if (ok) {
-    lines.push(`RESULT: PASS — ${passed}/${SELF_CHECK_CASES.length} negative mutations fail closed as required.`);
+    lines.push(`RESULT: PASS — ${passed}/${SELF_CHECK_CASES.length} self-check cases behave as required (${negCount} negative mutations fail closed; ${overmatchCount} exact-key non-over-match guards stay clean).`);
   } else {
-    lines.push(`RESULT: FAIL — ${failed}/${SELF_CHECK_CASES.length} negative mutation(s) did NOT fail closed.`);
+    lines.push(`RESULT: FAIL — ${failed}/${SELF_CHECK_CASES.length} self-check case(s) did NOT behave as required.`);
   }
 
   process.stdout.write(lines.join('\n') + '\n');
