@@ -113,6 +113,21 @@ export interface DixieConfig {
   /** Dev/operator id allowlist (checked against the `x-admission-operator-id`
    *  header); [] when unset. An empty token AND empty allowlist rejects all. */
   admissionIntakeSpikeOperatorIds: string[];
+
+  // Phase 46V: dev/operator-only Admission Wedge ROUTE-STORAGE spike gate
+  // (DRAFT / non-final; default OFF; NON-PRODUCTION). Authorized narrowly by
+  // Phase 46U (docs/ADMISSION-WEDGE-ROUTE-STORAGE-SPIKE-AUTHORIZATION-GATE.md
+  // §3–§16). This is a SEPARATE gate from the base route gate: the route-storage
+  // spike does NOT activate merely because route intake is enabled — it engages
+  // ONLY when BOTH this flag AND admissionIntakeSpikeEnabled are exactly 'true'
+  // (the AND is applied at the server mount site). Storage Mode 1 only
+  // (no-migration, bounded-synthetic, in-process): NO durable write, NO DB, NO
+  // migration. The env name DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED is a
+  // DRAFT / non-final proposal (Phase 46U §5). This does NOT authorize production
+  // storage/admission/auth/consent, a final schema, or a route-contract freeze.
+  /** Phase 46V draft route-storage-spike gate (`=== 'true'`); default false.
+   *  Inert unless admissionIntakeSpikeEnabled is also true (ANDed at mount). */
+  admissionIntakeStorageSpikeEnabled: boolean;
 }
 
 /**
@@ -195,6 +210,20 @@ const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
  *                                          Empty when unset. With BOTH the token and the operator
  *                                          allowlist empty, the enabled spike rejects ALL calls
  *                                          (fail-closed; no production default).
+ *
+ * Phase 46V additions (dev/operator-only Admission Wedge ROUTE-STORAGE spike; DRAFT / non-final;
+ * default OFF; NON-PRODUCTION):
+ * DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED (optional) — when 'true', AND DIXIE_ADMISSION_INTAKE_ENABLED
+ *                                          is also 'true', wire the dev/operator-only route-storage spike
+ *                                          (Storage Mode 1: no-migration, bounded-synthetic, in-process —
+ *                                          NO durable write, NO DB, NO migration) behind the existing
+ *                                          dev/operator gate. Default 'false'; anything other than the
+ *                                          literal 'true' (incl. blank/malformed) leaves it OFF
+ *                                          (fail-closed; never a production storage path). The storage
+ *                                          spike NEVER activates on the base route gate alone. This name is
+ *                                          a DRAFT / non-final proposal (Phase 46U §5). Authorized narrowly
+ *                                          by Phase 46U; does NOT authorize production storage/admission,
+ *                                          a final schema, or a route-contract freeze.
  */
 export function loadConfig(): DixieConfig {
   const finnUrl = process.env.FINN_URL;
@@ -403,5 +432,14 @@ export function loadConfig(): DixieConfig {
       .split(',')
       .map((id) => id.trim())
       .filter((id) => id.length > 0),
+
+    // Phase 46V: dev/operator-only route-storage spike gate (DRAFT; default off,
+    // NON-PRODUCTION). Strict `=== 'true'`, so blank/malformed/any-other value is
+    // off (fail-closed; never a production storage path). This flag is inert on
+    // its own — the server only wires the storage spike when BOTH this flag AND
+    // admissionIntakeSpikeEnabled are true (ANDed at the mount site, server.ts),
+    // so storage never activates merely because route intake is enabled.
+    admissionIntakeStorageSpikeEnabled:
+      process.env.DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED === 'true',
   };
 }

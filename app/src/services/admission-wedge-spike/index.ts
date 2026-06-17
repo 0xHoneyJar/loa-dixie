@@ -70,3 +70,23 @@ export {
   type EstateFootprint,
   type RecallProjection,
 } from './admitted-assertion-ledger.js';
+
+// Phase 46V — dev/operator-only Admission Wedge ROUTE-STORAGE spike
+// (Storage Mode 1: no-migration, bounded-synthetic, in-process; disabled-by-
+// default, NON-PRODUCTION). Authorized by Phase 46U §3–§16
+// (docs/ADMISSION-WEDGE-ROUTE-STORAGE-SPIKE-AUTHORIZATION-GATE.md). It wraps the
+// Phase 33Q ledger to add the THIRD scope dimension (actor) — one independent
+// bounded ledger per synthetic actor — plus a reversible tombstone/cleanup path.
+// Like the rest of the spike it stays on the internal service barrel ONLY (NO
+// package export, NO `src/index.ts` re-export; Phase 33M §8 / 46U §4) and
+// performs NO durable write, NO migration, NO `@loa/straylight` / Freeside import.
+export {
+  createRouteStorageSpikeStore,
+  RouteStorageSpikeInvalidConfigError,
+  RouteStorageSpikeInvalidActorError,
+  RouteStorageSpikeActorScopeError,
+  RouteStorageSpikeActorCapExceededError,
+  type RouteStorageSpikeStore,
+  type RouteStorageSpikeConfig,
+  type RouteStorageSpikeScope,
+} from './route-storage-spike.js';

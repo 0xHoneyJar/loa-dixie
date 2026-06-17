@@ -27,6 +27,8 @@ describe('config — Phase 33N admission intake spike gate (default off, non-pro
     'DIXIE_ADMISSION_INTAKE_ENABLED',
     'DIXIE_ADMISSION_INTAKE_SERVICE_TOKEN',
     'DIXIE_ADMISSION_INTAKE_OPERATOR_IDS',
+    // Phase 46V draft route-storage spike gate.
+    'DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED',
   ];
 
   beforeEach(() => {
@@ -90,5 +92,35 @@ describe('config — Phase 33N admission intake spike gate (default off, non-pro
     expect(c.admissionIntakeSpikeEnabled).toBe(true);
     expect(c.admissionIntakeSpikeServiceToken).toBe('');
     expect(c.admissionIntakeSpikeOperatorIds).toEqual([]);
+  });
+
+  // ── Phase 46V: route-storage spike gate (DRAFT / non-final; default off) ─────
+
+  it('Phase 46V: route-storage spike gate is OFF by default', () => {
+    const c = loadConfig();
+    expect(c.admissionIntakeStorageSpikeEnabled).toBe(false);
+  });
+
+  it('Phase 46V: storage-spike gate === "true" sets the flag (server ANDs it with the base gate)', () => {
+    process.env.DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED = 'true';
+    const c = loadConfig();
+    expect(c.admissionIntakeStorageSpikeEnabled).toBe(true);
+  });
+
+  it('Phase 46V: any value other than the literal "true" leaves the storage gate off', () => {
+    for (const v of ['1', 'TRUE', 'yes', 'on', '', ' true ']) {
+      process.env.DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED = v;
+      const c = loadConfig();
+      expect(c.admissionIntakeStorageSpikeEnabled).toBe(false);
+    }
+  });
+
+  it('Phase 46V: the storage gate is independent of the base route gate at config load', () => {
+    // Config parses the two flags independently; the AND (storage engages only
+    // when BOTH are true) is applied at the server mount site, not in config.
+    process.env.DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED = 'true';
+    const c = loadConfig();
+    expect(c.admissionIntakeSpikeEnabled).toBe(false); // base gate still off
+    expect(c.admissionIntakeStorageSpikeEnabled).toBe(true);
   });
 });

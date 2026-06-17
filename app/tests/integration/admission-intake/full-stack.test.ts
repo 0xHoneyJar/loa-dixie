@@ -75,6 +75,9 @@ function baseConfig(finnPort: number): DixieConfig {
     admissionIntakeSpikeEnabled: true,
     admissionIntakeSpikeServiceToken: SERVICE_TOKEN,
     admissionIntakeSpikeOperatorIds: [OPERATOR],
+    // Phase 46V route-storage spike gate (default off for the base full-stack
+    // suite; the dedicated registration suite proves the AND-gating).
+    admissionIntakeStorageSpikeEnabled: false,
   };
 }
 

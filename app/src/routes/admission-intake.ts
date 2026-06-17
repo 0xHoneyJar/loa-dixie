@@ -33,6 +33,7 @@ import {
   type AdmissionSpikeGateConfig,
   type AdmittedAssertionLedger,
   type SyntheticAdmissionTransition,
+  type RouteStorageSpikeStore,
 } from '../services/admission-wedge-spike/index.js';
 
 /** Header carrying the dev/operator id (checked against the allowlist). */
@@ -108,6 +109,37 @@ export interface AdmissionSpikeRouteDeps {
    *  spike request body carries NO tenant/estate/candidate ids, so the estate is
    *  a fixed synthetic dev constant (never request-derived). */
   admittedAssertionEstateId?: string;
+
+  // ── Phase 46V — dev/operator-only ROUTE-STORAGE spike seam (Storage Mode 1) ──
+  //
+  // Disabled-by-default. When undefined (the production/server default unless the
+  // separate route-storage-spike env gate is enabled), the route behaves EXACTLY
+  // as the Phase 33N no-store Option A spike / the Phase 33Q ledger-seam path. The
+  // server wires this ONLY when BOTH the base route gate AND the draft
+  // route-storage-spike gate are 'true' (config.admissionIntakeStorageSpikeEnabled
+  // ANDed with admissionIntakeSpikeEnabled at the mount site) — so storage never
+  // activates merely because route intake is enabled.
+  //
+  // It records the SAME fixed synthetic transition the ledger seam derives (built
+  // from constants, never request material), into a bounded, process-local,
+  // NON-DURABLE, tenant/estate/ACTOR-scoped store. Its records / ids are NEVER
+  // surfaced in the public body; any store throw fails closed to the same stable
+  // public-safe refusal as a partial failure. NO durable write, NO migration.
+  //
+  // The store write is attempted ONLY when the store AND the full synthetic
+  // (tenant, estate, actor) scope are all injected; a partial injection records
+  // nothing (stays the no-store path).
+  /** Phase 46V route-storage spike store (DI seam). */
+  routeStorageSpikeStore?: RouteStorageSpikeStore;
+  /** Synthetic tenant id the route-storage spike records under (fixed dev
+   *  constant; never request-derived). */
+  routeStorageSpikeTenantId?: string;
+  /** Synthetic estate id the route-storage spike records into (fixed dev
+   *  constant; never request-derived). */
+  routeStorageSpikeEstateId?: string;
+  /** Synthetic actor id the route-storage spike scopes by (fixed dev constant;
+   *  never request-derived) — the third isolation dimension (Phase 46U §10). */
+  routeStorageSpikeActorId?: string;
 }
 
 /** Fixed synthetic identity constants for the dev-only ledger seam. These are
@@ -358,6 +390,32 @@ export function createAdmissionIntakeRoutes(deps: AdmissionSpikeRouteDeps): Hono
             {
               tenant_id: deps.admittedAssertionTenantId,
               estate_id: deps.admittedAssertionEstateId,
+            },
+            transition,
+          );
+        }
+      }
+      // Phase 46V route-storage spike (Mode 1): record the SAME fixed synthetic
+      // transition into the bounded, NON-DURABLE, tenant/estate/actor-scoped
+      // store when the store AND the full synthetic scope are injected. Inside
+      // the SAME guarded try, so a store throw (capacity / scope / conflict /
+      // tombstone) collapses to the identical stable public-safe refusal and the
+      // store is left exactly as it was (atomic; no partially-admitted /
+      // recallable residue). The result is intentionally discarded — it is NEVER
+      // surfaced in the public body (step 5).
+      if (
+        deps.routeStorageSpikeStore &&
+        deps.routeStorageSpikeTenantId &&
+        deps.routeStorageSpikeEstateId &&
+        deps.routeStorageSpikeActorId
+      ) {
+        const transition = synthTransitionFor(classification);
+        if (transition) {
+          deps.routeStorageSpikeStore.record(
+            {
+              tenant_id: deps.routeStorageSpikeTenantId,
+              estate_id: deps.routeStorageSpikeEstateId,
+              actor_id: deps.routeStorageSpikeActorId,
             },
             transition,
           );
