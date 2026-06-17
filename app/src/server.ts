@@ -27,6 +27,10 @@ import { createMemoryRoutes } from './routes/memory.js';
 import { createRecallIntakeRoutes } from './routes/recall-intake.js';
 import { createAdmissionIntakeRoutes } from './routes/admission-intake.js';
 import {
+  createRouteStorageSpikeStore,
+  type RouteStorageSpikeStore,
+} from './services/admission-wedge-spike/index.js';
+import {
   createCapabilityHolder,
   createBoundedEstateStore,
   createIdempotencyCache,
@@ -117,6 +121,23 @@ export interface DixieApp {
   /** cycle-009: Async initialization promise (migration + store setup) */
   ready: Promise<void>;
 }
+
+// Phase 46V — fixed SYNTHETIC dev constants for the route-storage spike (Storage
+// Mode 1). The spike request body carries NO tenant/estate/actor/candidate ids,
+// so the storage scope is built from these constants alone — never from request
+// material. They are short synthetic labels (never UUID/long-opaque), and the
+// route-storage store ALSO validates every field to a bounded synthetic shape, so
+// no raw-payload material can enter the store. These are a SPIKE isolation
+// mechanism, NOT the final production tenant/estate/actor binding (Phase 46U §10,
+// which stays unresolved). The capacity bounds are generous dev/test ceilings,
+// far below any production scale; inserts beyond them fail closed (bounded
+// rejection, no eviction).
+const ADMISSION_ROUTE_STORAGE_SPIKE_TENANT_ID = 'tenant-synthetic-dev';
+const ADMISSION_ROUTE_STORAGE_SPIKE_ESTATE_ID = 'estate-synthetic-dev';
+const ADMISSION_ROUTE_STORAGE_SPIKE_ACTOR_ID = 'actor-synthetic-dev';
+const ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ACTORS = 64;
+const ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ASSERTIONS_PER_ESTATE = 256;
+const ADMISSION_ROUTE_STORAGE_SPIKE_MAX_BYTES_PER_ESTATE = 262_144;
 
 /**
  * Create and configure the Dixie BFF Hono application.
@@ -632,6 +653,50 @@ export function createDixieApp(config: DixieConfig): DixieApp {
       event: 'admission_intake_spike_active',
       note: 'dev/operator-only Admission Wedge route spike enabled — NOT production admission',
     });
+
+    // Phase 46V — dev/operator-only ROUTE-STORAGE spike (Storage Mode 1:
+    // no-migration, bounded-synthetic, in-process; NON-PRODUCTION). Disabled by
+    // default and SEPARATELY gated: it engages ONLY when BOTH the base route gate
+    // AND the draft route-storage-spike gate are enabled (the AND below), so
+    // storage never activates merely because route intake is enabled. When the
+    // storage gate is off, NO store is created and NO store deps are injected, so
+    // the route stays the Phase 33N no-store Option A path verbatim. The store
+    // opens no DB / file / socket / timer, performs NO durable write and NO
+    // migration; its synthetic state is lost on restart (no recallable residue).
+    // Authorized narrowly by Phase 46U
+    // (docs/ADMISSION-WEDGE-ROUTE-STORAGE-SPIKE-AUTHORIZATION-GATE.md §3–§16).
+    let routeStorageSpikeDeps: {
+      routeStorageSpikeStore?: RouteStorageSpikeStore;
+      routeStorageSpikeTenantId?: string;
+      routeStorageSpikeEstateId?: string;
+      routeStorageSpikeActorId?: string;
+    } = {};
+    if (config.admissionIntakeStorageSpikeEnabled) {
+      const store = createRouteStorageSpikeStore({
+        maxActors: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ACTORS,
+        maxAssertionsPerEstate: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ASSERTIONS_PER_ESTATE,
+        maxAssertionBytesPerEstate: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_BYTES_PER_ESTATE,
+      });
+      // Seed the single synthetic (tenant, estate, actor) dev slot the spike
+      // records under. These are fixed synthetic dev constants — never
+      // request-derived, never production identity binding (Phase 46U §10).
+      store.seedScope({
+        tenant_id: ADMISSION_ROUTE_STORAGE_SPIKE_TENANT_ID,
+        estate_id: ADMISSION_ROUTE_STORAGE_SPIKE_ESTATE_ID,
+        actor_id: ADMISSION_ROUTE_STORAGE_SPIKE_ACTOR_ID,
+      });
+      routeStorageSpikeDeps = {
+        routeStorageSpikeStore: store,
+        routeStorageSpikeTenantId: ADMISSION_ROUTE_STORAGE_SPIKE_TENANT_ID,
+        routeStorageSpikeEstateId: ADMISSION_ROUTE_STORAGE_SPIKE_ESTATE_ID,
+        routeStorageSpikeActorId: ADMISSION_ROUTE_STORAGE_SPIKE_ACTOR_ID,
+      };
+      log('warn', {
+        event: 'admission_intake_route_storage_spike_active',
+        note: 'dev/operator-only route-storage spike (Mode 1, non-durable, in-process) enabled — NOT production storage',
+      });
+    }
+
     app.route(
       '/api/admission/intake',
       createAdmissionIntakeRoutes({
@@ -641,6 +706,7 @@ export function createDixieApp(config: DixieConfig): DixieApp {
           operatorIds: config.admissionIntakeSpikeOperatorIds,
         },
         emitAudit: (ev) => log('info', { ...ev }),
+        ...routeStorageSpikeDeps,
       }),
     );
   }

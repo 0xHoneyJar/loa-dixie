@@ -61,6 +61,8 @@ function baseConfig(): DixieConfig {
     admissionIntakeSpikeEnabled: false,
     admissionIntakeSpikeServiceToken: '',
     admissionIntakeSpikeOperatorIds: [],
+    // Phase 46V route-storage spike gate (default off; overridden per-case).
+    admissionIntakeStorageSpikeEnabled: false,
   };
 }
 
@@ -71,9 +73,11 @@ function hasAdmissionRoute(app: ReturnType<typeof createDixieApp>): boolean {
 // Some env may leak the enable flag in; neutralize for determinism.
 beforeEach(() => {
   delete process.env.DIXIE_ADMISSION_INTAKE_ENABLED;
+  delete process.env.DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED;
 });
 afterEach(() => {
   delete process.env.DIXIE_ADMISSION_INTAKE_ENABLED;
+  delete process.env.DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED;
 });
 
 describe('Phase 33N — admission spike route registration is gated and off by default', () => {
@@ -108,5 +112,51 @@ describe('Phase 33N — admission spike route registration is gated and off by d
     const text = await res.text();
     expect(text).not.toContain('admission.spike_disabled');
     expect(text).not.toContain('dev_operator_only_non_production');
+  });
+});
+
+// ── Phase 46V: route-storage spike is SEPARATELY gated and ANDed ──────────────
+//
+// The route-storage spike (Mode 1) engages ONLY when BOTH the base route gate
+// AND the storage-spike gate are enabled. The store is an internal closure with
+// no route-table signal, so these assert the OBSERVABLE registration posture:
+//   * the storage gate ALONE never mounts the route (base gate is the only thing
+//     that registers the route at all);
+//   * with the base gate on, the route registers WHETHER OR NOT the storage gate
+//     is on (the storage spike is additive — it never disables the base route);
+//   * `createDixieApp` constructs without throwing in every flag combination
+//     (so the storage gate, when on with the base gate, builds + seeds the store
+//     successfully).
+describe('Phase 46V — route-storage spike is separately gated (storage gate ANDed with base gate)', () => {
+  it('storage gate ON but base gate OFF → route NOT registered (storage gate alone does nothing)', () => {
+    const app = createDixieApp({
+      ...baseConfig(),
+      admissionIntakeSpikeEnabled: false,
+      admissionIntakeStorageSpikeEnabled: true,
+    });
+    expect(hasAdmissionRoute(app)).toBe(false);
+  });
+
+  it('base gate ON + storage gate OFF → route registered (no-store path), constructs cleanly', () => {
+    const app = createDixieApp({
+      ...baseConfig(),
+      admissionIntakeSpikeEnabled: true,
+      admissionIntakeStorageSpikeEnabled: false,
+      admissionIntakeSpikeServiceToken: 'dev-token-synthetic',
+    });
+    expect(hasAdmissionRoute(app)).toBe(true);
+  });
+
+  it('base gate ON + storage gate ON → route registered; store built + seeded without throwing', () => {
+    // If the store config or seed were malformed this would throw at construction
+    // (fail-closed at startup). A clean construction proves the Mode-1 store wires
+    // up under the AND of both gates.
+    const app = createDixieApp({
+      ...baseConfig(),
+      admissionIntakeSpikeEnabled: true,
+      admissionIntakeStorageSpikeEnabled: true,
+      admissionIntakeSpikeServiceToken: 'dev-token-synthetic',
+    });
+    expect(hasAdmissionRoute(app)).toBe(true);
   });
 });
