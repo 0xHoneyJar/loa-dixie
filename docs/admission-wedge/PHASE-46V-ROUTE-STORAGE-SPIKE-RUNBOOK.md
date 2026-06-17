@@ -7,6 +7,16 @@
 > **no** production storage / DB writes / migration execution, no Lane-2 canonical-store migration, and no
 > operative Straylight-side gate discharge. The next lane is **Phase 46X — Mode 2 durable-route-storage
 > enablement blocker decomposition (docs/decision-only)**.
+>
+> **Phase 46X decomposition note (added later).** Phase 46X
+> ([`../ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-BLOCKER-DECOMPOSITION-GATE.md`](../ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-BLOCKER-DECOMPOSITION-GATE.md),
+> docs/decision-only) decomposed the Mode 2 blocker this spike's header names
+> (`app/src/services/admission-wedge-spike/route-storage-spike.ts:9-15`) — the global migration runner adopting
+> any new migration into the production set, and the Phase 33N scope guards forbidding durable-write / SQL /
+> migration tokens — and reached **Verdict A**: **Mode 2 remains BLOCKED**; the blocker is decomposed into
+> required future gates. Phase 46X selects only a **docs/decision-only Phase 46Y migration-isolation /
+> scope-guard boundary design lane** next; it authorizes **no** Mode 2 implementation, durable storage,
+> migration, or production work.
 
 > **Status:** dev/operator-only **route-storage** spike. **Draft / non-final.**
 > **Disabled by default.** **NON-PRODUCTION.** Uses **Storage Mode 1** —
