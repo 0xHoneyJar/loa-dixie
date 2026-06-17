@@ -1,5 +1,15 @@
 # Phase 46U — Admission Wedge Dev/Operator Route-Storage Spike Authorization Gate
 
+> **Phase 46W acceptance status note (added later).** The Phase 46V route-storage spike this gate authorized
+> was implemented (PR #167, **Storage Mode 1** — no-migration, bounded-synthetic, in-process) and then
+> **ACCEPTED** by Phase 46W
+> ([`ADMISSION-WEDGE-ROUTE-STORAGE-SPIKE-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ROUTE-STORAGE-SPIKE-ACCEPTANCE-GATE.md),
+> docs/decision-only) as a bounded dev/operator-only, non-production Mode 1 spike proof — **Verdict A**,
+> within this gate's §3.3 acceptance bar on every axis. Phase 46W selected **Phase 46X — dev/operator durable
+> (Mode 2) route-storage enablement *blocker decomposition* gate (docs/decision-only)** as the next lane;
+> direct production durable-store implementation, production DB writes / migration execution, Lane-2
+> canonical-store migrations, and the operative Straylight-side gate #8 all remain blocked.
+
 > **Phase**: 46U
 > **Branch context**: `phase-46u-admission-route-storage-spike-authorization`
 > **Related**: Phase 46T (PR #165,

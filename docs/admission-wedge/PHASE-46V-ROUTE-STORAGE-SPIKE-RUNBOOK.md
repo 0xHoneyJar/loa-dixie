@@ -1,5 +1,13 @@
 # Phase 46V — Admission Wedge dev/operator-only route-storage spike: enable/disable runbook
 
+> **Phase 46W acceptance note (added later).** This Phase 46V Mode 1 route-storage spike was **ACCEPTED** as a
+> bounded dev/operator-only, non-production spike proof by Phase 46W
+> ([`../ADMISSION-WEDGE-ROUTE-STORAGE-SPIKE-ACCEPTANCE-GATE.md`](../ADMISSION-WEDGE-ROUTE-STORAGE-SPIKE-ACCEPTANCE-GATE.md),
+> docs/decision-only) — **Verdict A**. Acceptance is bounded: it confirms the spike proof only and authorizes
+> **no** production storage / DB writes / migration execution, no Lane-2 canonical-store migration, and no
+> operative Straylight-side gate discharge. The next lane is **Phase 46X — Mode 2 durable-route-storage
+> enablement blocker decomposition (docs/decision-only)**.
+
 > **Status:** dev/operator-only **route-storage** spike. **Draft / non-final.**
 > **Disabled by default.** **NON-PRODUCTION.** Uses **Storage Mode 1** —
 > no-migration, bounded-synthetic, **in-process** route-owned storage: no
