@@ -671,6 +671,16 @@ production admission, and the operative Straylight-side gate #8 all remain block
 > **Selected next lane: Phase 46X — Dev/operator durable (Mode 2) route-storage enablement *blocker
 > decomposition* gate (docs / decision-only).**
 
+> **Phase 46X status note (added later).** Phase 46X
+> ([`ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-BLOCKER-DECOMPOSITION-GATE.md`](ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-BLOCKER-DECOMPOSITION-GATE.md),
+> docs/decision-only) executed this lane and reached **Verdict A — Mode 2 remains BLOCKED; the blocker is
+> decomposed into required future gates.** It grounded the blocker in the migration runner
+> (`app/src/db/migrate.ts:76-85` scans the whole shared dir; `app/src/server.ts:299-301` runs it ungated in
+> production) and the Phase 33N scope guards (`app/tests/unit/admission-wedge-spike/scope-guards.test.ts:122-198`
+> forbid durable-write / SQL / migration tokens and production-store imports), and selected only a
+> **docs/decision-only Phase 46Y migration-isolation / scope-guard boundary design lane** next. It authorizes
+> **no** Mode 2 implementation, durable storage, migration, production DB write, or migration execution.
+
 - **What it is.** A **docs / decision-only** gate that decomposes, precisely and read-only, the blocker the
   Phase 46V spike surfaced: *how (if ever) a dev/operator-only, disabled-by-default durable Mode 2 route-storage
   spike could be safely sequenced given that (a) the repo's global migration runner adopts any new migration
