@@ -646,6 +646,14 @@ the standing posture but a design gate (A) is the safer forward step.
 > without a later authorization gate. It selected only a **docs/decision-only Phase 47E Lane-1 `aw_*` SQL isolation
 > design-acceptance / implementation-authorization checklist gate** next.
 
+> **Phase 47E status note (added later).** Phase 47E
+> ([`ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-AUTHORIZATION-CHECKLIST-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-AUTHORIZATION-CHECKLIST-GATE.md),
+> docs/decision-only) executed the downstream acceptance / checklist lane and reached **Verdict A — the Phase 47D §18
+> layered design direction is accepted as the paper baseline** and converted into a hard, file:line-grounded
+> implementation-authorization checklist. It authorizes only a future, separate-PR, bounded, dev/operator-only,
+> disabled-by-default, non-production **Phase 47F** Lane-1 `aw_*` SQL isolation implementation spike, acceptance-gated
+> on that checklist; Lane-1 `aw_*` SQL itself stays BLOCKED and Phase 47E implements nothing.
+
 - **What it is.** A **docs / decision-only** gate that compares the §15 candidate designs (P1–P8) for isolating
   experimental `aw_*` SQL from normal production migration discovery / execution / packaging, and the §10 narrow
   replacement / allowlist scope-guard model, against the §16 evidence bar — **on paper**. It would select a

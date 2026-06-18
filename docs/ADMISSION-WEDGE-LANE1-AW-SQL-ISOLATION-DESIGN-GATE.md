@@ -108,6 +108,16 @@ paper** for a later authorization gate, and **all implementation stays BLOCKED**
 authorizing it; the preferred direction in §18 becomes input to the Phase 47E acceptance / authorization-checklist
 gate, not a license to write SQL.
 
+> **Phase 47E status note (added later).** Phase 47E
+> ([`ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-AUTHORIZATION-CHECKLIST-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-AUTHORIZATION-CHECKLIST-GATE.md),
+> docs/decision-only) executed the §23 next lane and reached **Verdict A — the §18 layered design direction is
+> accepted as the paper baseline** (with the Candidate C manifest-limitation, canonical-vs-refinement denylist, and
+> `server.ts:303-305`-not-`migrate.ts:303-305` citation precisions carried forward, not new defects) and turned into
+> a hard, file:line-grounded implementation-authorization checklist. It authorizes only a future, separate-PR,
+> bounded, dev/operator-only, disabled-by-default, non-production **Phase 47F** Lane-1 `aw_*` SQL isolation
+> implementation spike, acceptance-gated on that checklist; Lane-1 `aw_*` SQL itself stays BLOCKED and Phase 47E
+> implements nothing.
+
 ---
 
 ## 2. Scope
