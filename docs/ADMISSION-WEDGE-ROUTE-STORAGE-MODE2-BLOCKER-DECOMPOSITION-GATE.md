@@ -629,6 +629,16 @@ Straylight-store migrations, or the discharge of the operative Straylight-side A
 > **Selected next lane: Phase 46Y — Admission Wedge Mode 2 migration-isolation / scope-guard boundary **design**
 > gate (docs / decision-only).**
 
+> **Phase 46Y status note (added later).** Phase 46Y
+> ([`ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-MIGRATION-GUARD-DESIGN-GATE.md`](ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-MIGRATION-GUARD-DESIGN-GATE.md),
+> docs/decision-only) executed this lane and reached **Verdict A — the migration-isolation / scope-guard
+> boundary design is accepted as a docs-only precondition; Mode 2 implementation remains BLOCKED pending a
+> later authorization gate.** It designed, on paper, the four-class migration classification model (P / E / T /
+> C), the migration-isolation requirements, the route-owned storage boundary model, and the refined /
+> replacement scope-guard model the §9 evidence set requires, and selected only a **docs/decision-only Phase
+> 46Z Mode 2 implementation-authorization checklist lane** next. It authorizes **no** Mode 2 implementation,
+> durable storage, migration, production DB write, or migration execution, and it edits no guard or runner.
+
 This is a **docs / decision-only** design lane (§8): it specifies, on paper, the migration classification /
 isolation model and the replacement scope-guard model that the §9 evidence set requires, with §9 as its
 acceptance bar. It implements no store, writes no DB, adds no migration, creates no SQL or executable schema,

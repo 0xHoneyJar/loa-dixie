@@ -17,6 +17,16 @@
 > required future gates. Phase 46X selects only a **docs/decision-only Phase 46Y migration-isolation /
 > scope-guard boundary design lane** next; it authorizes **no** Mode 2 implementation, durable storage,
 > migration, or production work.
+>
+> **Phase 46Y design note (added later).** Phase 46Y
+> ([`../ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-MIGRATION-GUARD-DESIGN-GATE.md`](../ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-MIGRATION-GUARD-DESIGN-GATE.md),
+> docs/decision-only) designed the migration-isolation / scope-guard boundary on paper and reached **Verdict A**:
+> it **accepts** the four-class migration classification model (P / E / T / C), the migration-isolation
+> requirements, the route-owned storage boundary model, and the refined / replacement scope-guard model as a
+> **docs-only precondition**, while **Mode 2 remains BLOCKED pending a later authorization gate**. It selects
+> only a **docs/decision-only Phase 46Z implementation-authorization checklist lane** next. It edits no guard
+> or migration runner and authorizes **no** Mode 2 implementation, durable storage, migration, or production
+> work.
 
 > **Status:** dev/operator-only **route-storage** spike. **Draft / non-final.**
 > **Disabled by default.** **NON-PRODUCTION.** Uses **Storage Mode 1** —
