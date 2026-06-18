@@ -741,6 +741,17 @@ blocked (§16).
 > **Selected next lane: Phase 47C — Lane-1 `aw_*` SQL durable-store / migration-runner blocker *decomposition*
 > gate (docs / decision-only).**
 
+> **Phase 47C status note (added later).** Phase 47C
+> ([`ADMISSION-WEDGE-LANE1-AW-SQL-MIGRATION-RUNNER-BLOCKER-DECOMPOSITION-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-MIGRATION-RUNNER-BLOCKER-DECOMPOSITION-GATE.md),
+> docs/decision-only) executed this lane and reached **Verdict A — the Lane-1 `aw_*` SQL / migration-runner
+> blocker is decomposed and implementation stays BLOCKED.** It grounded, read-only, that Phase 47A delivered
+> durability by **sidestepping** (not solving) the migration-discovery (`migrate.ts:76-85`), packaging
+> (`copy-migrations.mjs:39`), runner-isolation, and Phase 33N scope-guard (`scope-guards.test.ts:122-142`)
+> blockers, mapped candidate future isolation patterns without selecting any, recorded the evidence still
+> missing, and selected only a **docs/decision-only Phase 47D Lane-1 `aw_*` SQL isolation *design* gate** next.
+> It authorizes **no** `aw_*` SQL, migration runner / packaging change, DB write, migration execution, or
+> production storage, and edits no runner / guard / migration.
+
 - **What it is.** A **docs / decision-only** gate that decomposes, precisely and read-only, the frontier the Phase
   47A `.json`-snapshot spike **sidestepped**: *how (if ever) a dev/operator-only durable store could ever use
   Lane-1 `aw_*` SQL given that (a) the global migration runner (`migrate.ts` `discoverMigrations`, `.sql && !_down`)

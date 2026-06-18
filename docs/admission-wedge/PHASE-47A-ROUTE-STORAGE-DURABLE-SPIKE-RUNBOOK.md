@@ -168,3 +168,13 @@ Straylight-store migrations; production admission / signer / auth / consent; Fre
 package exports; route-contract freeze; final schema freeze; production readiness; the operative Straylight-side
 ADR-022E gate #8 discharge — **all remain blocked**. Phase 47A is a bounded dev/operator-only spike and changes
 none of them.
+
+> **Phase 47C status note (added later).** Phase 47A delivered durability as a `.json` snapshot **off the
+> migration path**, deliberately **sidestepping** the Lane-1 `aw_*` SQL / migration-runner frontier rather than
+> resolving it. Phase 47C
+> ([`../ADMISSION-WEDGE-LANE1-AW-SQL-MIGRATION-RUNNER-BLOCKER-DECOMPOSITION-GATE.md`](../ADMISSION-WEDGE-LANE1-AW-SQL-MIGRATION-RUNNER-BLOCKER-DECOMPOSITION-GATE.md),
+> docs/decision-only) decomposed that sidestepped frontier (Verdict A — Lane-1 `aw_*` SQL stays **fully
+> blocked**): the migration-discovery, packaging/copy, runner-isolation, and Phase 33N scope-guard blockers are
+> mapped read-only, candidate future isolation patterns enumerated without selection, and only a
+> docs/decision-only Phase 47D Lane-1 `aw_*` SQL isolation *design* gate selected next. No `aw_*` SQL, migration
+> runner / packaging change, DB write, or migration execution is authorized.
