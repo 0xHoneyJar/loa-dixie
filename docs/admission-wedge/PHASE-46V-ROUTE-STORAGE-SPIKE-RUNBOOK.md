@@ -27,6 +27,17 @@
 > only a **docs/decision-only Phase 46Z implementation-authorization checklist lane** next. It edits no guard
 > or migration runner and authorizes **no** Mode 2 implementation, durable storage, migration, or production
 > work.
+>
+> **Phase 46Z checklist note (added later).** Phase 46Z
+> ([`../ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md`](../ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md),
+> docs/decision-only) turned the Phase 46Y boundary design into a hard, file:line-grounded
+> implementation-authorization checklist and reached **Verdict A**: the design is sufficient to authorize a
+> future, **separate-PR**, bounded, dev/operator-only, disabled-by-default, non-production Mode 2 implementation
+> spike (**Phase 47A**), **acceptance-gated** on that checklist and **mode-contingent** (Phase 47A may fall back
+> to Mode 1, as this Phase 46V spike did, if Mode 2 cannot satisfy migration isolation safely). Mode 2 itself
+> **remains unimplemented**; this gate builds nothing, executes no migration, and discharges no Straylight-side
+> gate. Production durable storage, Lane-2 canonical migrations, freezes, and the operative ADR-022E gate #8
+> remain blocked.
 
 > **Status:** dev/operator-only **route-storage** spike. **Draft / non-final.**
 > **Disabled by default.** **NON-PRODUCTION.** Uses **Storage Mode 1** —
