@@ -752,6 +752,16 @@ blocked (§16).
 > It authorizes **no** `aw_*` SQL, migration runner / packaging change, DB write, migration execution, or
 > production storage, and edits no runner / guard / migration.
 
+> **Phase 47D status note (added later).** The chain continued one rung: Phase 47D
+> ([`ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-DESIGN-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-DESIGN-GATE.md),
+> docs/decision-only) reached **Verdict A — a layered Lane-1 `aw_*` SQL isolation *design direction* is selected on
+> paper for a later authorization gate, and all implementation stays BLOCKED.** It compared candidate isolation
+> designs A–H on paper and selected a layered direction (separate experimental SQL location + manifest-gated
+> experimental runner + explicit dev/operator-only runner command + normal-runner / packaging hard-deny
+> defense-in-depth + a narrow scope-guard allowlist + negative tests) as paper input only — authorizing **no** SQL,
+> migration, runner / packaging change, DB write, or guard edit — and selected a **docs/decision-only Phase 47E
+> design-acceptance / implementation-authorization checklist gate** next.
+
 - **What it is.** A **docs / decision-only** gate that decomposes, precisely and read-only, the frontier the Phase
   47A `.json`-snapshot spike **sidestepped**: *how (if ever) a dev/operator-only durable store could ever use
   Lane-1 `aw_*` SQL given that (a) the global migration runner (`migrate.ts` `discoverMigrations`, `.sql && !_down`)

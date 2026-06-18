@@ -633,6 +633,19 @@ the standing posture but a design gate (A) is the safer forward step.
 
 > **Selected next lane: Phase 47D — Lane-1 `aw_*` SQL isolation *design* gate (docs / decision-only).**
 
+> **Phase 47D status note (added later).** Phase 47D
+> ([`ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-DESIGN-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-DESIGN-GATE.md),
+> docs/decision-only) executed this lane and reached **Verdict A — a layered Lane-1 `aw_*` SQL isolation *design
+> direction* is selected on paper for a later authorization gate, and all implementation stays BLOCKED.** It compared
+> candidate isolation designs A–H (recombining the §15 P1–P8 map) against the §16 evidence bar and selected, as paper
+> input only, a layered direction: separate experimental SQL location + manifest-gated experimental runner + explicit
+> dev/operator-only runner command + normal-runner / packaging hard-deny as defense-in-depth + a narrow path-specific /
+> token-specific scope-guard allowlist + negative tests proving the normal runner, packaging, route startup, and
+> adjacent paths stay blocked. It authorizes **no** `aw_*` SQL, migration runner / packaging change, DB write,
+> migration execution, guard edit, or production storage; the selected direction is **not** implementation-ready
+> without a later authorization gate. It selected only a **docs/decision-only Phase 47E Lane-1 `aw_*` SQL isolation
+> design-acceptance / implementation-authorization checklist gate** next.
+
 - **What it is.** A **docs / decision-only** gate that compares the §15 candidate designs (P1–P8) for isolating
   experimental `aw_*` SQL from normal production migration discovery / execution / packaging, and the §10 narrow
   replacement / allowlist scope-guard model, against the §16 evidence bar — **on paper**. It would select a
