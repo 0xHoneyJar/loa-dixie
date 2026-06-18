@@ -128,6 +128,33 @@ export interface DixieConfig {
   /** Phase 46V draft route-storage-spike gate (`=== 'true'`); default false.
    *  Inert unless admissionIntakeSpikeEnabled is also true (ANDed at mount). */
   admissionIntakeStorageSpikeEnabled: boolean;
+
+  // Phase 47A: dev/operator-only Admission Wedge ROUTE-STORAGE DURABLE (Mode 2)
+  // spike gate (DRAFT / non-final; default OFF; NON-PRODUCTION). Authorized
+  // narrowly by Phase 46Z
+  // (docs/ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md
+  // §7–§15). This is a THIRD gate nested under BOTH the base route gate AND the
+  // Phase 46V storage gate: the DURABLE store engages ONLY when ALL THREE flags are
+  // exactly 'true' AND an explicit durable directory is configured (the AND is
+  // applied at the server mount site). Storage Mode 2 = a bounded, synthetic,
+  // route-owned, fail-closed DURABLE JSON-snapshot store off the production
+  // migration path: NO SQL, NO `aw_*` schema, NO DB connection, NO migration runner
+  // / packager change, NO scope-guard change. The env names are DRAFT / non-final
+  // (Phase 46Z §13.1). This does NOT authorize production storage/admission/auth/
+  // consent, production DB writes, production migration execution, a Lane-2
+  // canonical Straylight-store migration, a final schema, or a route-contract
+  // freeze, and does NOT discharge ADR-022E gate #8.
+  /** Phase 47A draft DURABLE (Mode 2) route-storage-spike gate (`=== 'true'`);
+   *  default false. Inert unless BOTH admissionIntakeSpikeEnabled AND
+   *  admissionIntakeStorageSpikeEnabled are true AND a non-empty durable dir is set
+   *  (all ANDed at mount). When off (the default), the storage spike — if enabled —
+   *  stays the Phase 46V Mode-1 in-process (non-durable) store. */
+  admissionIntakeDurableStorageSpikeEnabled: boolean;
+  /** Explicit dev/operator directory for the Phase 47A durable JSON snapshot. ''
+   *  when unset. There is NO default location: with the durable gate on but this
+   *  empty, the spike fails closed to the Mode-1 (non-durable) store — durable
+   *  state is never written without a deliberate operator directory choice. */
+  admissionIntakeDurableStorageSpikeDir: string;
 }
 
 /**
@@ -441,5 +468,18 @@ export function loadConfig(): DixieConfig {
     // so storage never activates merely because route intake is enabled.
     admissionIntakeStorageSpikeEnabled:
       process.env.DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED === 'true',
+
+    // Phase 47A: dev/operator-only DURABLE (Mode 2) route-storage spike gate
+    // (DRAFT; default off, NON-PRODUCTION). Strict `=== 'true'`, so blank/malformed/
+    // any-other value is off (fail-closed; never a production durable path). This
+    // flag is inert on its own — the server only wires the DURABLE store when the
+    // base route gate AND the Mode-1 storage gate AND this flag are all true AND a
+    // non-empty durable dir is configured (all ANDed at the mount site, server.ts).
+    // The durable dir is parsed unconditionally (inert when the gate is off); an
+    // empty dir with the gate on fails closed to the Mode-1 (non-durable) store.
+    admissionIntakeDurableStorageSpikeEnabled:
+      process.env.DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_ENABLED === 'true',
+    admissionIntakeDurableStorageSpikeDir:
+      process.env.DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_DIR ?? '',
   };
 }

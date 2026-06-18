@@ -29,6 +29,9 @@ describe('config — Phase 33N admission intake spike gate (default off, non-pro
     'DIXIE_ADMISSION_INTAKE_OPERATOR_IDS',
     // Phase 46V draft route-storage spike gate.
     'DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED',
+    // Phase 47A draft DURABLE (Mode 2) route-storage spike gate + dir.
+    'DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_ENABLED',
+    'DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_DIR',
   ];
 
   beforeEach(() => {
@@ -122,5 +125,44 @@ describe('config — Phase 33N admission intake spike gate (default off, non-pro
     const c = loadConfig();
     expect(c.admissionIntakeSpikeEnabled).toBe(false); // base gate still off
     expect(c.admissionIntakeStorageSpikeEnabled).toBe(true);
+  });
+
+  // ── Phase 47A: DURABLE (Mode 2) route-storage spike gate (DRAFT; default off) ──
+
+  it('Phase 47A: durable gate + dir are OFF/empty by default', () => {
+    const c = loadConfig();
+    expect(c.admissionIntakeDurableStorageSpikeEnabled).toBe(false);
+    expect(c.admissionIntakeDurableStorageSpikeDir).toBe('');
+  });
+
+  it('Phase 47A: durable gate === "true" sets the flag (server ANDs all three + dir)', () => {
+    process.env.DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_ENABLED = 'true';
+    const c = loadConfig();
+    expect(c.admissionIntakeDurableStorageSpikeEnabled).toBe(true);
+  });
+
+  it('Phase 47A: any value other than the literal "true" leaves the durable gate off', () => {
+    for (const v of ['1', 'TRUE', 'yes', 'on', '', ' true ']) {
+      process.env.DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_ENABLED = v;
+      const c = loadConfig();
+      expect(c.admissionIntakeDurableStorageSpikeEnabled).toBe(false);
+    }
+  });
+
+  it('Phase 47A: the durable dir is parsed verbatim and defaults empty (fail-closed when unset)', () => {
+    process.env.DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_DIR = '/tmp/aw-durable-dev';
+    const c = loadConfig();
+    expect(c.admissionIntakeDurableStorageSpikeDir).toBe('/tmp/aw-durable-dev');
+  });
+
+  it('Phase 47A: durable flags are independent of the base/Mode-1 gates at config load', () => {
+    // Config parses all four flags independently; the AND (durable engages only
+    // when base + Mode-1 + durable gates are all true AND a dir is set) is applied
+    // at the server mount site, not in config.
+    process.env.DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_ENABLED = 'true';
+    const c = loadConfig();
+    expect(c.admissionIntakeSpikeEnabled).toBe(false); // base gate still off
+    expect(c.admissionIntakeStorageSpikeEnabled).toBe(false); // Mode-1 gate still off
+    expect(c.admissionIntakeDurableStorageSpikeEnabled).toBe(true);
   });
 });

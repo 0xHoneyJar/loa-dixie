@@ -90,3 +90,24 @@ export {
   type RouteStorageSpikeConfig,
   type RouteStorageSpikeScope,
 } from './route-storage-spike.js';
+
+// Phase 47A — dev/operator-only Admission Wedge ROUTE-STORAGE DURABLE (Mode 2)
+// spike (bounded-synthetic, route-owned JSON-snapshot file store off the production
+// migration path; disabled-by-default, NON-PRODUCTION). Authorized by Phase 46Z
+// (docs/ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md).
+// It WRAPS the Phase 46V Mode-1 engine (inheriting tenant/estate/actor isolation,
+// idempotent replay, conflict fail-closed, capacity, synthetic-only validation, and
+// the actor-id snapshot/TOCTOU discipline) and layers a thin durable persist/hydrate
+// log on top — durability is a `.json` file, NO SQL, NO `aw_*` schema, NO DB
+// connection, NO migration. Like the rest of the spike it stays on the internal
+// service barrel ONLY (NO package export, NO `src/index.ts` re-export; Phase 33M §8 /
+// 46Z §13.2) and performs NO `@loa/straylight` / Freeside import.
+export {
+  createRouteStorageDurableSpikeStore,
+  RouteStorageDurableSpikeInvalidConfigError,
+  RouteStorageDurableSpikeCorruptStateError,
+  RouteStorageDurableSpikeCapacityError,
+  RouteStorageDurableSpikeDegradedError,
+  type RouteStorageDurableSpikeStore,
+  type RouteStorageDurableSpikeConfig,
+} from './route-storage-durable-spike.js';
