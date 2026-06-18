@@ -671,6 +671,18 @@ authorization checklist. **It still does not implement Mode 2** unless a later p
 it implements no store, writes no DB, adds no migration, creates no SQL or executable schema, edits no guard,
 changes no route / API behavior, and freezes nothing.
 
+> **Phase 46Z status note (added later).** Phase 46Z
+> ([`ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md`](ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md),
+> docs/decision-only) executed this lane and reached **Verdict A — the Phase 46Y boundary design is sufficient
+> to authorize a future, separate-PR, bounded, dev/operator-only, disabled-by-default, non-production Mode 2
+> implementation spike, *acceptance-gated on a hard checklist*; Mode 2 itself remains unimplemented and is
+> BLOCKED from production / Lane-2 / freeze / gate-#8 work in full.** It converted the §7–§12 boundary design
+> into a binary, file:line-grounded checklist (migration-isolation, scope-guard, gate-conjunction,
+> storage-behaviour, no-leak), a future file-scope envelope, a validation matrix, and a copyable Codex audit
+> checklist for the later implementation PR, and selected only a **separate Phase 47A implementation lane**
+> (acceptance-gated and mode-contingent) next. It edits no guard or migration runner and authorizes **no** Mode 2
+> implementation, durable storage, migration, production DB write, or migration execution **in its own PR**.
+
 **Not selected:** direct production implementation; production durable-store implementation; production DB
 writes or migration execution; Mode 2 implementation now (the §5 blocker is unresolved by this gate's design —
 §6 / §14). A later **bounded implementation authorization gate** and an implementation lane remain possible
