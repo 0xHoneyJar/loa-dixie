@@ -28,6 +28,7 @@ import { createRecallIntakeRoutes } from './routes/recall-intake.js';
 import { createAdmissionIntakeRoutes } from './routes/admission-intake.js';
 import {
   createRouteStorageSpikeStore,
+  createRouteStorageDurableSpikeStore,
   type RouteStorageSpikeStore,
 } from './services/admission-wedge-spike/index.js';
 import {
@@ -138,6 +139,9 @@ const ADMISSION_ROUTE_STORAGE_SPIKE_ACTOR_ID = 'actor-synthetic-dev';
 const ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ACTORS = 64;
 const ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ASSERTIONS_PER_ESTATE = 256;
 const ADMISSION_ROUTE_STORAGE_SPIKE_MAX_BYTES_PER_ESTATE = 262_144;
+// Phase 47A — durable (Mode 2) snapshot bound. Bounded REJECTION at the cap (never
+// eviction), so the dev/operator on-disk JSON artifact cannot grow unbounded.
+const ADMISSION_ROUTE_STORAGE_SPIKE_MAX_DURABLE_ENTRIES = 4_096;
 
 /**
  * Create and configure the Dixie BFF Hono application.
@@ -672,14 +676,39 @@ export function createDixieApp(config: DixieConfig): DixieApp {
       routeStorageSpikeActorId?: string;
     } = {};
     if (config.admissionIntakeStorageSpikeEnabled) {
-      const store = createRouteStorageSpikeStore({
-        maxActors: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ACTORS,
-        maxAssertionsPerEstate: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ASSERTIONS_PER_ESTATE,
-        maxAssertionBytesPerEstate: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_BYTES_PER_ESTATE,
-      });
+      // Phase 47A — DURABLE (Mode 2) store selection. The durable store engages
+      // ONLY when the THIRD gate is on AND an explicit operator dir is configured
+      // (a non-empty dir). This is nested under BOTH the base route gate
+      // (config.admissionIntakeSpikeEnabled, the outer `if` above) AND the Mode-1
+      // storage gate (config.admissionIntakeStorageSpikeEnabled, this `if`), so all
+      // three flags plus a dir are required — durable state is never written merely
+      // because route intake or the Mode-1 storage gate is on. With the durable gate
+      // off, or the dir empty (fail closed), the spike stays the Phase 46V Mode-1
+      // in-process (non-durable) store verbatim. Mode 2 is a `.json`-snapshot file
+      // store OFF the production migration path: NO SQL, NO `aw_*` schema, NO DB
+      // connection, NO migration. Authorized narrowly by Phase 46Z
+      // (docs/ADMISSION-WEDGE-ROUTE-STORAGE-MODE2-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md).
+      const durable =
+        config.admissionIntakeDurableStorageSpikeEnabled &&
+        config.admissionIntakeDurableStorageSpikeDir.length > 0;
+      const store: RouteStorageSpikeStore = durable
+        ? createRouteStorageDurableSpikeStore({
+            dir: config.admissionIntakeDurableStorageSpikeDir,
+            maxActors: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ACTORS,
+            maxAssertionsPerEstate: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ASSERTIONS_PER_ESTATE,
+            maxAssertionBytesPerEstate: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_BYTES_PER_ESTATE,
+            maxDurableEntries: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_DURABLE_ENTRIES,
+          })
+        : createRouteStorageSpikeStore({
+            maxActors: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ACTORS,
+            maxAssertionsPerEstate: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_ASSERTIONS_PER_ESTATE,
+            maxAssertionBytesPerEstate: ADMISSION_ROUTE_STORAGE_SPIKE_MAX_BYTES_PER_ESTATE,
+          });
       // Seed the single synthetic (tenant, estate, actor) dev slot the spike
       // records under. These are fixed synthetic dev constants — never
-      // request-derived, never production identity binding (Phase 46U §10).
+      // request-derived, never production identity binding (Phase 46U §10). For the
+      // durable store this seed is idempotent against an already-hydrated snapshot
+      // (re-seeding the same scope is a no-op and is not re-persisted).
       store.seedScope({
         tenant_id: ADMISSION_ROUTE_STORAGE_SPIKE_TENANT_ID,
         estate_id: ADMISSION_ROUTE_STORAGE_SPIKE_ESTATE_ID,
@@ -693,7 +722,9 @@ export function createDixieApp(config: DixieConfig): DixieApp {
       };
       log('warn', {
         event: 'admission_intake_route_storage_spike_active',
-        note: 'dev/operator-only route-storage spike (Mode 1, non-durable, in-process) enabled — NOT production storage',
+        note: durable
+          ? 'dev/operator-only route-storage spike (Mode 2, DURABLE json-snapshot, off the production migration path) enabled — NOT production storage'
+          : 'dev/operator-only route-storage spike (Mode 1, non-durable, in-process) enabled — NOT production storage',
       });
     }
 

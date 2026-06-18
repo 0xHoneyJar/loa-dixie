@@ -10,6 +10,9 @@
 // only assert the route table.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createDixieApp } from '../../../src/server.js';
 import type { DixieConfig } from '../../../src/config.js';
 
@@ -63,6 +66,10 @@ function baseConfig(): DixieConfig {
     admissionIntakeSpikeOperatorIds: [],
     // Phase 46V route-storage spike gate (default off; overridden per-case).
     admissionIntakeStorageSpikeEnabled: false,
+    // Phase 47A durable (Mode 2) route-storage spike gate + dir (default off/empty;
+    // overridden per-case).
+    admissionIntakeDurableStorageSpikeEnabled: false,
+    admissionIntakeDurableStorageSpikeDir: '',
   };
 }
 
@@ -74,10 +81,14 @@ function hasAdmissionRoute(app: ReturnType<typeof createDixieApp>): boolean {
 beforeEach(() => {
   delete process.env.DIXIE_ADMISSION_INTAKE_ENABLED;
   delete process.env.DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED;
+  delete process.env.DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_ENABLED;
+  delete process.env.DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_DIR;
 });
 afterEach(() => {
   delete process.env.DIXIE_ADMISSION_INTAKE_ENABLED;
   delete process.env.DIXIE_ADMISSION_INTAKE_STORAGE_SPIKE_ENABLED;
+  delete process.env.DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_ENABLED;
+  delete process.env.DIXIE_ADMISSION_INTAKE_DURABLE_STORAGE_SPIKE_DIR;
 });
 
 describe('Phase 33N — admission spike route registration is gated and off by default', () => {
@@ -158,5 +169,84 @@ describe('Phase 46V — route-storage spike is separately gated (storage gate AN
       admissionIntakeSpikeServiceToken: 'dev-token-synthetic',
     });
     expect(hasAdmissionRoute(app)).toBe(true);
+  });
+});
+
+// ── Phase 47A: DURABLE (Mode 2) store is gated behind a THIRD flag + a dir ─────
+//
+// The durable store engages ONLY when ALL of: base route gate AND Mode-1 storage
+// gate AND durable gate are true AND a non-empty durable dir is set. Any missing
+// leg leaves the spike on the Mode-1 (non-durable, in-process) path or the no-store
+// path. The store has no route-table signal, so observable proof is: the app
+// constructs cleanly in every combination, and ONLY the full conjunction writes a
+// durable artifact to disk.
+describe('Phase 47A — durable (Mode 2) store is gated behind a third flag + a dir', () => {
+  let durableDir: string;
+  beforeEach(() => {
+    durableDir = mkdtempSync(join(tmpdir(), 'aw-durable-reg-'));
+  });
+  afterEach(() => {
+    rmSync(durableDir, { recursive: true, force: true });
+  });
+
+  function durableArtifactWritten(): boolean {
+    return existsSync(durableDir) && readdirSync(durableDir).length > 0;
+  }
+
+  it('durable gate ON but base+storage gates OFF → route NOT registered, no durable artifact', () => {
+    const app = createDixieApp({
+      ...baseConfig(),
+      admissionIntakeSpikeEnabled: false,
+      admissionIntakeStorageSpikeEnabled: false,
+      admissionIntakeDurableStorageSpikeEnabled: true,
+      admissionIntakeDurableStorageSpikeDir: durableDir,
+    });
+    expect(hasAdmissionRoute(app)).toBe(false);
+    expect(durableArtifactWritten()).toBe(false);
+  });
+
+  it('base+storage ON, durable gate OFF → route registered (Mode 1), no durable artifact', () => {
+    const app = createDixieApp({
+      ...baseConfig(),
+      admissionIntakeSpikeEnabled: true,
+      admissionIntakeStorageSpikeEnabled: true,
+      admissionIntakeDurableStorageSpikeEnabled: false,
+      admissionIntakeDurableStorageSpikeDir: durableDir,
+      admissionIntakeSpikeServiceToken: 'dev-token-synthetic',
+    });
+    expect(hasAdmissionRoute(app)).toBe(true);
+    // Mode 1 store is in-process only — nothing is written to the durable dir.
+    expect(durableArtifactWritten()).toBe(false);
+  });
+
+  it('base+storage+durable gates ON but dir EMPTY → fails closed to Mode 1 (no artifact)', () => {
+    const app = createDixieApp({
+      ...baseConfig(),
+      admissionIntakeSpikeEnabled: true,
+      admissionIntakeStorageSpikeEnabled: true,
+      admissionIntakeDurableStorageSpikeEnabled: true,
+      admissionIntakeDurableStorageSpikeDir: '', // no operator dir → fail closed to Mode 1
+      admissionIntakeSpikeServiceToken: 'dev-token-synthetic',
+    });
+    expect(hasAdmissionRoute(app)).toBe(true);
+    expect(durableArtifactWritten()).toBe(false);
+  });
+
+  it('ALL three gates ON + a dir → route registered; durable store built + seeded (artifact on disk)', () => {
+    const app = createDixieApp({
+      ...baseConfig(),
+      admissionIntakeSpikeEnabled: true,
+      admissionIntakeStorageSpikeEnabled: true,
+      admissionIntakeDurableStorageSpikeEnabled: true,
+      admissionIntakeDurableStorageSpikeDir: durableDir,
+      admissionIntakeSpikeServiceToken: 'dev-token-synthetic',
+    });
+    expect(hasAdmissionRoute(app)).toBe(true);
+    // The seed of the fixed synthetic scope is persisted → exactly one durable
+    // artifact (the `.json` snapshot) exists, and it is NOT a `.sql` file.
+    expect(durableArtifactWritten()).toBe(true);
+    const files = readdirSync(durableDir);
+    expect(files.some((f) => f.endsWith('.json'))).toBe(true);
+    expect(files.some((f) => f.endsWith('.sql'))).toBe(false);
   });
 });

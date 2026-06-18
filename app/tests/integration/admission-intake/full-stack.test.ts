@@ -78,6 +78,10 @@ function baseConfig(finnPort: number): DixieConfig {
     // Phase 46V route-storage spike gate (default off for the base full-stack
     // suite; the dedicated registration suite proves the AND-gating).
     admissionIntakeStorageSpikeEnabled: false,
+    // Phase 47A durable (Mode 2) route-storage spike gate + dir (default off/empty;
+    // the dedicated registration suite proves the three-gate AND).
+    admissionIntakeDurableStorageSpikeEnabled: false,
+    admissionIntakeDurableStorageSpikeDir: '',
   };
 }
 
