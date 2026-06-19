@@ -22,6 +22,12 @@
 > and the Phase 47E §8–§18 obligations satisfied **for a planning-only spike**. **Real DB execution remains NOT
 > authorized**: `--apply` stays refused and no execution sink exists; any future execution lane must first pass the
 > separate docs-only **Phase 47H — Lane-1 `aw_*` SQL execution sink / real-DB boundary decomposition gate**.
+>
+> **Phase 47H status note (forward traceability).** Phase 47H (PR pending,
+> [`../ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-BOUNDARY-GATE.md`](../ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-BOUNDARY-GATE.md))
+> **decomposed** the execution-sink / real-DB boundary (Verdict A) and kept implementation **BLOCKED** — `--apply` /
+> DB client / sink injection / real DB execution all remain blocked behind a docs-only **Phase 47I** implementation-
+> authorization checklist gate and a later code-bearing lane.
 
 ---
 
