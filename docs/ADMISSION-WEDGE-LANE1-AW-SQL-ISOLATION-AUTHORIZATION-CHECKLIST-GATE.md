@@ -916,6 +916,14 @@ guard / gate / storage / no-leak / rollback evidence), and implies **no** change
 > **Selected next lane: Phase 47F — Lane-1 `aw_*` SQL isolated dev/operator implementation spike (a *separate*
 > implementation PR, acceptance-gated on the §8–§18 checklist).**
 
+> **Phase 47G status note (forward traceability).** Phase 47F ran as PR #177 (merged) and was **accepted** by Phase
+> 47G ([`ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-SPIKE-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-SPIKE-ACCEPTANCE-GATE.md),
+> Verdict A) as a bounded, disabled-by-default, dev/operator-only, non-production, location-isolated SQL **planning /
+> manifest / safety-proof** spike satisfying the §8–§18 obligations **for a planning-only spike** (all five Codex
+> PATCH defects resolved). **Real DB execution remains BLOCKED** (`--apply` refused; no execution sink); Phase 47G
+> selected a separate docs-only **Phase 47H** execution-sink / real-DB boundary decomposition gate before any lane may
+> enable `--apply` or inject a real sink.
+
 Phase 47F, if it runs, would be a separate implementation PR and **may only attempt the bounded implementation spike
 if it satisfies the Phase 47E checklist**. It must remain:
 

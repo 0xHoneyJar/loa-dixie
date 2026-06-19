@@ -14,6 +14,14 @@
 > **no** Freeside runtime/client. Lane-2 canonical Straylight-store migrations and the operative
 > Straylight-side ADR-022E gate #8 remain **blocked**. **Phase 47F does not claim that `aw_*` SQL is
 > production-safe and does not claim this is production storage.**
+>
+> **Phase 47G status note (forward traceability).** Phase 47G (PR pending,
+> [`../ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-SPIKE-ACCEPTANCE-GATE.md`](../ADMISSION-WEDGE-LANE1-AW-SQL-ISOLATION-SPIKE-ACCEPTANCE-GATE.md))
+> **accepted** this Phase 47F spike (Verdict A) as a bounded, disabled-by-default, dev/operator-only, non-production,
+> location-isolated SQL **planning / manifest / safety-proof** spike — confirming all five Codex PATCH defects resolved
+> and the Phase 47E §8–§18 obligations satisfied **for a planning-only spike**. **Real DB execution remains NOT
+> authorized**: `--apply` stays refused and no execution sink exists; any future execution lane must first pass the
+> separate docs-only **Phase 47H — Lane-1 `aw_*` SQL execution sink / real-DB boundary decomposition gate**.
 
 ---
 
