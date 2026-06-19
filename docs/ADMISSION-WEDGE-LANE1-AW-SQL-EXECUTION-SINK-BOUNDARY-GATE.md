@@ -712,6 +712,14 @@ execution sink, enable `--apply`, inject a DB client, or run experimental SQL ag
 > **Selected next lane: Phase 47I — Lane-1 `aw_*` SQL execution sink implementation-authorization checklist gate (a
 > *separate*, docs / decision-only gate).**
 
+> **Phase 47I status note (forward traceability).** Phase 47I (PR pending,
+> [`ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md))
+> **converted** this Phase 47H decomposition into a precise, file:line-grounded implementation-authorization checklist
+> and file-scope envelope (Verdict A), **kept implementation BLOCKED**, and **conditionally authorized** a future,
+> separate, code-bearing **Phase 47J — Lane-1 `aw_*` SQL execution sink dev/operator spike** — bounded,
+> disabled-by-default, dev/operator/test-only, non-production, exact-scope, and acceptance-gated on that checklist.
+> `--apply` / DB client / sink injection / real DB execution all **remain blocked** in Phase 47I itself.
+
 Phase 47I must be **docs / decision-only**. It turns this Phase 47H decomposition into a **precise
 implementation-authorization checklist and file-scope envelope** — i.e. the exact implementation file scope, the
 conjunctive gates, the required tests, and the evidence (§18) that must exist before a later code-bearing **Phase 47J**

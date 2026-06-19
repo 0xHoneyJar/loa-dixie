@@ -28,6 +28,14 @@
 > **decomposed** the execution-sink / real-DB boundary (Verdict A) and kept implementation **BLOCKED** — `--apply` /
 > DB client / sink injection / real DB execution all remain blocked behind a docs-only **Phase 47I** implementation-
 > authorization checklist gate and a later code-bearing lane.
+>
+> **Phase 47I status note (forward traceability).** Phase 47I (PR pending,
+> [`../ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md`](../ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-IMPLEMENTATION-AUTHORIZATION-CHECKLIST-GATE.md))
+> **converted** the Phase 47H decomposition into a precise implementation-authorization checklist and file-scope
+> envelope (Verdict A) and **conditionally authorized** a future, separate, code-bearing **Phase 47J — Lane-1 `aw_*`
+> SQL execution sink dev/operator spike** (bounded, disabled-by-default, dev/operator/test-only, non-production,
+> exact-scope, acceptance-gated). **`--apply` stays refused and real DB execution remains BLOCKED** in this Phase 47F
+> spike and in Phase 47I; only the future Phase 47J lane, under its full gate conjunction, could enable execution.
 
 ---
 
