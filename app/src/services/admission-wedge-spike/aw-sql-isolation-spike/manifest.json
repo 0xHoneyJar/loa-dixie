@@ -1,0 +1,13 @@
+{
+  "spike": "phase-47f-aw-sql-isolation-spike",
+  "kind": "experimental-dev-operator-only",
+  "production": false,
+  "schemaFinal": false,
+  "note": "EXACT allowlist of experimental aw_* SQL files for the Phase 47F dev/operator isolated spike. NON-PRODUCTION. Files are relative to this manifest's directory and must resolve inside the sql/ subdirectory. The normal production runner never consults this manifest; isolation of the normal runner is by LOCATION, not by this manifest.",
+  "forward": [
+    "sql/0001_aw_isolation_spike_init.sql"
+  ],
+  "cleanup": [
+    "sql/0001_aw_isolation_spike_init_down.sql"
+  ]
+}
