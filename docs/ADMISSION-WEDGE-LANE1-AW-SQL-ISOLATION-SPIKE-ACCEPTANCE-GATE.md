@@ -573,6 +573,12 @@ Stated clearly so the next lane carries no ambiguity:
 - **Phase 47H is not an ADR-022E gate #8 discharge.**
 - **Phase 47H is docs-only** unless a *subsequent* gate's evidence justifies otherwise.
 
+> **Phase 47H status note (forward traceability).** Phase 47H (PR pending,
+> [`ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-BOUNDARY-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-BOUNDARY-GATE.md))
+> **decomposed** the execution-sink / real-DB boundary (Verdict A), kept execution-sink implementation **BLOCKED**
+> (`--apply` still refused, no sink injected), and **selected a docs-only Phase 47I — Lane-1 `aw_*` SQL execution sink
+> implementation-authorization checklist gate** before any code-bearing execution lane.
+
 **Not selected:** authorize immediate real DB execution (Option B); production durable-store implementation (Option E);
 gate #8 discharge (Option F); Freeside integration (Option G); any freeze (Option H); any execution / `--apply` /
 sink-injection **in this PR**. The accepted Phase 47A `.json` path (Option D) remains the live fallback if a future
