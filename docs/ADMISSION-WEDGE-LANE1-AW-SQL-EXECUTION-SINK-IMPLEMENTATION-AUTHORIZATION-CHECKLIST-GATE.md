@@ -132,6 +132,19 @@ adjacent `loa-straylight` repository (cross-repo references, not Dixie file:line
 > Straylight-store migrations, the route-contract / final-schema freeze, and the operative ADR-022E gate #8 discharge
 > all **remain BLOCKED**.
 
+> **Phase 47L status note (forward traceability; added by the Phase 47L least-privilege evidence blocker gate).** The
+> binding **§16 P.2 / P.3** least-privilege execution-role / grant obligation defined here has been **decomposed (not
+> discharged)** by
+> [`ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-BLOCKER-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-BLOCKER-GATE.md)
+> (strictly docs/decision-only; **produced no evidence**). Phase 47L selected **Option A** and **authorized a future,
+> separate, bounded, dev/operator/test-only, disabled-by-default, non-production, disposable-Postgres-only Phase 47M
+> evidence lane** to satisfy P.2 / P.3 — defining its envelope without implementing it. Only **non-production,
+> disposable** least-privilege evidence is in scope; **production-representative** least privilege stays deferred and
+> blocked. The binding §16 P.2 / P.3 obligation **remains undischarged**, full Phase 47J acceptance **remains
+> withheld**, and a **later, separate acceptance gate** (not Phase 47M itself) decides whether the future evidence
+> clears the gap. Production DB execution, MVP-2 closure, Lane-2 canonical migrations, the route-contract /
+> final-schema freeze, and the operative ADR-022E gate #8 discharge **remain BLOCKED**.
+
 Phase 47I is the bounded, docs/decision-only **Lane-1 `aw_*` SQL execution-sink implementation-authorization checklist
 gate** named by Phase 47H §21. Its purpose is to take the Phase 47H execution-sink / real-DB boundary **decomposition**
 (47H §5–§18) and **convert it into a hard, enumerated, file:line-grounded implementation-authorization checklist and

@@ -57,6 +57,18 @@
 > gate and **not** a docs/test-only or evidence-producing lane — as the next lane. Production DB execution, production
 > migration execution, and the operative ADR-022E gate #8 discharge **remain blocked**.
 
+> **Phase 47L status note (forward traceability; added by the Phase 47L least-privilege evidence blocker gate).** The
+> §16 P.2 / P.3 least-privilege execution-role / grant gap that withheld full acceptance has been **decomposed (not
+> discharged)** by
+> [`../ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-BLOCKER-GATE.md`](../ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-BLOCKER-GATE.md)
+> (strictly docs/decision-only; **produced no evidence** — no role, no grant, no privilege run). Phase 47L selected
+> **Option A** and **authorized a future, separate, bounded, dev/operator/test-only, disabled-by-default,
+> non-production, disposable-Postgres-only Phase 47M evidence lane** to satisfy P.2 / P.3 — only **non-production,
+> disposable** least-privilege evidence is in scope, with **production-representative** least privilege deferred and
+> blocked. Full Phase 47J acceptance **remains withheld** pending that future evidence and a **later, separate
+> acceptance gate**; production DB execution, production migration execution, and the operative ADR-022E gate #8
+> discharge **remain blocked**.
+
 ---
 
 ## 1. Scope

@@ -47,6 +47,19 @@
 > neither the route contract nor the final schema, discharges no operative Straylight-side gate, and claims no
 > production readiness.**
 
+> **Phase 47L status note (forward traceability; added by the Phase 47L least-privilege evidence blocker gate).** The
+> next lane this gate selected (§18) has run:
+> [`ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-BLOCKER-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-BLOCKER-GATE.md)
+> **decomposed** the binding §16 P.2 / P.3 least-privilege execution-role / grant evidence gap, **produced no
+> evidence** (strictly docs/decision-only), and selected **Option A** — **authorizing a future, separate, bounded,
+> dev/operator/test-only, disabled-by-default, non-production, disposable-Postgres-only Phase 47M evidence lane** to
+> satisfy P.2 / P.3, defining its envelope without implementing it. Only **non-production, disposable** least-privilege
+> evidence is in scope; **production-representative** least privilege stays deferred and blocked behind gate #8. The
+> binding §16 P.2 / P.3 obligation **remains undischarged**, full Phase 47J acceptance **remains withheld**, and a
+> **later, separate acceptance gate** (not Phase 47M itself) decides whether the future evidence clears the gap and
+> unblocks full Phase 47J acceptance. MVP-2 closure, production DB execution, Lane-2 canonical migrations, the
+> route-contract / final-schema freeze, and the operative ADR-022E gate #8 discharge **remain BLOCKED**.
+
 Every assessment below is grounded **read-only** against the **merged Phase 47J source** in the Dixie repo at the time
 of writing (PR #181, commit `a377922d`, **8 files, +1902 / −52 lines, zero production-path / vector / fixture files
 touched**). The execution-gate seam read read-only: the injected `IsolationSpikeStatementSink` interface
