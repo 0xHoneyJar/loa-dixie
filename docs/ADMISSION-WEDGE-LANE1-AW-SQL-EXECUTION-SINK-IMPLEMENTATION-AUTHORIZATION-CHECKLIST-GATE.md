@@ -82,6 +82,35 @@ adjacent `loa-straylight` repository (cross-repo references, not Dixie file:line
 
 ## 1. Status
 
+> **Phase 47J status note (forward traceability; added by the Phase 47J implementation lane, §8 / §24).** The
+> conditionally-authorized **Phase 47J — Lane-1 `aw_*` SQL execution-sink dev/operator spike** has been implemented
+> within the exact §8 file-scope envelope:
+> [`admission-wedge/PHASE-47J-AW-SQL-EXECUTION-SINK-SPIKE-RUNBOOK.md`](admission-wedge/PHASE-47J-AW-SQL-EXECUTION-SINK-SPIKE-RUNBOOK.md).
+> It added a pure execution-gate conjunction to the planner module (`index.ts`, still pool-free and `node:`-only), the
+> real sink / DB-client / non-production target policy to the explicit runner (`aw-sql-isolation-spike-runner.mjs`,
+> outside the guarded `SPIKE_FILES`), the new focused
+> `app/tests/unit/admission-wedge-spike/aw-sql-execution-sink-spike.test.ts`, and extended the three existing Phase 47F
+> test files. `--apply` is now possible **only** under the full §10 gate conjunction against a strictly-non-production
+> target accepted by the §11 policy; the production `DATABASE_URL` stays refused; the migration runner, packager, server
+> boot, `config.ts`, scope guard, package, and lockfile are **unchanged**. The §11 target policy was **hardened**
+> (beyond the original host-only check) to a **scheme allowlist** (`postgres:`/`postgresql:` only) plus **wholesale
+> query-parameter rejection**, so a loopback-looking DSN can no longer launder a wrong protocol or redirect the
+> effective network target `pg` uses via `?host=` / `?hostaddr=` / `?port=` / `?ssl*=` (stable non-secret refusal codes
+> `TARGET_UNSUPPORTED_PROTOCOL` / `TARGET_HOST_OVERRIDE_UNSUPPORTED` / `TARGET_TLS_FILE_PARAMETER_UNSUPPORTED` /
+> `TARGET_QUERY_PARAMETER_UNSUPPORTED`). The execution-sink seam, target policy, gate
+> conjunction, and transaction / rollback / conflict semantics are proven with an **injected fake/test sink** in the
+> automated unit suite (no external DB is contacted by the suite; no dependency / CI DB service added). **In addition**,
+> a **one-off, bounded, non-production operator run** against a **disposable, loopback-only, volume-less, auto-removed
+> Postgres 16 container** exercised the §15 real-engine `CHECK` enforcement (R.1–R.6), the §13 transaction / idempotency
+> / conflict checklist (all-or-nothing apply, idempotent replay, `UNIQUE`-conflict rollback with no partial admit), and
+> the §14 cleanup / down checklist against a **live** engine, with the DSN / password / host / port / DB name redacted
+> and absent from runner output (recorded in the Phase 47J runbook §8). This live-engine proof is a **bounded
+> dev/operator artifact only** — **not** a CI service, changing **no** dependency / lockfile / package script / config,
+> and proving **nothing** about production. **Real production DB
+> execution, production migration execution, Lane-2 canonical Straylight-store migrations, the route-contract /
+> final-schema freeze, and the operative ADR-022E gate #8 discharge all remain BLOCKED**; Phase 47J claims no production
+> readiness and does not claim `aw_*` SQL is production-safe.
+
 Phase 47I is the bounded, docs/decision-only **Lane-1 `aw_*` SQL execution-sink implementation-authorization checklist
 gate** named by Phase 47H §21. Its purpose is to take the Phase 47H execution-sink / real-DB boundary **decomposition**
 (47H §5–§18) and **convert it into a hard, enumerated, file:line-grounded implementation-authorization checklist and

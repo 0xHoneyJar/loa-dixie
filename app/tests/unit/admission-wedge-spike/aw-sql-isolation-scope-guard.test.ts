@@ -120,6 +120,19 @@ describe('Phase 47F scope-guard — the new module is inside the canonical guard
       expect(specifiers.some((s) => fn(s))).toBe(false);
     }
   });
+
+  // ── Phase 47J — the new pure execution-gate seam stays token-clean ──────────
+
+  it('the Phase 47J execution-gate seam exists in index.ts yet adds ZERO durable-write hits', () => {
+    const raw = readFileSync(ISO_INDEX, 'utf8');
+    // The pure gate conjunction (runner-fed) lives in the planner module …
+    expect(raw).toContain('evaluateIsolationSpikeExecutionGate');
+    expect(raw).toContain('assertIsolationSpikeExecutionGateOpen');
+    // … and it remains pool-free: no pg / db client / migrate token in executable
+    // source (the DB-touching code lives only in the runner, outside SPIKE_FILES).
+    const code = stripComments(raw);
+    expect(durableWriteHits(code)).toEqual([]);
+  });
 });
 
 // ── G.2/G.3 — no allowlist / opt-out was added for this lane ───────────────────
