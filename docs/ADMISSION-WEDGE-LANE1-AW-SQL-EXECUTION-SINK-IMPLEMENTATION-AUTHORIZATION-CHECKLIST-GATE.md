@@ -111,6 +111,27 @@ adjacent `loa-straylight` repository (cross-repo references, not Dixie file:line
 > final-schema freeze, and the operative ADR-022E gate #8 discharge all remain BLOCKED**; Phase 47J claims no production
 > readiness and does not claim `aw_*` SQL is production-safe.
 
+> **Phase 47K status note (forward traceability; added by the Phase 47K acceptance gate).** The merged Phase 47J
+> implementation (PR #181) was **partially accepted (PATCH / NOT FULLY ACCEPTED)** by
+> [`ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-SPIKE-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-SPIKE-ACCEPTANCE-GATE.md):
+> its bounded, **demonstrated** components — the hardened target policy (scheme allowlist + wholesale query-parameter
+> rejection), the fail-closed gate / connect-order conjunction, the runner-only DB-touching execution sink, the
+> transaction / `CHECK` / `UNIQUE` semantics, the gated reversible cleanup, the public no-leak parity, and the exact
+> file-envelope compliance with no production overclaim — are **accepted**, but **full acceptance against this §8–§21
+> checklist is WITHHELD** because the **binding §16 P.2 / P.3 least-privilege execution-role / grant obligation was
+> named but not demonstrated** (the recorded Phase 47J evidence identifies only a redacted connection user / password
+> and disposable database target; it does **not** document a role, grants, privileges, or a least-privilege boundary)
+> — a **blocking acceptance gap**, not an accepted-by-design characteristic. Phase 47K confirmed both original Codex PATCH fixes (target-policy scheme
+> allowlist + wholesale query-parameter rejection; the bounded redacted live-engine operator run), framed the
+> live-engine evidence as a **bounded non-production operator proof only** (not CI, not production, not a
+> least-privilege / production-role proof), recorded the absence of a standing / CI live-engine regression guard as a
+> **non-defect future-hardening limitation**, and selected **Phase 47L** — a **strictly docs/decision-only** Lane-1
+> `aw_*` SQL least-privilege (P.2 / P.3) evidence blocker decomposition / authorization gate, explicitly **not** the
+> MVP-2 closure gate and **not** a docs/test-only or evidence-producing lane — as the next lane (decision-structure
+> Option C, patch / partial acceptance). Production DB execution, production migration execution, Lane-2 canonical
+> Straylight-store migrations, the route-contract / final-schema freeze, and the operative ADR-022E gate #8 discharge
+> all **remain BLOCKED**.
+
 Phase 47I is the bounded, docs/decision-only **Lane-1 `aw_*` SQL execution-sink implementation-authorization checklist
 gate** named by Phase 47H §21. Its purpose is to take the Phase 47H execution-sink / real-DB boundary **decomposition**
 (47H §5–§18) and **convert it into a hard, enumerated, file:line-grounded implementation-authorization checklist and

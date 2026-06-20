@@ -36,6 +36,26 @@
 > about production admission, production storage, or production-readiness. It does **not** discharge ADR-022E
 > gate #8, authorize Lane-2 canonical Straylight-store migrations, freeze the route contract or the final
 > schema, or claim `aw_*` SQL is production-safe; all of those remain **blocked**.
+>
+> **Phase 47K status note (forward traceability; added by the Phase 47K acceptance gate).** This Phase 47J spike was
+> **partially accepted (PATCH / NOT FULLY ACCEPTED)** by
+> [`../ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-SPIKE-ACCEPTANCE-GATE.md`](../ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-SINK-SPIKE-ACCEPTANCE-GATE.md):
+> its bounded, **demonstrated** components — target-policy hardening, scheme allowlist, query-parameter refusal,
+> fail-closed connect ordering, runner-only DB-touching, the redacted disposable real-engine `CHECK` / `UNIQUE` /
+> transaction evidence, gated reversible cleanup, public no-leak parity, and exact file-envelope compliance with no
+> production overclaim — are **accepted** as a disabled-by-default, dev/operator/test-only, NON-PRODUCTION, exact-scope,
+> fail-closed execution-sink spike, but **full acceptance is WITHHELD** because the **binding Phase 47I §16 P.2 / P.3
+> least-privilege execution-role / grant obligation was named but not demonstrated** (the §8 operator-run evidence
+> identifies only a redacted connection user / password and disposable database target; it does **not** document a
+> role, grants, privileges, or a least-privilege boundary) — a **blocking acceptance gap**, not an accepted-by-design
+> characteristic. The §8
+> live-engine operator run is accepted **only** as a bounded, redacted, local **disposable** operator proof — **not**
+> CI, **not** production, **not** production-readiness, **not** a least-privilege / production-role proof, and **not**
+> permission to connect production DBs; the absence of a standing / CI live-engine regression guard is a **non-defect
+> future-hardening limitation**. Phase 47K selected **Phase 47L** — a **strictly docs/decision-only** Lane-1 `aw_*` SQL
+> least-privilege (P.2 / P.3) evidence blocker decomposition / authorization gate, explicitly **not** the MVP-2 closure
+> gate and **not** a docs/test-only or evidence-producing lane — as the next lane. Production DB execution, production
+> migration execution, and the operative ADR-022E gate #8 discharge **remain blocked**.
 
 ---
 
