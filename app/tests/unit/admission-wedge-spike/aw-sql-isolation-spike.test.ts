@@ -39,6 +39,9 @@ import {
   createSyntheticWriteReducer,
   isSyntheticOpaqueRef,
   SYNTHETIC_REF_MAX_LENGTH,
+  evaluateIsolationSpikeExecutionGate,
+  assertIsolationSpikeExecutionGateOpen,
+  ISOLATION_SPIKE_EXECUTION_REFUSAL,
   IsolationSpikeDisabledError,
   IsolationSpikeProductionRefusedError,
   IsolationSpikeManifestError,
@@ -46,7 +49,9 @@ import {
   IsolationSpikeApplyError,
   IsolationSpikeSyntheticInputError,
   IsolationSpikeReplayConflictError,
+  IsolationSpikeExecutionRefusedError,
   type IsolationSpikeStatementSink,
+  type IsolationSpikeExecutionGateInput,
   type SyntheticAssertionWrite,
 } from '../../../src/services/admission-wedge-spike/aw-sql-isolation-spike/index.js';
 import {
@@ -752,6 +757,57 @@ describe('Phase 47F — rollback / recovery (Section K / §18)', () => {
   it('dry-run plan building opens no connection and applies nothing (no sink involved)', () => {
     const p = buildIsolationSpikePlan(REAL_SPIKE_ROOT, 'forward');
     expect(Array.isArray(p.steps)).toBe(true);
+  });
+});
+
+// ── Phase 47J — execution-gate seam composes with the all-or-nothing apply ─────
+
+describe('Phase 47F/47J — execution-gate seam is pure and runner-fed', () => {
+  const openInput: IsolationSpikeExecutionGateInput = {
+    applyRequested: true,
+    executionOptInPresent: true,
+    devOperatorModeAccepted: true,
+    nonProductionTargetAccepted: true,
+    explicitRunnerInvocation: true,
+    manifestVerified: true,
+    pathContainmentVerified: true,
+    noUnlistedSql: true,
+    cleanupRequested: false,
+    cleanupOptInPresent: false,
+  };
+
+  it('evaluateIsolationSpikeExecutionGate is open only with every gate, refuses each missing one', () => {
+    expect(evaluateIsolationSpikeExecutionGate(openInput).open).toBe(true);
+    const closed = evaluateIsolationSpikeExecutionGate({ ...openInput, executionOptInPresent: false });
+    expect(closed.open).toBe(false);
+    expect(closed.refusals).toContain(ISOLATION_SPIKE_EXECUTION_REFUSAL.EXECUTION_OPT_IN_MISSING);
+    expect(() => assertIsolationSpikeExecutionGateOpen(openInput)).not.toThrow();
+    expect(() =>
+      assertIsolationSpikeExecutionGateOpen({ ...openInput, nonProductionTargetAccepted: false }),
+    ).toThrow(IsolationSpikeExecutionRefusedError);
+  });
+
+  it('once the gate is open, the same injected-sink apply path runs all-or-nothing', async () => {
+    const root = tempSpike(OK_MANIFEST, OK_SQL);
+    assertIsolationSpikeExecutionGateOpen(openInput);
+    const calls: string[] = [];
+    const sink: IsolationSpikeStatementSink = {
+      begin() {
+        calls.push('begin');
+      },
+      applyStatement() {
+        calls.push('apply');
+      },
+      commit() {
+        calls.push('commit');
+      },
+      rollback() {
+        calls.push('rollback');
+      },
+    };
+    const result = await applyIsolationSpikePlan(buildIsolationSpikePlan(root, 'forward'), sink);
+    expect(calls).toEqual(['begin', 'apply', 'commit']);
+    expect(result.appliedCount).toBe(1);
   });
 });
 

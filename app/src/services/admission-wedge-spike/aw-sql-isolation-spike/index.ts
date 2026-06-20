@@ -592,6 +592,120 @@ export async function applyIsolationSpikePlan(
   };
 }
 
+// ── Phase 47J — bounded execution-sink gate conjunction (pure; runner-fed) ─────
+//
+// The execution-sink proof (Phase 47J) lets the EXPLICIT dev/operator runner
+// inject a real sink and apply the already-validated static plan — but ONLY when
+// every independent gate below holds. This module stays the pure, pool-free,
+// `node:`-only seam: it parses NO DSN, names NO client, reads NO env, and opens
+// NO connection. The runner does the raw env / DSN parsing and the strict
+// non-production target policy, then hands this conjunction the ALREADY-DECIDED
+// booleans. Any unmet gate fails closed BEFORE the runner opens a connection.
+
+/** The independent gates that must ALL hold before a real sink may be injected
+ *  and the static plan executed. Each field is an already-decided boolean — the
+ *  raw env / DSN parsing + non-production target policy that produce them live
+ *  ONLY in the explicit runner (this module stays pool-free and never parses a
+ *  target). A missing / false / non-`true` field fails closed. */
+export interface IsolationSpikeExecutionGateInput {
+  /** Execution was explicitly requested (`--apply`). */
+  applyRequested: boolean;
+  /** A DISTINCT execution opt-in (separate from the base spike opt-in) is set. */
+  executionOptInPresent: boolean;
+  /** The base dev/operator gate is open AND the environment is not production. */
+  devOperatorModeAccepted: boolean;
+  /** A strictly-non-production target was accepted by the runner target policy. */
+  nonProductionTargetAccepted: boolean;
+  /** The runner is the explicit out-of-band caller (never startup / route / hook). */
+  explicitRunnerInvocation: boolean;
+  /** The exact manifest verified (a plan was built — strict schema + literals). */
+  manifestVerified: boolean;
+  /** SQL path containment verified (lexical + symlink + realpath, per the plan). */
+  pathContainmentVerified: boolean;
+  /** No unlisted SQL is present (on-disk reconciliation passed during plan build). */
+  noUnlistedSql: boolean;
+  /** Whether the requested direction is the cleanup / down path. */
+  cleanupRequested: boolean;
+  /** A DISTINCT cleanup opt-in is set (required only when cleanup is requested). */
+  cleanupOptInPresent: boolean;
+}
+
+/** The outcome of evaluating the execution-sink gate conjunction. */
+export interface IsolationSpikeExecutionGateResult {
+  /** True iff EVERY required gate holds. */
+  open: boolean;
+  /** Stable, non-secret reason codes for each unmet gate (never a DSN / secret). */
+  refusals: string[];
+}
+
+/** Stable, non-secret reason codes for an unmet execution gate. */
+export const ISOLATION_SPIKE_EXECUTION_REFUSAL = Object.freeze({
+  APPLY_NOT_REQUESTED: 'APPLY_NOT_REQUESTED',
+  EXECUTION_OPT_IN_MISSING: 'EXECUTION_OPT_IN_MISSING',
+  DEV_OPERATOR_MODE_MISSING: 'DEV_OPERATOR_MODE_MISSING',
+  NON_PRODUCTION_TARGET_NOT_ACCEPTED: 'NON_PRODUCTION_TARGET_NOT_ACCEPTED',
+  NOT_EXPLICIT_RUNNER_INVOCATION: 'NOT_EXPLICIT_RUNNER_INVOCATION',
+  MANIFEST_NOT_VERIFIED: 'MANIFEST_NOT_VERIFIED',
+  PATH_CONTAINMENT_NOT_VERIFIED: 'PATH_CONTAINMENT_NOT_VERIFIED',
+  UNLISTED_SQL_PRESENT: 'UNLISTED_SQL_PRESENT',
+  CLEANUP_OPT_IN_MISSING: 'CLEANUP_OPT_IN_MISSING',
+} as const);
+
+/**
+ * Evaluate the execution-sink gate conjunction. Returns `open: true` ONLY when
+ * EVERY required gate holds; otherwise `open: false` with a list of stable,
+ * non-secret reason codes. This is a pure function: it parses nothing, opens
+ * nothing, and logs nothing. The runner calls it (and refuses, fail-closed)
+ * BEFORE constructing a client or opening a connection.
+ */
+export function evaluateIsolationSpikeExecutionGate(
+  input: IsolationSpikeExecutionGateInput,
+): IsolationSpikeExecutionGateResult {
+  const R = ISOLATION_SPIKE_EXECUTION_REFUSAL;
+  const refusals: string[] = [];
+  if (input.applyRequested !== true) refusals.push(R.APPLY_NOT_REQUESTED);
+  if (input.executionOptInPresent !== true) refusals.push(R.EXECUTION_OPT_IN_MISSING);
+  if (input.devOperatorModeAccepted !== true) refusals.push(R.DEV_OPERATOR_MODE_MISSING);
+  if (input.nonProductionTargetAccepted !== true) refusals.push(R.NON_PRODUCTION_TARGET_NOT_ACCEPTED);
+  if (input.explicitRunnerInvocation !== true) refusals.push(R.NOT_EXPLICIT_RUNNER_INVOCATION);
+  if (input.manifestVerified !== true) refusals.push(R.MANIFEST_NOT_VERIFIED);
+  if (input.pathContainmentVerified !== true) refusals.push(R.PATH_CONTAINMENT_NOT_VERIFIED);
+  if (input.noUnlistedSql !== true) refusals.push(R.UNLISTED_SQL_PRESENT);
+  if (input.cleanupRequested === true && input.cleanupOptInPresent !== true) {
+    refusals.push(R.CLEANUP_OPT_IN_MISSING);
+  }
+  return { open: refusals.length === 0, refusals };
+}
+
+/** Thrown when the execution-sink gate conjunction is not fully open — carries
+ *  the stable, non-secret unmet-gate reason codes (never a DSN / secret). */
+export class IsolationSpikeExecutionRefusedError extends Error {
+  /** Stable reason codes for each unmet gate. */
+  readonly refusals: string[];
+  constructor(refusals: string[]) {
+    super(
+      `Phase 47J aw_* SQL execution sink refused (fail-closed): every execution gate must hold before a connection is opened. Unmet gate codes: ${refusals.join(', ')}.`,
+    );
+    this.name = 'IsolationSpikeExecutionRefusedError';
+    this.refusals = refusals;
+  }
+}
+
+/**
+ * Assert the execution-sink gate conjunction is fully open; throw a typed,
+ * non-secret error (with reason codes only) otherwise. The runner calls this
+ * before injecting a real sink — so a missing gate refuses, fails closed, and
+ * exits non-zero, never silently opening a connection or applying anything.
+ */
+export function assertIsolationSpikeExecutionGateOpen(
+  input: IsolationSpikeExecutionGateInput,
+): void {
+  const { open, refusals } = evaluateIsolationSpikeExecutionGate(input);
+  if (!open) {
+    throw new IsolationSpikeExecutionRefusedError(refusals);
+  }
+}
+
 // ── Bounded opaque references + dev-only replay / conflict reducer ─────────────
 //
 // The experimental schema persists ONLY short, bounded, opaque `awref:` strings —

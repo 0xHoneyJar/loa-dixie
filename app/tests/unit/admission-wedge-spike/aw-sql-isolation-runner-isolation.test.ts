@@ -162,6 +162,36 @@ describe('Phase 47F isolation — startup runs no experimental SQL (Section F / 
     // The runner has a top-level guard assertion before any plan is built.
     expect(runner).toContain('assertDevOperatorGateOpen');
   });
+
+  // ── Phase 47J — the execution sink stays runner-bound + import-safe ──────────
+
+  it('F.2–F.5 (47J) — server.ts never imports the execution-sink runner / sink / gate', () => {
+    const src = serverSrc();
+    expect(src).not.toMatch(/runExecutionSinkSpike|createPgClientStatementSink|assessExecutionTarget/);
+    expect(src).not.toMatch(/IsolationSpikeExecutionGate|assertIsolationSpikeExecutionGateOpen/);
+  });
+
+  it('F.5 (47J) — the real pg client / sink is constructed ONLY in the runner (outside SPIKE_FILES)', () => {
+    const runner = readFileSync(RUNNER_SRC, 'utf8');
+    // The DB-touching pg import lives in the runner (under app/scripts/, which the
+    // canonical scope guard does NOT scan), never in the planner module.
+    expect(runner).toMatch(/import\(['"]pg['"]\)/);
+    expect(runner).toContain('createPgClientStatementSink');
+    const planner = readFileSync(
+      join(SPIKE_SERVICE_DIR, 'aw-sql-isolation-spike', 'index.ts'),
+      'utf8',
+    );
+    expect(planner).not.toMatch(/from\s+['"]pg['"]/);
+    expect(planner).not.toMatch(/import\(['"]pg['"]\)/);
+  });
+
+  it('the runner runs main() only when invoked directly (import-safe direct-run guard)', () => {
+    const runner = readFileSync(RUNNER_SRC, 'utf8');
+    // Importing the runner in a test must NOT trigger main()/process.exit — the
+    // direct-run guard compares import.meta.url to the invoked argv path.
+    expect(runner).toMatch(/import\.meta\.url\s*===\s*pathToFileURL/);
+    expect(runner).toContain('if (isDirectRun)');
+  });
 });
 
 // ── Section C (§10 C.7) — no package-lifecycle invocation ─────────────────────
