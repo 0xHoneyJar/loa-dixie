@@ -75,6 +75,20 @@
 > operative ADR-022E gate #8 discharge **all remain BLOCKED**; the selected next lane is a strictly docs/decision-only
 > Phase 47O corridor-closure / remaining-MVP-2-blocker review gate.
 
+> **Phase 47O status note (forward traceability; added by the Phase 47O corridor-closure review gate).** The Phase 47O
+> Lane-1 `aw_*` SQL execution corridor-closure review gate
+> ([`ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-CORRIDOR-CLOSURE-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-CORRIDOR-CLOSURE-GATE.md);
+> strictly docs/decision-only; **produced no evidence**; Verdict **Option A — ACCEPT corridor closure**) reviewed the
+> bounded non-production Lane-1 corridor after Phase 47N's P.2 / P.3 acceptance and **accepted closure of the bounded
+> non-production `aw_*` SQL execution proof stack**. The corridor whose single **blocking acceptance gap** this gate
+> identified (the binding §16 P.2 / P.3 least-privilege evidence) is now **closed as a bounded non-production proof
+> stack** — the gap cleared by Phase 47N, the corridor closed by Phase 47O — with the **non-defect future-hardening
+> limitation** this gate recorded (no standing / CI live-engine regression guard) remaining a known characteristic, not
+> a blocking gap. This is a **proof-corridor closure only**: **MVP-2 REMAINS OPEN**, and production DB execution,
+> production-representative least privilege, durable production storage, Lane-2 canonical migrations, the route-contract
+> / final-schema freeze, Freeside, and the operative ADR-022E gate #8 discharge **all still BLOCKED**; the selected next
+> lane is a strictly docs/decision-only Phase 47P MVP-2 remaining-blocker decomposition / next-corridor selection gate.
+
 Every assessment below is grounded **read-only** against the **merged Phase 47J source** in the Dixie repo at the time
 of writing (PR #181, commit `a377922d`, **8 files, +1902 / −52 lines, zero production-path / vector / fixture files
 touched**). The execution-gate seam read read-only: the injected `IsolationSpikeStatementSink` interface
