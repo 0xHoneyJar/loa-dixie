@@ -60,6 +60,21 @@
 > unblocks full Phase 47J acceptance. MVP-2 closure, production DB execution, Lane-2 canonical migrations, the
 > route-contract / final-schema freeze, and the operative ADR-022E gate #8 discharge **remain BLOCKED**.
 
+> **Phase 47N status note (forward traceability; added by the Phase 47N least-privilege evidence acceptance gate).** The
+> **blocking acceptance gap** this gate identified — the binding §16 P.2 / P.3 least-privilege execution-role / grant
+> evidence that withheld *full* Phase 47J acceptance — has been **cleared for the bounded Lane-1 non-production /
+> disposable-local corridor** by the merged Phase 47M evidence (PR #184), adjudicated **ACCEPT** by
+> [`ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-ACCEPTANCE-GATE.md)
+> (strictly docs/decision-only; **produced no new evidence**). With the single blocking gap cleared for that bounded
+> corridor, **full Phase 47J acceptance is now recorded within the non-production Lane-1 limits** (the bounded,
+> disabled-by-default, dev/operator/test-only, non-production execution-sink spike Phase 47J was authorized to be). The
+> **non-defect future-hardening limitation** this gate recorded (no standing / CI live-engine regression guard) is
+> **not** resolved by the (also one-off, non-CI) Phase 47M run and remains a known characteristic, not a blocking gap.
+> This clears P.2 / P.3 **only** in the bounded non-production sense; **production-representative** least privilege,
+> production DB execution, MVP-2 closure, Lane-2 canonical migrations, the route-contract / final-schema freeze, and the
+> operative ADR-022E gate #8 discharge **all remain BLOCKED**; the selected next lane is a strictly docs/decision-only
+> Phase 47O corridor-closure / remaining-MVP-2-blocker review gate.
+
 Every assessment below is grounded **read-only** against the **merged Phase 47J source** in the Dixie repo at the time
 of writing (PR #181, commit `a377922d`, **8 files, +1902 / −52 lines, zero production-path / vector / fixture files
 touched**). The execution-gate seam read read-only: the injected `IsolationSpikeStatementSink` interface

@@ -74,6 +74,19 @@
 > least privilege, Lane-2 canonical migrations, route-contract / final-schema freeze, Freeside, and the operative
 > ADR-022E gate #8 discharge **all remain blocked**.
 
+> **Phase 47N status note (forward traceability; added by the Phase 47N least-privilege evidence acceptance gate).** The
+> **later, separate acceptance gate** this gate named (§17) has run:
+> [`ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-ACCEPTANCE-GATE.md)
+> (strictly docs/decision-only; **produced no new evidence**) **adjudicated the merged Phase 47M evidence** against the
+> §7–§13 requirements this gate decomposed (Verdict **A — ACCEPT**): every binding requirement is satisfied by recorded,
+> redacted, disposable-local evidence, so the binding §16 P.2 / P.3 gap is **cleared for the bounded Lane-1
+> non-production / disposable-local evidence corridor** and **full Phase 47J acceptance is recorded within the
+> non-production Lane-1 limits**. This clears P.2 / P.3 **only** in that bounded sense — the **production-representative**
+> least-privilege boundary this gate preserved (Option C, §7 / §16) stays **deferred and blocked** behind the operative
+> ADR-022E gate #8. Production DB execution, MVP-2 closure, Lane-2 canonical migrations, the route-contract /
+> final-schema freeze, and the operative ADR-022E gate #8 discharge **remain BLOCKED**; the selected next lane is a
+> strictly docs/decision-only Phase 47O corridor-closure / remaining-MVP-2-blocker review gate.
+
 Every assessment below is grounded **read-only** against the **merged Phase 47J source and evidence record** in the
 Dixie repo at authoring time (PR #181, commit `a377922d`, **8 files, +1902 / −52 lines, zero production-path / vector /
 fixture files touched**), the Phase 47K partial-acceptance gate (PR #182, commit `66c09514`), and the binding Phase

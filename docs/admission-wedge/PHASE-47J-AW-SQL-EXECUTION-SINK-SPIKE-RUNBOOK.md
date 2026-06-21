@@ -69,6 +69,21 @@
 > acceptance gate**; production DB execution, production migration execution, and the operative ADR-022E gate #8
 > discharge **remain blocked**.
 
+> **Phase 47N status note (forward traceability; added by the Phase 47N least-privilege evidence acceptance gate).** The
+> §16 P.2 / P.3 least-privilege execution-role / grant gap that withheld full acceptance has been **cleared for the
+> bounded Lane-1 non-production / disposable-local corridor** by the merged Phase 47M evidence (PR #184), adjudicated
+> **ACCEPT** by
+> [`../ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-ACCEPTANCE-GATE.md`](../ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-ACCEPTANCE-GATE.md)
+> (strictly docs/decision-only; **produced no new evidence**). With that single blocking gap cleared for the bounded
+> corridor, **full Phase 47J acceptance is now recorded within the non-production Lane-1 limits** — this Phase 47J spike
+> is accepted as the bounded, disabled-by-default, dev/operator/test-only, **NON-PRODUCTION**, exact-scope, fail-closed
+> execution-sink spike it was authorized to be (the §8–§14 demonstrated components plus the now-demonstrated §16 P.2 /
+> P.3). This is **not** a production execution authorization: it clears P.2 / P.3 **only** in the bounded non-production
+> sense, and **production-representative** least privilege, production DB execution, production migration execution,
+> durable production storage, MVP-2 closure, the route-contract / final-schema freeze, Freeside, Lane-2 canonical
+> migrations, and the operative ADR-022E gate #8 discharge **all remain blocked**; the selected next lane is a strictly
+> docs/decision-only Phase 47O corridor-closure / remaining-MVP-2-blocker review gate.
+
 ---
 
 ## 1. Scope
