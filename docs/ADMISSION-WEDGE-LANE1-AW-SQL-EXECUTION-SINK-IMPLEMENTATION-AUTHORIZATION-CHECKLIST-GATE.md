@@ -145,6 +145,22 @@ adjacent `loa-straylight` repository (cross-repo references, not Dixie file:line
 > clears the gap. Production DB execution, MVP-2 closure, Lane-2 canonical migrations, the route-contract /
 > final-schema freeze, and the operative ADR-022E gate #8 discharge **remain BLOCKED**.
 
+> **Phase 47N status note (forward traceability; added by the Phase 47N least-privilege evidence acceptance gate).** The
+> binding **§16 P.2 / P.3** least-privilege execution-role / grant obligation this gate made binding has been
+> **demonstrated for the bounded Lane-1 non-production / disposable-local corridor** by the merged Phase 47M evidence
+> (PR #184) and **accepted** by
+> [`ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-ACCEPTANCE-GATE.md)
+> (strictly docs/decision-only; **produced no new evidence**; Verdict **A — ACCEPT**): a dedicated least-privilege role
+> with a minimal grant proven necessary and sufficient, the dedicated-schema `search_path`, the live CHECK / UNIQUE /
+> rollback probes, the separate cleanup role with proven per-object ownership, and the no-overreach boundary where
+> representable. With this single binding gap cleared for the bounded non-production corridor, **full Phase 47J
+> acceptance is recorded within the non-production Lane-1 limits**. This clears P.2 / P.3 **only** in that bounded
+> sense — **production-representative** least privilege stays **deferred and blocked** behind the operative ADR-022E
+> gate #8. Production DB execution, production migration execution, durable production storage, MVP-2 closure, Lane-2
+> canonical migrations, the route-contract / final-schema freeze, and the operative ADR-022E gate #8 discharge **remain
+> BLOCKED**; the selected next lane is a strictly docs/decision-only Phase 47O corridor-closure / remaining-MVP-2-blocker
+> review gate.
+
 Phase 47I is the bounded, docs/decision-only **Lane-1 `aw_*` SQL execution-sink implementation-authorization checklist
 gate** named by Phase 47H §21. Its purpose is to take the Phase 47H execution-sink / real-DB boundary **decomposition**
 (47H §5–§18) and **convert it into a hard, enumerated, file:line-grounded implementation-authorization checklist and

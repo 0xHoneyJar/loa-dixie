@@ -36,6 +36,23 @@
 > blocked** behind the operative ADR-022E gate #8; only **non-production, disposable** least-privilege evidence is
 > in this lane's scope.
 
+> **Phase 47N status note (forward traceability; added by the Phase 47N least-privilege evidence acceptance gate).** The
+> **later, separate acceptance gate** this lane deferred the clear / accept decision to has run:
+> [`../ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-ACCEPTANCE-GATE.md`](../ADMISSION-WEDGE-LANE1-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-ACCEPTANCE-GATE.md)
+> (strictly docs/decision-only; **produced no new evidence**) **adjudicated this merged Phase 47M evidence** against the
+> binding Phase 47L §7–§13 requirements (Verdict **A — ACCEPT**). It found every binding requirement satisfied by the
+> recorded, redacted, disposable-local evidence (the dedicated least-privilege role, the minimal grant proven necessary
+> and sufficient, the dedicated-schema `search_path`, the live CHECK / UNIQUE / rollback probes under the LP role, the
+> separate cleanup role with proven per-object ownership-transfer, and the no-overreach boundary where representable),
+> and therefore **cleared the binding §16 P.2 / P.3 gap for the bounded Lane-1 non-production / disposable-local
+> evidence corridor** and **recorded full Phase 47J acceptance within the non-production Lane-1 limits** (the bounded,
+> disabled-by-default, dev/operator/test-only, non-production execution-sink spike). This clears P.2 / P.3 **only** in
+> that bounded sense — **production-representative** least privilege stays **deferred and blocked** behind the operative
+> ADR-022E gate #8. Production DB execution, production migration execution, durable production storage, MVP-2 closure,
+> route-contract / final-schema freeze, Freeside, Lane-2 canonical migrations, and the operative ADR-022E gate #8
+> discharge **all remain BLOCKED**; the selected next lane is a strictly docs/decision-only Phase 47O corridor-closure /
+> remaining-MVP-2-blocker review gate.
+
 ---
 
 ## 1. Scope
