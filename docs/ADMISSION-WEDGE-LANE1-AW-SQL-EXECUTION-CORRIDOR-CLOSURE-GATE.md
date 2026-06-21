@@ -55,6 +55,16 @@
 > stack** (§9); **production-representative** safety and MVP-2 closure **remain deferred and blocked** behind the
 > operative ADR-022E gate #8.
 
+> **Phase 47P status note (forward traceability; added by the Phase 47P MVP-2 remaining-blocker decomposition /
+> next-corridor selection gate).** The next lane this gate selected (§16) has run:
+> [`ADMISSION-WEDGE-MVP2-REMAINING-BLOCKER-DECOMPOSITION-GATE.md`](ADMISSION-WEDGE-MVP2-REMAINING-BLOCKER-DECOMPOSITION-GATE.md)
+> **decomposed** the standing MVP-2 blockers this gate left open (§11–§14) into candidate next corridors with an
+> explicit dependency map, **produced no evidence** (strictly docs/decision-only), and **selected Option A — the
+> ADR-022E gate #8 / production storage-adapter binding corridor** as the next corridor, routing it to a separate,
+> strictly docs/decision-only **Phase 47Q — ADR-022E gate #8 production storage-adapter binding blocker decomposition
+> gate**. Phase 47P discharged **no** gate, implemented **no** storage, authorized **no** production work, and **closed
+> no MVP-2**; **MVP-2 remains OPEN** and all production / gate-#8 / MVP-2 closure work stays blocked.
+
 Every assessment below is grounded **read-only** against the merged predecessor decision record in the Dixie repo at
 authoring time and against the **unchanged** Dixie source surface. The frozen Phase 47J execution-sink source is read
 read-only for citation grounding only: the injected `IsolationSpikeStatementSink` interface (`index.ts:124`), the
