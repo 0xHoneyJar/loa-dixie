@@ -64,6 +64,21 @@
 > non-production / disposable-local evidence sense**, and **production-representative** least privilege **remains
 > deferred and blocked** behind the operative ADR-022E gate #8.
 
+> **Phase 47O status note (forward traceability; added by the Phase 47O corridor-closure review gate).** The
+> docs/decision-only Lane-1 `aw_*` SQL execution corridor-closure / remaining-MVP-2-blocker review gate this gate named
+> (§18) has run:
+> [`ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-CORRIDOR-CLOSURE-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-CORRIDOR-CLOSURE-GATE.md)
+> (strictly docs/decision-only; **produced no evidence**; Verdict **Option A — ACCEPT corridor closure**). It reviewed
+> the bounded non-production Lane-1 `aw_*` SQL execution proof corridor after this gate's P.2 / P.3 acceptance and
+> **accepted closure of the bounded non-production `aw_*` SQL execution proof stack** (isolation / planning → execution
+> sink → least-privilege evidence acceptance), finding every corridor element backed by an accepted non-production proof
+> and no remaining non-production proof gap. This is a **proof-corridor closure only**: **MVP-2 REMAINS OPEN**, and
+> production DB execution, production migration execution, durable production storage, production-representative least
+> privilege, route-contract / final-schema freeze, Freeside integration, Lane-2 canonical Straylight-store migrations,
+> and the operative ADR-022E gate #8 discharge **all remain BLOCKED**. The review inventoried the remaining MVP-2
+> blockers and selected the next lane as a strictly docs/decision-only Phase 47P MVP-2 remaining-blocker decomposition /
+> next-corridor selection gate.
+
 Every assessment below is grounded **read-only** against the **merged Phase 47M evidence record** in the Dixie repo at
 authoring time (PR #184, commit `4ec76567`, the redacted §5 / §5.1 disposable-local evidence block), the binding Phase
 47L §7–§13 requirements it was authorized to satisfy, the Phase 47K partial-acceptance gate (PR #182), and the binding

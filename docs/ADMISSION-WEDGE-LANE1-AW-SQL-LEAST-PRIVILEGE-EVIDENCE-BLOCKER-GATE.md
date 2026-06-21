@@ -87,6 +87,19 @@
 > final-schema freeze, and the operative ADR-022E gate #8 discharge **remain BLOCKED**; the selected next lane is a
 > strictly docs/decision-only Phase 47O corridor-closure / remaining-MVP-2-blocker review gate.
 
+> **Phase 47O status note (forward traceability; added by the Phase 47O corridor-closure review gate).** The Phase 47O
+> Lane-1 `aw_*` SQL execution corridor-closure review gate
+> ([`ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-CORRIDOR-CLOSURE-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-CORRIDOR-CLOSURE-GATE.md);
+> strictly docs/decision-only; **produced no evidence**; Verdict **Option A — ACCEPT corridor closure**) reviewed the
+> bounded non-production Lane-1 corridor after Phase 47N's P.2 / P.3 acceptance and **accepted closure of the bounded
+> non-production `aw_*` SQL execution proof stack**. The P.2 / P.3 evidence track this gate decomposed is now part of
+> that **closed bounded non-production proof corridor**. This is a **proof-corridor closure only**: the
+> **production-representative** least-privilege boundary this gate preserved (Option C, §7 / §16) stays **deferred and
+> blocked** behind the operative ADR-022E gate #8, and **MVP-2 REMAINS OPEN** with production DB execution, durable
+> production storage, Lane-2 canonical migrations, the route-contract / final-schema freeze, Freeside, and the gate #8
+> discharge **all still BLOCKED**; the selected next lane is a strictly docs/decision-only Phase 47P MVP-2
+> remaining-blocker decomposition / next-corridor selection gate.
+
 Every assessment below is grounded **read-only** against the **merged Phase 47J source and evidence record** in the
 Dixie repo at authoring time (PR #181, commit `a377922d`, **8 files, +1902 / −52 lines, zero production-path / vector /
 fixture files touched**), the Phase 47K partial-acceptance gate (PR #182, commit `66c09514`), and the binding Phase

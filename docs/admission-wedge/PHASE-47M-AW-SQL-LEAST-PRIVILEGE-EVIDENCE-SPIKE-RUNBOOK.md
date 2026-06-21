@@ -53,6 +53,19 @@
 > discharge **all remain BLOCKED**; the selected next lane is a strictly docs/decision-only Phase 47O corridor-closure /
 > remaining-MVP-2-blocker review gate.
 
+> **Phase 47O status note (forward traceability; added by the Phase 47O corridor-closure review gate).** The Phase 47O
+> Lane-1 `aw_*` SQL execution corridor-closure review gate
+> ([`../ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-CORRIDOR-CLOSURE-GATE.md`](../ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-CORRIDOR-CLOSURE-GATE.md);
+> strictly docs/decision-only; **produced no evidence**; Verdict **Option A — ACCEPT corridor closure**) reviewed the
+> bounded non-production Lane-1 corridor after Phase 47N's P.2 / P.3 acceptance and **accepted closure of the bounded
+> non-production `aw_*` SQL execution proof stack**. The disposable-local least-privilege evidence this runbook produced
+> is now part of that **closed bounded non-production proof corridor** (accepted upstream by Phase 47N, closed as a proof
+> stack by Phase 47O). This is a **proof-corridor closure only**: **production-representative** least privilege stays
+> **deferred and blocked** behind the operative ADR-022E gate #8, and **MVP-2 REMAINS OPEN** with production DB
+> execution, production migration execution, durable production storage, Lane-2 canonical migrations, the route-contract
+> / final-schema freeze, Freeside, and the gate #8 discharge **all still BLOCKED**; the selected next lane is a strictly
+> docs/decision-only Phase 47P MVP-2 remaining-blocker decomposition / next-corridor selection gate.
+
 ---
 
 ## 1. Scope

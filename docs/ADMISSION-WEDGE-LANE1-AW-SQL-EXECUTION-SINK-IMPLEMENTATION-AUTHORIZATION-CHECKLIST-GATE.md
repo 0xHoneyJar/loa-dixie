@@ -161,6 +161,18 @@ adjacent `loa-straylight` repository (cross-repo references, not Dixie file:line
 > BLOCKED**; the selected next lane is a strictly docs/decision-only Phase 47O corridor-closure / remaining-MVP-2-blocker
 > review gate.
 
+> **Phase 47O status note (forward traceability; added by the Phase 47O corridor-closure review gate).** The Phase 47O
+> Lane-1 `aw_*` SQL execution corridor-closure review gate
+> ([`ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-CORRIDOR-CLOSURE-GATE.md`](ADMISSION-WEDGE-LANE1-AW-SQL-EXECUTION-CORRIDOR-CLOSURE-GATE.md);
+> strictly docs/decision-only; **produced no evidence**; Verdict **Option A — ACCEPT corridor closure**) reviewed the
+> bounded non-production Lane-1 corridor after Phase 47N's P.2 / P.3 acceptance and **accepted closure of the bounded
+> non-production `aw_*` SQL execution proof stack**. The binding §16 P.1–P.7 privilege / secret / logging obligations
+> this gate made binding are satisfied within that **closed bounded non-production proof corridor**. This is a
+> **proof-corridor closure only**: **MVP-2 REMAINS OPEN**, and production DB execution, production migration execution,
+> durable production storage, production-representative least privilege, Lane-2 canonical migrations, the route-contract
+> / final-schema freeze, Freeside, and the operative ADR-022E gate #8 discharge **all still BLOCKED**; the selected next
+> lane is a strictly docs/decision-only Phase 47P MVP-2 remaining-blocker decomposition / next-corridor selection gate.
+
 Phase 47I is the bounded, docs/decision-only **Lane-1 `aw_*` SQL execution-sink implementation-authorization checklist
 gate** named by Phase 47H §21. Its purpose is to take the Phase 47H execution-sink / real-DB boundary **decomposition**
 (47H §5–§18) and **convert it into a hard, enumerated, file:line-grounded implementation-authorization checklist and
