@@ -54,6 +54,26 @@
 > production work **remain BLOCKED**; the binding §16 P.2 / P.3 gap **remains undischarged** — Phase 47L only decides
 > *how* a future lane would discharge it.
 
+> **Phase 47M status note (forward traceability; added by the Phase 47M least-privilege evidence spike).** The future
+> separate evidence lane this gate authorized (§17, Option A) has run:
+> [`admission-wedge/PHASE-47M-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-SPIKE-RUNBOOK.md`](admission-wedge/PHASE-47M-AW-SQL-LEAST-PRIVILEGE-EVIDENCE-SPIKE-RUNBOOK.md)
+> **produced** the **non-production, disposable** least-privilege (P.2 / P.3) evidence decomposed in §7–§13 — a
+> dedicated least-privilege execution role (no superuser / `CREATEDB` / `CREATEROLE` / `CREATE` on `public`) drove the
+> **frozen** Phase 47J forward `--apply`, the unqualified `aw_isolation_spike_*` DDL resolved into a dedicated
+> non-`public` schema via a proven `search_path`, the minimal grant set was shown **necessary and sufficient** (F.1–F.7),
+> the no-overreach boundary was demonstrated where representable (N.1–N.5), a set of live data-plane CHECK / UNIQUE /
+> rollback probes was exercised under that same least-privilege role (invalid payload ref, wrong `awref` kind,
+> overlength ref, out-of-range status / class, duplicate conflict, explicit rollback with no partial row), and cleanup
+> ran under a **separate** role with **proven per-object ownership** via a documented ownership-transfer boundary
+> (§10 Model A) — all inside the §14 envelope, with **no source / test / SQL change needed** (the existing runner
+> sufficed; role / grant / schema / ownership setup is operator SQL outside the runner). Phase 47M **does not
+> self-accept** and **does not clear P.2 / P.3**: it **records evidence for later acceptance-gate review**, and a
+> **later, separate acceptance gate** — not Phase 47M — decides whether this evidence clears the binding §16 P.2 / P.3
+> gap and unblocks full Phase 47J acceptance. The binding §16 obligation **remains undischarged** and full Phase 47J acceptance **remains
+> withheld** pending that gate; MVP-2 closure, production DB execution / migration execution, **production-representative**
+> least privilege, Lane-2 canonical migrations, route-contract / final-schema freeze, Freeside, and the operative
+> ADR-022E gate #8 discharge **all remain blocked**.
+
 Every assessment below is grounded **read-only** against the **merged Phase 47J source and evidence record** in the
 Dixie repo at authoring time (PR #181, commit `a377922d`, **8 files, +1902 / −52 lines, zero production-path / vector /
 fixture files touched**), the Phase 47K partial-acceptance gate (PR #182, commit `66c09514`), and the binding Phase
