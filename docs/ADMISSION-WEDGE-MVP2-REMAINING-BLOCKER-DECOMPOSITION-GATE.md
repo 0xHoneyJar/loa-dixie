@@ -96,6 +96,20 @@ next lane:
 > decomposition gate** (a *separate*, strictly docs / decision-only gate — NOT a production implementation, NOT a
 > durable-store lane, NOT the gate-#8 discharge, and NOT the MVP-2 closure itself).
 
+> **Phase 47Q status note (forward traceability; added by the Phase 47Q ADR-022E gate #8 production storage-adapter
+> binding blocker decomposition gate).** The next lane this gate selected (§17) has run:
+> [`ADMISSION-WEDGE-ADR-022E-GATE-8-STORAGE-ADAPTER-BINDING-BLOCKER-DECOMPOSITION-GATE.md`](ADMISSION-WEDGE-ADR-022E-GATE-8-STORAGE-ADAPTER-BINDING-BLOCKER-DECOMPOSITION-GATE.md)
+> **decomposed** the ADR-022E gate #8 / production storage-adapter binding blocker this gate selected (§16 / §17) into
+> its unresolved architectural predicates (storage-adapter ownership / placement; canonical semantics owner; migration-
+> file and migration-execution owners; runtime route storage-call owner; Lane-1-to-Lane-2 relationship; production DB
+> write / route-API / Freeside authorization; auth / consent / signer / authority attachment; tenant / estate / actor
+> identity binding; public-response / raw-payload / no-leak boundary; MVP-2 closure dependency), **produced no evidence**
+> (strictly docs/decision-only), and **selected Option A — a separate, strictly docs/decision-only Phase 47R ADR-022E
+> gate #8 clearing-readiness gate** as the next lane. Phase 47Q discharged **no** gate, cleared gate #8 **no** further
+> than Phase 46N's documentation / architecture / handoff prerequisite, implemented **no** storage, updated **no**
+> ownership ADR, authorized **no** production work, and **closed no MVP-2**; **gate #8 and MVP-2 remain OPEN** and all
+> production / gate-#8 / MVP-2 closure work stays blocked.
+
 For the avoidance of doubt, this selection is **bounded** and says only what the chain supports:
 
 - **"Select the gate #8 / storage-adapter binding corridor next" means choosing which blocker corridor the next
