@@ -3,13 +3,15 @@
   "issue": 331,
   "title": "cycle-014 merge deletes 933 downstream project files",
   "severity": "CRITICAL",
-  "state": "TRIAGED",
+  "state": "COMPLETED",
   "sprint": "sprint-bug-331",
   "global_sprint_id": 100,
   "timestamps": {
     "reported": "2026-02-15T00:00:00Z",
-    "triaged": "2026-02-15T17:00:00Z"
+    "triaged": "2026-02-15T17:00:00Z",
+    "completed": "2026-06-22T00:00:00Z"
   },
+  "closure_note": "Fix landed via PR #330 (commit cf67cd3f): .gitattributes merge=ours protection block + update-loa.md Phase 5.3 collateral-deletion safeguard and Phase 5.5 workflow revert. Record was stuck in TRIAGED; marked COMPLETED to stop /loa routing into the bug workflow.",
   "root_cause": "update-loa uses git merge loa/main which propagates upstream file deletions. Only README.md, CHANGELOG.md, .github/workflows/ protected via .gitattributes merge=ours. All other downstream files (app/, src/, grimoires/) are unprotected.",
   "fix_files": [
     ".claude/commands/update-loa.md",
