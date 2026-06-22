@@ -159,8 +159,12 @@ else
     arg_count="$(yq -r ".graders[$i].args | length // 0" "$TASK_FILE")"
     for j in $(seq 0 $((arg_count - 1))); do
       arg="$(yq -r ".graders[$i].args[$j] // \"\"" "$TASK_FILE")"
-      # Reject args containing shell metacharacters
-      if [[ "$arg" =~ [\;\|\&\$\`\\] ]]; then
+      # Reject args containing shell metacharacters that enable command injection.
+      # Backslash is intentionally NOT in this class: grader args are regex patterns
+      # (e.g. 'describe\(' for pattern-match.sh) and are passed as argv via
+      # "${grader_args[@]}" with no eval/sh -c (see grade.sh), so '\' is inert.
+      # The blocked chars are command separators and substitution: ; | & $ `
+      if [[ "$arg" =~ [\;\|\&\$\`] ]]; then
         errors+=("graders[$i].args[$j]: contains shell metacharacter: '$arg'")
       fi
       # Reject path traversal

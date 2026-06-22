@@ -431,8 +431,12 @@ execute_task() {
     "$HARNESS_DIR/sandbox.sh" destroy --trial-id "$trial_id" 2>/dev/null || true
 
     # Track pass/fail for early stopping
+    # NOTE: do not inline a brace-default like ${composite_json:-{}} here — bash parses
+    # the trailing brace as a literal '}', producing invalid JSON ('{...}}') that makes jq
+    # emit "true\nfalse". Default to an empty object on a separate line instead.
     local trial_passed
-    trial_passed="$(echo "${composite_json:-{}}" | jq -r '.pass // false' 2>/dev/null || echo "false")"
+    [[ -n "$composite_json" ]] || composite_json='{}'
+    trial_passed="$(printf '%s' "$composite_json" | jq -r '.pass // false' 2>/dev/null || echo "false")"
     if [[ "$trial_passed" == "true" ]]; then
       es_passes=$((es_passes + 1))
     else
