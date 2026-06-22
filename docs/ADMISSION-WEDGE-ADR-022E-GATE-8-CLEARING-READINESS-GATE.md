@@ -133,6 +133,20 @@ checklist is **defined**, not satisfied; **no** item is checked off by this gate
 > must satisfy — NOT a production implementation, NOT a durable-store lane, NOT a storage-adapter ownership/placement ADR
 > update, NOT the gate-#8 discharge, and NOT the MVP-2 closure itself).
 
+> **Phase 47S status note (forward traceability; added by the Phase 47S ADR-022E gate #8 clearing-readiness acceptance
+> gate).** The next lane this gate selected (§18) has run:
+> [`ADMISSION-WEDGE-ADR-022E-GATE-8-CLEARING-READINESS-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ADR-022E-GATE-8-CLEARING-READINESS-ACCEPTANCE-GATE.md)
+> (strictly docs/decision-only; **produced no evidence**; Verdict / **Option A — ACCEPT**). It **accepted** this Phase
+> 47R **NOT YET READY for operative discharge** readiness verdict and the **D.1–D.14** minimum discharge checklist as the
+> binding criteria a future operative-discharge lane and Straylight teammate review must satisfy, finding all ten
+> acceptance criteria met (correct/bounded/grounded verdict; complete, dependency-ordered, entirely-unsatisfied
+> checklist; D.13 externally-owned; D.14 terminal; no overclaim; accurate citations). Phase 47S **satisfied no checklist
+> item**, **checked off no box**, **discharged no gate**, **cleared gate #8 no further** than Phase 46N's documentation /
+> architecture / handoff prerequisite, **updated no ownership / placement ADR**, **authorized no production work**, and
+> **selected the next lane as a strictly docs/decision-only Phase 47T — Admission Wedge ADR-022E gate #8 D.1
+> storage-adapter ownership / placement decision gate** (the first dependency-ordered Dixie-assessable checklist
+> corridor). **Gate #8 and MVP-2 remain OPEN** and all production / gate-#8 discharge / MVP-2 closure work stays blocked.
+
 For the avoidance of doubt, this readiness assessment is **bounded** and says only what the chain supports:
 
 - **"Assess gate-#8 clearing readiness" means judging the sufficiency of existing evidence and defining the discharge
