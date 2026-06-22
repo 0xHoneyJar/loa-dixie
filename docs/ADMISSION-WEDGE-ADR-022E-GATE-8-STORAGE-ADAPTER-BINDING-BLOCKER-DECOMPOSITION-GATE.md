@@ -112,6 +112,19 @@ discharge gate #8 and does **not** authorize any production work. It selects the
 > #8 — NOT a production implementation, NOT a durable-store lane, NOT a storage-adapter ownership/placement ADR update,
 > NOT the gate-#8 discharge, and NOT the MVP-2 closure itself).
 
+> **Phase 47R status note (forward traceability; added by the Phase 47R ADR-022E gate #8 clearing-readiness gate).** The
+> next lane this gate selected (§17) has run:
+> [`ADMISSION-WEDGE-ADR-022E-GATE-8-CLEARING-READINESS-GATE.md`](ADMISSION-WEDGE-ADR-022E-GATE-8-CLEARING-READINESS-GATE.md)
+> **assessed** gate-#8 clearing readiness across the thirteen Phase 47Q §7 predicates, concluded the rolled-up verdict is
+> **NOT YET READY for operative discharge** (multiple predicates NOT READY plus the externally-held Straylight-side
+> operative discharge), **defined the minimum discharge checklist** (items D.1–D.14, all currently unsatisfied) a future
+> operative-discharge lane and Straylight teammate review must satisfy, **produced no evidence** (strictly
+> docs/decision-only), and **selected Option A — a separate, strictly docs/decision-only Phase 47S ADR-022E gate #8
+> clearing-readiness *acceptance* gate** as the next lane. Phase 47R discharged **no** gate, concluded **no**
+> readiness-for-discharge, cleared gate #8 **no** further than Phase 46N's documentation / architecture / handoff
+> prerequisite, implemented **no** storage, updated **no** ownership ADR, authorized **no** production work, and **closed
+> no MVP-2**; **gate #8 and MVP-2 remain OPEN** and all production / gate-#8 discharge / MVP-2 closure work stays blocked.
+
 For the avoidance of doubt, this decomposition is **bounded** and says only what the chain supports:
 
 - **"Decompose the gate #8 / storage-adapter binding blocker" means enumerating its unresolved predicates and routing
