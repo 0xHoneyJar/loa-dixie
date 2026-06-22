@@ -960,6 +960,23 @@ production safety, **no** gate-#8 readiness, **no** gate-#8 discharge, **no** fu
   architecture / handoff prerequisite, and **authorized no production work** — keeping **gate #8 OPEN** and **MVP-2
   OPEN** and all production / gate-#8 discharge / MVP-2 closure work blocked.
 
+> **Phase 47U status note (forward traceability; added by the Phase 47U ADR-022E gate #8 D.1 storage-adapter ownership /
+> placement decision *acceptance* gate).** The next lane this gate selected (§18) has run:
+> [`ADMISSION-WEDGE-ADR-022E-GATE-8-D1-STORAGE-ADAPTER-OWNERSHIP-PLACEMENT-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ADR-022E-GATE-8-D1-STORAGE-ADAPTER-OWNERSHIP-PLACEMENT-ACCEPTANCE-GATE.md)
+> (strictly docs/decision-only; **produced no evidence**; Verdict / **Option A — ACCEPT** the Phase 47T D.1 conjunct-(i)
+> decision). It **accepted** this Phase 47T **D.1 conjunct-(i) decision** — accept Candidate D's split-storage route-side
+> adapter as the docs/architecture-level production storage-adapter ownership / placement architecture for route-owned
+> records (a paper architecture decision only, shaped as a `StorageAdapter` swap-in, never a parallel canonical
+> lifecycle) — as correctly-bounded, faithfully-grounded, and invariant-preserving (all ten acceptance criteria MET), and
+> **confirmed D.1 conjunct (ii)** (the canonical-store physical host) stays **externally gated by held sibling gates #9 /
+> #10** with **no host selected**. Because conjunct (ii) stays externally gated, Phase 47U left the **full D.1 checklist
+> item NOT YET SATISFIED** (box not checked off) and **D.2–D.14 all UNSATISFIED**; it **satisfied no full checklist
+> item**, **discharged no gate**, **cleared gate #8 no further** than Phase 46N's documentation / architecture / handoff
+> prerequisite, **updated or froze no ownership / placement ADR**, **selected no canonical-store host**, **authorized no
+> production work**, and **selected the next lane as a strictly docs/decision-only Phase 47V — Admission Wedge ADR-022E
+> gate #8 D.1 canonical-store physical-host dependency gate**. **Gate #8 and MVP-2 remain OPEN** and all production /
+> gate-#8 discharge / MVP-2 closure work stays blocked.
+
 No other file is modified.
 
 ---
