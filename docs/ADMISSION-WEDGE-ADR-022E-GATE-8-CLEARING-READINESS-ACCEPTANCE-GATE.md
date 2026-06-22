@@ -849,6 +849,22 @@ safety, **no** gate-#8 readiness, **no** gate-#8 discharge, **no** checklist-ite
   placement decision gate** — keeping **gate #8 OPEN** and **MVP-2 OPEN** and all production / gate-#8 discharge / MVP-2
   closure work blocked.
 
+> **Phase 47T status note (forward traceability; added by the Phase 47T ADR-022E gate #8 D.1 storage-adapter ownership /
+> placement decision gate).** The next lane this gate selected (§15) has run:
+> [`ADMISSION-WEDGE-ADR-022E-GATE-8-D1-STORAGE-ADAPTER-OWNERSHIP-PLACEMENT-GATE.md`](ADMISSION-WEDGE-ADR-022E-GATE-8-D1-STORAGE-ADAPTER-OWNERSHIP-PLACEMENT-GATE.md)
+> (strictly docs/decision-only; **produced no evidence**; Verdict / **Option A — DECIDE D.1 conjunct (i)**). It **decided
+> D.1 conjunct (i)** — accepting Candidate D's split-storage route-side adapter as the docs/architecture-level production
+> storage-adapter ownership / placement architecture for route-owned records (a paper architecture decision only, shaped
+> as a `StorageAdapter` swap-in, never a parallel canonical lifecycle) — and **decomposed D.1 conjunct (ii)**, routing the
+> canonical-store physical-host selection to held sibling gates #9 / #10 and selecting **no** host. Because conjunct (ii)
+> stays externally gated and the conjunct-(i) decision awaits its own acceptance gate, Phase 47T left the **full D.1
+> checklist item NOT YET SATISFIED** (box not checked off) and **D.2–D.14 all UNSATISFIED**; it **satisfied no full
+> checklist item**, **discharged no gate**, **cleared gate #8 no further** than Phase 46N's documentation / architecture /
+> handoff prerequisite, **updated or froze no ownership / placement ADR**, **authorized no production work**, and
+> **selected the next lane as a strictly docs/decision-only Phase 47U — Admission Wedge ADR-022E gate #8 D.1
+> storage-adapter ownership / placement decision *acceptance* gate**. **Gate #8 and MVP-2 remain OPEN** and all
+> production / gate-#8 discharge / MVP-2 closure work stays blocked.
+
 No other file is modified.
 
 ---
