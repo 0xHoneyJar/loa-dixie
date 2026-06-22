@@ -932,6 +932,25 @@ additive; it claims **no** production safety, **no** gate-#8 readiness, **no** g
   Phase 46N's documentation / architecture / handoff prerequisite, and **authorized no production work** — keeping **gate
   #8 OPEN** and **MVP-2 OPEN** and all production / gate-#8 discharge / MVP-2 closure work blocked.
 
+> **Phase 47W status note (forward traceability; added by the Phase 47W ADR-022E gate #8 D.1 canonical-store
+> physical-host dependency *acceptance* gate).** The next lane this gate selected (§15) has run:
+> [`ADMISSION-WEDGE-ADR-022E-GATE-8-D1-CANONICAL-STORE-PHYSICAL-HOST-DEPENDENCY-ACCEPTANCE-GATE.md`](ADMISSION-WEDGE-ADR-022E-GATE-8-D1-CANONICAL-STORE-PHYSICAL-HOST-DEPENDENCY-ACCEPTANCE-GATE.md)
+> (strictly docs/decision-only; **produced no evidence**; Verdict / **Option A** — **ACCEPT** this Phase 47V D.1
+> canonical-store physical-host dependency verdict, within its actual scope). It **accepted** that the D.1 conjunct-(ii)
+> canonical-store physical-host dependency **REMAINS HELD and is ROUTED to held sibling gates #9 / #10** with **no host
+> selected** (sibling gates #9 / #10 remain the proper authority path for the host dependency; the resolution path is a
+> host selected plus #9 / #10 resolved for the chosen host; D.2 is a separate downstream item, not a prerequisite for
+> satisfying D.1), **preserved** D.1 conjunct (i) (route-owned-records placement) as **accepted by Phase 47T / 47U** (not
+> reopened) and distinguished from canonical-store physical hosting, **preserved** that canonical `Assertion` /
+> `TransitionReceipt` / `AuditEvent` semantics remain Straylight-owned and that **Dixie does not become a parallel
+> canonical lifecycle owner** (it holds ingress references only and re-mints no receipt), left the **full D.1 checklist
+> item NOT YET SATISFIED** (box not checked off) and **D.2–D.14 all UNSATISFIED** (D.13 externally owned / held; D.14
+> terminal / downstream), **satisfied no full checklist item**, **selected no canonical-store host**, **discharged no
+> gate**, **cleared gate #8 no further** than Phase 46N's documentation / architecture / handoff prerequisite, **updated
+> or froze no ownership / placement ADR**, **authorized no production work**, and **selected the next lane as a strictly
+> docs/decision-only Phase 47X — Admission Wedge ADR-022E gate #8 D.1 remaining-conjunct / sibling-gate handoff packet**.
+> **Gate #8 and MVP-2 remain OPEN** and all production / gate-#8 discharge / MVP-2 closure work stays blocked.
+
 No other file is modified.
 
 ---
