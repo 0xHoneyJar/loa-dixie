@@ -410,7 +410,7 @@ gate / satisfaction state; the **Later implication** column records the downstre
 | Decision component | Phase 47T claim | Phase 47U assessment | Status after Phase 47U | Later implication |
 |--------------------|-----------------|----------------------|------------------------|-------------------|
 | **D.1 conjunct (i): route-side adapter ownership / placement** | DECIDED — accept Candidate D's split-storage route-side adapter for route-owned records at the docs/architecture level (47T §9) | Faithful, bounded, invariant-preserving; a paper architecture decision only | **Conjunct (i) decision ACCEPTED by Phase 47U** | Conjunct (i) is now a ratified Dixie-side paper architecture decision; downstream items may presuppose accepted placement once conjunct (ii) resolves |
-| **D.1 conjunct (ii): canonical-store physical host** | DECOMPOSED, NOT decided — routed to held sibling gates #9 / #10; no host selected (47T §10) | Correctly decomposed; the host is not a Dixie docs-only decision | **EXTERNALLY GATED, UNSATISFIED (no host selected)** | Resolved only when #9 / #10 resolve per their own triggers + the chosen host's D.2 invariant-preservation evidence is accepted under Straylight review |
+| **D.1 conjunct (ii): canonical-store physical host** | DECOMPOSED, NOT decided — routed to held sibling gates #9 / #10; no host selected (47T §10) | Correctly decomposed; the host is not a Dixie docs-only decision | **EXTERNALLY GATED, UNSATISFIED (no host selected)** | D.1 conjunct (ii) resolves only when the canonical-store physical host is selected through the proper authority path and sibling gates #9 / #10 are resolved for that host; D.2 invariant-preservation evidence remains a separate downstream checklist item and is **not** a prerequisite for satisfying D.1 |
 | **Full D.1 checklist item ((i) ∧ (ii))** | NOT YET SATISFIED — box not checked off (47T §11) | Correct; conjunctive item with conjunct (ii) open is not satisfied | **NOT YET SATISFIED — box NOT checked off** | D.1 stays an open precondition for the downstream Dixie-assessable chain |
 | **Dixie route-side adapter responsibility** | Owns endpoint-local contract / idempotency / replay records, ingress references, public / private projection; `StorageAdapter` swap-in (47T §9) | Precise; never a parallel canonical lifecycle | **Accepted as the route-owned-records half only (paper architecture)** | A future swap-in implementation must conform to the canonical `StorageAdapter` contract (D.3 / D.5 / D.7), still owed |
 | **Straylight canonical-semantics responsibility** | `Assertion` / `TransitionReceipt` / `AuditEvent` remain Straylight-owned through `StorageAdapter` / `AuditLog`; Dixie re-mints no receipt (47T §10 / §12) | Preserved; canonical ownership unchanged | **Remains Straylight-owned (unchanged)** | Canonical invariant-preservation evidence (D.2) is Straylight-reviewed and still owed |
@@ -531,7 +531,7 @@ gate. **Accepting the conjunct-(i) decision checks off no box and discharges not
 
 | Checklist item | Status before Phase 47U | Status after Phase 47U | Why | Next implication |
 |----------------|-------------------------|------------------------|-----|------------------|
-| **D.1 Storage-adapter ownership / placement ACCEPTED** | **NOT YET SATISFIED** (47T decided conjunct (i) at docs/architecture level, pending its acceptance gate; conjunct (ii) externally gated) | **NOT YET SATISFIED** (conjunct (i) decision now **accepted by Phase 47U**; full item still open) | Conjunctive item: conjunct (ii) (canonical-store host) remains externally gated by #9 / #10 (§8 / §11) | Full D.1 satisfied only when conjunct (ii) resolves under #9 / #10 + D.2 evidence accepted; box stays unchecked |
+| **D.1 Storage-adapter ownership / placement ACCEPTED** | **NOT YET SATISFIED** (47T decided conjunct (i) at docs/architecture level, pending its acceptance gate; conjunct (ii) externally gated) | **NOT YET SATISFIED** (conjunct (i) decision now **accepted by Phase 47U**; full item still open) | Conjunctive item: conjunct (ii) (canonical-store host) remains externally gated by #9 / #10 (§8 / §11) | Full D.1 can only be satisfied after D.1 conjunct (i) remains accepted and D.1 conjunct (ii) is resolved through canonical-store physical-host selection plus sibling #9 / #10 resolution; D.2 remains a separate downstream checklist item and stays UNSATISFIED after full D.1; box stays unchecked |
 | **D.2 Canonical invariant-preservation evidence** | **UNSATISFIED** | **UNSATISFIED** | Owner stays Straylight; preservation *evidence* still owed under Straylight review; not advanced beyond readiness | After D.1 full; canonical-substrate invariant-preservation evidence gate (Straylight-reviewed) |
 | **D.3 Migration-file ownership** | **UNSATISFIED** | **UNSATISFIED** | Presupposes accepted placement + selected host; canonical side stays a separate Straylight ADR + sibling-repo PR; no migration authored | Schema / migration design + acceptance gate, downstream of D.1 full |
 | **D.4 Migration-execution ownership + least-privilege** | **UNSATISFIED** | **UNSATISFIED** | Production migration path unchanged; no execution owner decided; only bounded non-production Lane-1 evidence exists | Production migration-execution authorization gate + production-grade least-privilege evidence |
@@ -960,6 +960,26 @@ satisfaction, and **no** MVP-2 closure.
   **produced no evidence**, **satisfied no full checklist item**, **discharged no gate**, **cleared gate #8 no further**
   than Phase 46N's documentation / architecture / handoff prerequisite, and **authorized no production work** — keeping
   **gate #8 OPEN** and **MVP-2 OPEN** and all production / gate-#8 discharge / MVP-2 closure work blocked.
+
+> **Phase 47V status note (forward traceability; added by the Phase 47V ADR-022E gate #8 D.1 canonical-store
+> physical-host dependency gate).** The next lane this gate selected (§15) has run:
+> [`ADMISSION-WEDGE-ADR-022E-GATE-8-D1-CANONICAL-STORE-PHYSICAL-HOST-DEPENDENCY-GATE.md`](ADMISSION-WEDGE-ADR-022E-GATE-8-D1-CANONICAL-STORE-PHYSICAL-HOST-DEPENDENCY-GATE.md)
+> (strictly docs/decision-only; **produced no evidence**; Verdict / **Option A** — the D.1 conjunct-(ii) canonical-store
+> physical-host dependency **REMAINS HELD under sibling gates #9 / #10**). It **decided the canonical-store
+> physical-host dependency status**: the host (Straylight-process / Finn / Dixie-hosted adapter) is **not** selected and
+> **cannot** be selected by a Dixie docs-only phase — host wiring is governed by **held** gate #9 (Finn runtime wiring) /
+> gate #10 (Dixie boundary wiring), canonical ownership is Straylight's, and no repo evidence discharges #9 / #10 — so the
+> dependency is **routed** to held sibling gates #9 / #10 (its resolution path is a host selected plus #9 / #10 resolved
+> for the chosen host; D.2 is a separate downstream checklist item, not a prerequisite for satisfying D.1). Because
+> conjunct (ii) stays held, Phase 47V left the **full D.1 checklist item NOT YET SATISFIED** (box not checked off) and
+> **D.2–D.14 all UNSATISFIED**; it **satisfied no full checklist item**, **selected no canonical-store host**,
+> **discharged no gate**, **cleared gate #8 no further** than Phase 46N's documentation / architecture / handoff
+> prerequisite, **updated or froze no ownership / placement ADR**, **authorized no production work**, and **selected the
+> next lane as a strictly docs/decision-only Phase 47W — Admission Wedge ADR-022E gate #8 D.1 physical-host dependency
+> acceptance gate** (which may accept or patch the Phase 47V dependency verdict only and is categorically unable to select
+> the canonical-store physical host, satisfy full D.1, satisfy any D.2–D.14 item, discharge gate #8, close MVP-2, or
+> authorize production implementation). **Gate #8 and MVP-2 remain OPEN** and all production / gate-#8 discharge / MVP-2
+> closure work stays blocked.
 
 No other file is modified.
 
