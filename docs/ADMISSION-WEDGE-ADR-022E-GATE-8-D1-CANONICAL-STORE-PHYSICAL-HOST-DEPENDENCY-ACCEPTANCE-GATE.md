@@ -1034,6 +1034,25 @@ D.2–D.14 satisfaction, and **no** MVP-2 closure.
   Phase 46N's documentation / architecture / handoff prerequisite, and **authorized no production work** — keeping **gate
   #8 OPEN** and **MVP-2 OPEN** and all production / gate-#8 discharge / MVP-2 closure work blocked.
 
+> **Phase 47X status note (forward traceability; added by the Phase 47X ADR-022E gate #8 D.1 remaining-conjunct /
+> sibling-gate handoff packet).** The next lane this gate selected (§15) has run:
+> [`ADMISSION-WEDGE-ADR-022E-GATE-8-D1-REMAINING-CONJUNCT-SIBLING-GATE-HANDOFF-PACKET.md`](ADMISSION-WEDGE-ADR-022E-GATE-8-D1-REMAINING-CONJUNCT-SIBLING-GATE-HANDOFF-PACKET.md)
+> (strictly docs/decision-only; **produced no evidence**). It **assembled** the D.1 remaining-conjunct / sibling-gate
+> handoff packet for the still-open **conjunct (ii)** — recording what the canonical-store physical host still requires
+> (a host selected **and** held sibling gates #9 / #10 resolved per their own triggers for the chosen host), why it is
+> externally gated, and what the held sibling-gate #9 / #10 owners and a future host-selection lane must resolve — and it
+> **kept** conjunct (ii) **held** under externally-owned sibling gates #9 / #10 with **no host selected**, **preserved**
+> D.1 conjunct (i) as **accepted by Phase 47T / 47U** (not reopened), **preserved** that canonical `Assertion` /
+> `TransitionReceipt` / `AuditEvent` semantics remain Straylight-owned and that **Dixie does not become a parallel
+> canonical lifecycle owner** (it holds ingress references only and re-mints no receipt), left the **full D.1 checklist
+> item NOT YET SATISFIED** (box not checked off) and **D.2–D.14 all UNSATISFIED** (D.13 externally owned / held; D.14
+> terminal / downstream), **produced no evidence**, **selected no canonical-store host**, **resolved no sibling gate**,
+> **discharged no gate**, **cleared gate #8 no further** than Phase 46N's documentation / architecture / handoff
+> prerequisite, **updated or froze no ownership / placement ADR**, **authorized no production work**, and **routed the
+> next step to `BLOCKED_FOR_HUMAN_ROUTING`** (no Phase 47Y invented; the next step — held sibling gate #9 / #10
+> resolution and a future host-selection lane — is externally owned and externally sequenced). **Gate #8 and MVP-2 remain
+> OPEN** and all production / gate-#8 discharge / MVP-2 closure work stays blocked.
+
 No other file is modified.
 
 ---
