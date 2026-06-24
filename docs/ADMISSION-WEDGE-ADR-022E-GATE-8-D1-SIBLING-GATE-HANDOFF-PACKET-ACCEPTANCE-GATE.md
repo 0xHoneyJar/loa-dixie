@@ -670,6 +670,29 @@ categorically unable to resolve sibling gates #9 / #10, select the host, or sati
 to keep the chain paused at `BLOCKED_FOR_HUMAN_ROUTING` pending the externally-owned sibling-gate work, that remains the
 correct standing posture; Phase 47Z is the recommended docs/decision-only lane only, not a substantive unblock.
 
+> **Phase 47Z status note (forward traceability; added by the Phase 47Z ADR-022E gate #8 D.1 remaining-conjunct
+> closure-readiness gate).** The next lane this gate selected (§13) has run:
+> [`ADMISSION-WEDGE-ADR-022E-GATE-8-D1-REMAINING-CONJUNCT-CLOSURE-READINESS-GATE.md`](ADMISSION-WEDGE-ADR-022E-GATE-8-D1-REMAINING-CONJUNCT-CLOSURE-READINESS-GATE.md)
+> (strictly docs/decision-only; **produced no evidence**; Verdict / **Option A** — **ASSESS** the closure-readiness of the
+> still-open D.1 conjunct (ii) as **NOT READY / HELD**). It **assessed** that D.1 conjunct (ii) (the canonical-store
+> physical host) is **not ready for closure**, because its closure conditions are externally owned and unmet — the held
+> sibling gates #9 (Finn runtime wiring, `:58`) / #10 (Dixie boundary wiring, `:59`) are externally owned and unresolved
+> (no repo evidence discharges them) and **no canonical-store physical host is selected** — **defined** the conjunct-(ii)
+> closure-readiness checklist (CR-1…CR-5, all unsatisfied), **resolved no sibling gate**, **selected no canonical-store
+> host**, **accepted no D.2 evidence** (D.2 is downstream of full D.1, not a prerequisite for it), **preserved** D.1
+> conjunct (i) (route-owned-records placement) as **accepted by Phase 47T / 47U** (not reopened) and distinguished from
+> canonical-store physical hosting, **preserved** that canonical `Assertion` / `TransitionReceipt` / `AuditEvent`
+> semantics remain Straylight-owned and that **Dixie does not become a parallel canonical lifecycle owner** (it holds
+> ingress references only and re-mints no receipt), left the **full D.1 checklist item NOT YET SATISFIED** (box not
+> checked off) and **D.2–D.14 all UNSATISFIED** (D.13 externally owned / held; D.14 terminal / downstream), **produced no
+> evidence**, **discharged no gate**, **cleared gate #8 no further** than Phase 46N's documentation / architecture /
+> handoff prerequisite, **updated or froze no ownership / placement ADR**, **authorized no production work**, and **routed
+> the substantive externally-owned host / sibling-gate work to `BLOCKED_FOR_HUMAN_ROUTING`** (recommending, as the
+> conservative human-routable escalation only, a strictly docs/decision-only cross-repo sibling-gate #9 / #10
+> resolution-request / gate-request packet) — preserving this gate's `BLOCKED_FOR_HUMAN_ROUTING` posture for that
+> substantive work. **Gate #8 and MVP-2 remain OPEN**, the **full D.1 item remains NOT YET SATISFIED**, and all
+> production / gate-#8 discharge / MVP-2 closure work stays blocked.
+
 **Not selected as the next lane:** a held sibling-gate #9 / #10 *resolution* (externally owned and externally sequenced —
 not a Dixie docs-only act); a canonical-store physical-host *selection* (externally gated by held sibling gates #9 / #10);
 a D.2 canonical invariant-preservation-evidence gate (premature — it presupposes a *fully-satisfied* D.1, so it follows
