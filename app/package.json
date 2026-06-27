@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "lint": "eslint src/ tests/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:dependency-provenance": "node scripts/check-dependency-provenance.mjs"
   },
   "_dependencyNotes": {
     "@noble/hashes": "Transitive via @0xhoneyjar/loa-hounfour — provides sha256 for audit-trail-hash and chain-bound-hash modules"
@@ -22,7 +23,7 @@
   "dependencies": {
     "@0xhoneyjar/loa-hounfour": "github:0xHoneyJar/loa-hounfour#v8.6.0",
     "@hono/node-server": "^1.14.0",
-    "@loa/straylight": "github:0xHoneyJar/loa-straylight#34bfff8",
+    "@loa/straylight": "github:0xHoneyJar/loa-straylight#34bfff8de67500849b1f5fed4c82ddae5cc278d6",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-trace-otlp-grpc": "0.57.0",
     "@opentelemetry/resources": "^1.30.0",
