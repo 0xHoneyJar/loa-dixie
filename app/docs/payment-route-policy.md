@@ -29,4 +29,27 @@ This document scopes the payment middleware behavior implemented in this PR. It 
 
 ## Production wiring status
 
-The middleware contract now requires `validatePaymentHeader` in production. This PR still needs an app-wiring commit that supplies a real validator-backed function at the `createPaymentGate` call site. Until that exists, this PR should remain `VERDICT: PATCH` and use `Refs`, not `Closes`, for the wider route/payment issue set.
+The middleware contract now requires `validatePaymentHeader` in production. The PR also adds `SettlementClient.validatePaymentHeader()`, which is the intended validator-backed adapter surface for the app wiring.
+
+This PR still needs a call-site commit proving the actual `createPaymentGate(...)` construction path passes a real function equivalent to:
+
+```ts
+validatePaymentHeader: (paymentHeader, { path }) => settlementClient.validatePaymentHeader({ paymentHeader, path })
+```
+
+Until the real bootstrap/middleware assembly path supplies that function, this PR should remain `VERDICT: PATCH` and use `Refs`, not `Closes`, for the wider route/payment issue set.
+
+## Non-production semantics
+
+When `x402Enabled=true` outside production and no `validatePaymentHeader` hook is provided, the middleware still rejects protected routes that omit a payment header, but it does not prove payment validity for protected routes that include one.
+
+That mode is development/shadow behavior only. It is useful for exercising route boundaries, header plumbing, and downstream handlers without a live facilitator. It is not production payment validation, not settlement evidence, and not sufficient acceptance evidence for paid-route enforcement.
+
+## Acceptance split
+
+This PR can be accepted only after both slices are proven:
+
+1. **Middleware contract slice** — protected-route default deny, exact free-route boundary matching, validator success/rejection/error handling, and production fail-closed config tests.
+2. **App wiring slice** — the real app bootstrap path supplies the validator-backed adapter to `createPaymentGate(...)`, with a test or fixture proving production config cannot accidentally instantiate the gate without that adapter.
+
+The broader route inventory still remains separate evidence unless every free/protected route is enumerated against its auth and payment reason.
