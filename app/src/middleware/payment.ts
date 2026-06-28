@@ -10,6 +10,14 @@ export interface PaymentGateConfig {
   x402FacilitatorUrl: string | null;
   /** Current environment (payment enforcement is fail-closed in production) */
   nodeEnv: string;
+  /**
+   * Validates a payment header against the configured facilitator.
+   * Required for production enforcement so arbitrary non-empty headers cannot pass.
+   */
+  validatePaymentHeader?: (
+    paymentHeader: string,
+    context: { path: string; facilitatorUrl: string | null },
+  ) => boolean | Promise<boolean>;
 }
 
 /** Routes that are always free — everything else is protected (default-deny) */
@@ -18,9 +26,15 @@ const FREE_PREFIXES = [
   '/api/reputation/', '/api/identity/',
 ];
 
+function matchesFreePrefix(path: string, prefix: string): boolean {
+  const normalizedPath = path.replace(/\/+$/, '') || '/';
+  const normalizedPrefix = prefix.replace(/\/+$/, '') || '/';
+  return normalizedPath === normalizedPrefix || normalizedPath.startsWith(`${normalizedPrefix}/`);
+}
+
 function isProtectedRoute(path: string): boolean {
-  // Default-deny: only routes in FREE_PREFIXES are exempt from payment
-  return !FREE_PREFIXES.some(prefix => path.startsWith(prefix));
+  // Default-deny: only exact free prefixes or their children are exempt from payment.
+  return !FREE_PREFIXES.some(prefix => matchesFreePrefix(path, prefix));
 }
 
 /**
@@ -55,6 +69,13 @@ export function createPaymentGate(config?: PaymentGateConfig) {
     );
   }
 
+  if (config.nodeEnv === 'production' && !config.validatePaymentHeader) {
+    throw new Error(
+      'DIXIE_X402_ENABLED=true in production requires validatePaymentHeader. ' +
+      'Production payment enforcement must not accept arbitrary non-empty headers.',
+    );
+  }
+
   return createMiddleware(async (c, next) => {
     const path = c.req.path;
 
@@ -75,10 +96,29 @@ export function createPaymentGate(config?: PaymentGateConfig) {
       }, 402);
     }
 
-    // TODO: When @x402/hono is available, validate payment header against facilitator.
-    // Current state: accepts any non-empty header in non-production environments.
-    // Production gate above ensures this path only runs when facilitator is configured.
+    if (config.validatePaymentHeader) {
+      let valid = false;
+      try {
+        valid = await config.validatePaymentHeader(paymentHeader, {
+          path,
+          facilitatorUrl: config.x402FacilitatorUrl,
+        });
+      } catch {
+        return c.json({
+          error: 'payment_validation_unavailable',
+          message: 'Payment validation failed closed',
+        }, 503);
+      }
 
+      if (!valid) {
+        return c.json({
+          error: 'invalid_payment',
+          message: 'Payment header was rejected by the validator',
+        }, 402);
+      }
+    }
+
+    // Non-production without a validator remains a development/shadow path only.
     await next();
   });
 }

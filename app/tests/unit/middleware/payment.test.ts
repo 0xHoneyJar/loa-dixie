@@ -18,6 +18,13 @@ function createTestApp(config?: PaymentGateConfig) {
   return app;
 }
 
+const productionConfig: PaymentGateConfig = {
+  x402Enabled: true,
+  x402FacilitatorUrl: 'https://freeside.example.com',
+  nodeEnv: 'production',
+  validatePaymentHeader: (paymentHeader) => paymentHeader === 'valid-payment-token',
+};
+
 describe('createPaymentGate', () => {
   describe('disabled (default)', () => {
     it('passes through all requests when x402 disabled', async () => {
@@ -34,14 +41,25 @@ describe('createPaymentGate', () => {
   });
 
   describe('enabled', () => {
-    const config: PaymentGateConfig = {
-      x402Enabled: true,
-      x402FacilitatorUrl: 'https://freeside.example.com',
-      nodeEnv: 'production',
-    };
+    it('throws in production without a facilitator URL', () => {
+      expect(() => createPaymentGate({
+        x402Enabled: true,
+        x402FacilitatorUrl: null,
+        nodeEnv: 'production',
+        validatePaymentHeader: () => true,
+      })).toThrow(/DIXIE_X402_FACILITATOR_URL/);
+    });
+
+    it('throws in production without a payment validator', () => {
+      expect(() => createPaymentGate({
+        x402Enabled: true,
+        x402FacilitatorUrl: 'https://freeside.example.com',
+        nodeEnv: 'production',
+      })).toThrow(/validatePaymentHeader/);
+    });
 
     it('returns 402 for protected route without payment header', async () => {
-      const app = createTestApp(config);
+      const app = createTestApp(productionConfig);
       const res = await app.request('/api/chat');
       expect(res.status).toBe(402);
       const body = await res.json();
@@ -49,24 +67,47 @@ describe('createPaymentGate', () => {
       expect(body.facilitator).toBe('https://freeside.example.com');
     });
 
-    it('passes through protected route with payment header', async () => {
-      const app = createTestApp(config);
+    it('passes through protected route with validated payment header', async () => {
+      const app = createTestApp(productionConfig);
       const res = await app.request('/api/chat', {
         headers: { 'x-payment': 'valid-payment-token' },
       });
       expect(res.status).toBe(200);
     });
 
-    it('passes through protected route with x-402-payment header', async () => {
-      const app = createTestApp(config);
+    it('passes through protected route with validated x-402-payment header', async () => {
+      const app = createTestApp(productionConfig);
       const res = await app.request('/api/chat', {
         headers: { 'x-402-payment': 'valid-payment-token' },
       });
       expect(res.status).toBe(200);
     });
 
+    it('rejects arbitrary payment headers', async () => {
+      const app = createTestApp(productionConfig);
+      const res = await app.request('/api/chat', {
+        headers: { 'x-payment': 'fake-payment-token' },
+      });
+      expect(res.status).toBe(402);
+      const body = await res.json();
+      expect(body.error).toBe('invalid_payment');
+    });
+
+    it('fails closed when validator throws', async () => {
+      const app = createTestApp({
+        ...productionConfig,
+        validatePaymentHeader: () => { throw new Error('facilitator unavailable'); },
+      });
+      const res = await app.request('/api/chat', {
+        headers: { 'x-payment': 'valid-payment-token' },
+      });
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.error).toBe('payment_validation_unavailable');
+    });
+
     it('allows free routes without payment', async () => {
-      const app = createTestApp(config);
+      const app = createTestApp(productionConfig);
 
       const health = await app.request('/api/health');
       expect(health.status).toBe(200);
@@ -79,13 +120,13 @@ describe('createPaymentGate', () => {
     });
 
     it('requires payment for /api/agent/query', async () => {
-      const app = createTestApp(config);
+      const app = createTestApp(productionConfig);
       const res = await app.request('/api/agent/query', { method: 'POST' });
       expect(res.status).toBe(402);
     });
 
     it('requires payment for /api/fleet/spawn', async () => {
-      const app = createTestApp(config);
+      const app = createTestApp(productionConfig);
       const res = await app.request('/api/fleet/spawn', { method: 'POST' });
       expect(res.status).toBe(402);
     });
@@ -107,5 +148,12 @@ describe('isProtectedRoute', () => {
     expect(_isProtectedRoute('/api/admin/allowlist')).toBe(false);
     expect(_isProtectedRoute('/api/identity/oracle')).toBe(false);
     expect(_isProtectedRoute('/api/reputation/query')).toBe(false);
+  });
+
+  it('does not exempt sibling paths that only share a free-route prefix string', () => {
+    expect(_isProtectedRoute('/api/healthcheck')).toBe(true);
+    expect(_isProtectedRoute('/api/administer')).toBe(true);
+    expect(_isProtectedRoute('/api/identityish')).toBe(true);
+    expect(_isProtectedRoute('/api/reputation-score')).toBe(true);
   });
 });
