@@ -447,6 +447,8 @@ export function createDixieApp(config: DixieConfig): DixieApp {
     x402Enabled: config.x402Enabled,
     x402FacilitatorUrl: config.x402FacilitatorUrl,
     nodeEnv: config.nodeEnv,
+    validatePaymentHeader: (paymentHeader, { path }) =>
+      settlementClient.validatePaymentHeader({ paymentHeader, path }),
   }));
 
   // --- Phase 2 Position 13: Conviction tier resolution ---

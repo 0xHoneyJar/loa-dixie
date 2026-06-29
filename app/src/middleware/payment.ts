@@ -10,6 +10,11 @@ export interface PaymentGateConfig {
   x402FacilitatorUrl: string | null;
   /** Current environment (payment enforcement is fail-closed in production) */
   nodeEnv: string;
+  /** Settlement-backed validator for x402 payment headers. */
+  validatePaymentHeader?: (
+    paymentHeader: string,
+    context: { path: string },
+  ) => Promise<boolean>;
 }
 
 /** Routes that are always free — everything else is protected (default-deny) */
@@ -55,6 +60,16 @@ export function createPaymentGate(config?: PaymentGateConfig) {
     );
   }
 
+  // SEC-2: Production payment enforcement must use a real settlement-backed
+  // validator. Header presence alone is acceptable only for non-production
+  // shadow/dev paths.
+  if (config.nodeEnv === 'production' && !config.validatePaymentHeader) {
+    throw new Error(
+      'DIXIE_X402_ENABLED=true in production requires settlement-backed payment validation. ' +
+      'Payment enforcement without validatePaymentHeader is fail-open in disguise.',
+    );
+  }
+
   return createMiddleware(async (c, next) => {
     const path = c.req.path;
 
@@ -75,9 +90,25 @@ export function createPaymentGate(config?: PaymentGateConfig) {
       }, 402);
     }
 
-    // TODO: When @x402/hono is available, validate payment header against facilitator.
-    // Current state: accepts any non-empty header in non-production environments.
-    // Production gate above ensures this path only runs when facilitator is configured.
+    if (config.validatePaymentHeader) {
+      let validPayment = false;
+      try {
+        validPayment = await config.validatePaymentHeader(paymentHeader, { path });
+      } catch {
+        return c.json({
+          error: 'payment_validation_unavailable',
+          message: 'Payment validation is temporarily unavailable',
+        }, 503);
+      }
+
+      if (!validPayment) {
+        return c.json({
+          error: 'invalid_payment',
+          message: 'Payment header could not be validated',
+          facilitator: config.x402FacilitatorUrl,
+        }, 402);
+      }
+    }
 
     await next();
   });
