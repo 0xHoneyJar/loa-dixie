@@ -33,6 +33,15 @@ export interface SettlementReceipt {
   settledAt: string;
 }
 
+export interface PaymentValidationRequest {
+  paymentHeader: string;
+  path: string;
+}
+
+export interface PaymentValidationResponse {
+  valid: boolean;
+}
+
 export interface SettlementClientConfig {
   facilitatorUrl: string | null;
   enabled: boolean;
@@ -94,6 +103,30 @@ export class SettlementClient {
       if (!res.ok) throw new Error(`Settlement failed: ${res.status}`);
       this.resetCircuit();
       return await res.json() as SettlementReceipt;
+    } catch (err) {
+      this.recordFailure();
+      throw err;
+    }
+  }
+
+  async validatePaymentHeader(request: PaymentValidationRequest): Promise<boolean> {
+    if (!this.config.enabled || !this.config.facilitatorUrl) {
+      return true;
+    }
+
+    if (this.isCircuitOpen()) {
+      throw new Error('Settlement circuit breaker open');
+    }
+
+    try {
+      const res = await this.authenticatedFetch(
+        `${this.config.facilitatorUrl}/api/settlement/validate-payment`,
+        request,
+      );
+      if (!res.ok) throw new Error(`Payment validation failed: ${res.status}`);
+      this.resetCircuit();
+      const body = await res.json() as PaymentValidationResponse;
+      return body.valid === true;
     } catch (err) {
       this.recordFailure();
       throw err;

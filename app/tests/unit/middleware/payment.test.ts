@@ -38,6 +38,7 @@ describe('createPaymentGate', () => {
       x402Enabled: true,
       x402FacilitatorUrl: 'https://freeside.example.com',
       nodeEnv: 'production',
+      validatePaymentHeader: async () => true,
     };
 
     it('returns 402 for protected route without payment header', async () => {
@@ -63,6 +64,42 @@ describe('createPaymentGate', () => {
         headers: { 'x-402-payment': 'valid-payment-token' },
       });
       expect(res.status).toBe(200);
+    });
+
+    it('returns 402 when payment header validation fails', async () => {
+      const app = createTestApp({
+        ...config,
+        validatePaymentHeader: async () => false,
+      });
+      const res = await app.request('/api/chat', {
+        headers: { 'x-payment': 'invalid-payment-token' },
+      });
+      expect(res.status).toBe(402);
+      const body = await res.json();
+      expect(body.error).toBe('invalid_payment');
+    });
+
+    it('returns 503 when payment header validation is unavailable', async () => {
+      const app = createTestApp({
+        ...config,
+        validatePaymentHeader: async () => {
+          throw new Error('validator unavailable');
+        },
+      });
+      const res = await app.request('/api/chat', {
+        headers: { 'x-payment': 'payment-token' },
+      });
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.error).toBe('payment_validation_unavailable');
+    });
+
+    it('fails closed in production when no validator is configured', () => {
+      expect(() => createTestApp({
+        x402Enabled: true,
+        x402FacilitatorUrl: 'https://freeside.example.com',
+        nodeEnv: 'production',
+      })).toThrow(/validatePaymentHeader/);
     });
 
     it('allows free routes without payment', async () => {
