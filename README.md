@@ -65,6 +65,8 @@ npm test                # run test suite
 
 Dixie exposes 16 route modules (47 endpoints total, 41 active). Protocol version `8.2.0` is advertised via the `X-Protocol-Version` response header on every request.
 
+> **Protocol vs package version**: the advertised protocol version (`8.2.0`) tracks the contract *surface* Dixie implements. The `@0xhoneyjar/loa-hounfour` contract package is consumed at `8.6.0` (additive minor versions, pinned by full commit SHA). The mapping is checked in [docs/protocol-compatibility.json](docs/protocol-compatibility.json) and enforced by `app/tests/unit/protocol-version-parity.test.ts` — unexplained drift fails CI.
+
 | Module | Mount Point | Endpoints | Auth | Description |
 |--------|-------------|-----------|------|-------------|
 | health | `/api/health` | 2 | Public / Admin | System health, governor status |
