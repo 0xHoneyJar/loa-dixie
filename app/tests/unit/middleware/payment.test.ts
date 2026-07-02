@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { createPaymentGate, _isProtectedRoute, type PaymentGateConfig } from '../../../src/middleware/payment.js';
+import { createPaymentGate, _isProtectedRoute, FREE_ROUTE_POLICY, type PaymentGateConfig } from '../../../src/middleware/payment.js';
 
 function createTestApp(config?: PaymentGateConfig) {
   const app = new Hono();
@@ -144,5 +144,67 @@ describe('isProtectedRoute', () => {
     expect(_isProtectedRoute('/api/admin/allowlist')).toBe(false);
     expect(_isProtectedRoute('/api/identity/oracle')).toBe(false);
     expect(_isProtectedRoute('/api/reputation/query')).toBe(false);
+  });
+
+  describe('route-boundary matching (issue #208)', () => {
+    it('keeps near-prefix paths protected', () => {
+      expect(_isProtectedRoute('/api/healthzzz')).toBe(true);
+      expect(_isProtectedRoute('/api/health-check')).toBe(true);
+      expect(_isProtectedRoute('/api/administrator')).toBe(true);
+      expect(_isProtectedRoute('/api/identityX')).toBe(true);
+      expect(_isProtectedRoute('/api/reputations')).toBe(true);
+      expect(_isProtectedRoute('/api/authors/1')).toBe(true);
+    });
+
+    it('treats the exact free path and trailing-slash variants as free', () => {
+      expect(_isProtectedRoute('/api/health/')).toBe(false);
+      expect(_isProtectedRoute('/api/admin')).toBe(false);
+      expect(_isProtectedRoute('/api/admin/')).toBe(false);
+      expect(_isProtectedRoute('/api/identity')).toBe(false);
+    });
+
+    it('normalizes duplicate slashes and dot segments before matching', () => {
+      expect(_isProtectedRoute('//api//health')).toBe(false);
+      expect(_isProtectedRoute('/api/./health')).toBe(false);
+      // Traversal that resolves INTO a protected route stays protected
+      expect(_isProtectedRoute('/api/health/../chat')).toBe(true);
+      expect(_isProtectedRoute('/api/admin/../agent/query')).toBe(true);
+    });
+
+    it('percent-decodes before matching', () => {
+      expect(_isProtectedRoute('/api/%68ealth')).toBe(false);
+      // Encoded traversal into a protected route stays protected
+      expect(_isProtectedRoute('/api/health/%2e%2e/chat')).toBe(true);
+    });
+
+    it('fails closed on unclassifiable paths', () => {
+      expect(_isProtectedRoute('/api/%zz')).toBe(true);
+      expect(_isProtectedRoute('/api/health%00')).toBe(true);
+    });
+  });
+});
+
+describe('FREE_ROUTE_POLICY (issues #206, #230)', () => {
+  it('documents a reason for every payment-free prefix', () => {
+    expect(FREE_ROUTE_POLICY.length).toBeGreaterThan(0);
+    for (const entry of FREE_ROUTE_POLICY) {
+      expect(entry.prefix.startsWith('/')).toBe(true);
+      expect(entry.reason.length).toBeGreaterThan(10);
+    }
+  });
+
+  it('documents at least one independent guard for every payment-free prefix', () => {
+    for (const entry of FREE_ROUTE_POLICY) {
+      expect(entry.guards.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('is the single source for payment exemption', () => {
+    for (const entry of FREE_ROUTE_POLICY) {
+      const representative = entry.prefix.endsWith('/')
+        ? `${entry.prefix}representative`
+        : entry.prefix;
+      expect(_isProtectedRoute(representative)).toBe(false);
+    }
   });
 });
