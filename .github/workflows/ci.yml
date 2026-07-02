@@ -38,6 +38,10 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Dependency provenance (full-SHA pins for github: refs)
+        working-directory: app
+        run: npm run check:dependency-provenance
+
       - name: Typecheck
         working-directory: app
         run: npm run typecheck
