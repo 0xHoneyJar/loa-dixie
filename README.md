@@ -181,7 +181,7 @@ Phase 2 (Experience Orchestrator) complete. 13 sprints, 2,431 tests across 128 t
 
 ## Maintainer
 
-[@janitooor](https://github.com/janitooor)
+[@deep-name](https://github.com/deep-name)
 
 ## License
 
