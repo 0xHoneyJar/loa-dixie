@@ -15,7 +15,8 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "lint": "eslint src/ tests/",
     "typecheck": "tsc --noEmit",
-    "check:dependency-provenance": "node scripts/check-dependency-provenance.mjs"
+    "check:dependency-provenance": "node scripts/check-dependency-provenance.mjs",
+    "topology:generate": "tsx scripts/generate-route-topology.ts"
   },
   "_dependencyNotes": {
     "@noble/hashes": "Transitive via @0xhoneyjar/loa-hounfour — provides sha256 for audit-trail-hash and chain-bound-hash modules",
