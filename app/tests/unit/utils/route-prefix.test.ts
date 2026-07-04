@@ -19,15 +19,26 @@ describe('normalizeRoutePath', () => {
     expect(normalizeRoutePath('//api//health')).toBe('/api/health');
   });
 
-  it('resolves . and .. segments', () => {
+  it('drops . segments and rejects .. traversal (fail closed)', () => {
     expect(normalizeRoutePath('/api/./health')).toBe('/api/health');
-    expect(normalizeRoutePath('/api/chat/../health')).toBe('/api/health');
-    expect(normalizeRoutePath('/../api/health')).toBe('/api/health');
+    // Traversal is never a legitimate shape for a payment-free route; the
+    // router does not resolve it, so resolving here could classify a
+    // protected route as free.
+    expect(normalizeRoutePath('/api/chat/../health')).toBeNull();
+    expect(normalizeRoutePath('/../api/health')).toBeNull();
   });
 
   it('percent-decodes before classification', () => {
     expect(normalizeRoutePath('/api/%68ealth')).toBe('/api/health');
-    expect(normalizeRoutePath('/api/health%2Fgovernance')).toBe('/api/health/governance');
+  });
+
+  it('rejects encoded separators (fail closed)', () => {
+    // The router keeps %2F inside ONE segment; decoding it here would let
+    // /api/personality/..%2Fidentity%2Foracle classify as a free prefix
+    // while dispatching to the protected /api/personality/:nftId route.
+    expect(normalizeRoutePath('/api/health%2Fgovernance')).toBeNull();
+    expect(normalizeRoutePath('/api/personality/%2e%2e%2Fidentity%2Foracle')).toBeNull();
+    expect(normalizeRoutePath('/api/health%5Cgovernance')).toBeNull();
   });
 
   it('returns null for malformed encoding (fail closed)', () => {
@@ -73,9 +84,10 @@ describe('matchesRoutePrefix', () => {
     expect(matchesRoutePrefix('//api//health', prefixes)).toBe(true);
   });
 
-  it('classifies traversal by the resolved path', () => {
-    expect(matchesRoutePrefix('/api/chat/../health', prefixes)).toBe(true);
+  it('treats traversal as unclassifiable (fail closed, never free)', () => {
+    expect(matchesRoutePrefix('/api/chat/../health', prefixes)).toBe(false);
     expect(matchesRoutePrefix('/api/health/../chat', prefixes)).toBe(false);
+    expect(matchesRoutePrefix('/api/personality/%2e%2e%2Fauth%2Fverify', prefixes)).toBe(false);
   });
 
   it('does not match unclassifiable paths (fail closed)', () => {

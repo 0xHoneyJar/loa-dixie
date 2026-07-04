@@ -26,7 +26,7 @@ cd app && npm run test:e2e
 | 1 | Compose stack converges | `docker compose ... up -d --wait` | all services healthy |
 | 2 | Health | `curl -sf $BASE/api/health` | `"status": "healthy"`; `loa_finn` reachable; postgres/redis/nats healthy |
 | 3 | Governance health | `curl -sf -H "Authorization: Bearer $ADMIN_KEY" $BASE/api/health/governance` | 200, no degraded governors |
-| 4 | Route surface | `cd app && npm run topology:generate` against the deployed build | counts match `docs/api-topology.json` (43 active) |
+| 4 | Route surface | Probe the DEPLOYED service, not the local tree: run the topology check inside the deployed image (`docker compose -f deploy/docker-compose.staging.yml exec dixie-bff npm run topology:generate`) or spot-probe one endpoint per module against `$BASE` and compare with `docs/api-topology.json` | deployed counts match the checked topology (43 active); a stale image or differently-gated build fails here |
 | 5 | Dependencies | health output `infrastructure` block | postgres, redis, nats all `healthy` |
 | 6 | **Payment mode** | staging env (`X402_*` / payment middleware config) + one gated route probe | state the active payment mode (enforced / shadow / disabled) explicitly in the evidence; a payment-free route responds 200 and a gated route responds 402/401 as configured |
 | 7 | Protocol version | response header `X-Protocol-Version` | `8.2.0` (must match `docs/protocol-compatibility.json`) |

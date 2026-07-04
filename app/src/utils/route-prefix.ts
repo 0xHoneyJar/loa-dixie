@@ -20,16 +20,27 @@
 /**
  * Normalize a request path for classification.
  *
+ * - Rejects percent-encoded separators `%2F`/`%5C` (→ null): the router
+ *   keeps an encoded slash inside ONE path segment, so decoding it here
+ *   would let a protected dynamic route (e.g. `/api/personality/:nftId`
+ *   with `nftId = "..%2Fidentity%2Foracle"`) classify as a payment-free
+ *   prefix the router never dispatches to
+ * - Rejects `..` traversal segments (→ null) instead of resolving them —
+ *   no payment-free route legitimately needs traversal
  * - Percent-decodes (malformed encoding → null)
  * - Rejects NUL bytes (→ null)
- * - Collapses duplicate slashes
- * - Resolves `.` and `..` segments
+ * - Collapses duplicate slashes, drops `.` segments
  * - Strips trailing slashes
  *
  * Returns `null` when the path cannot be safely classified; callers must
  * treat `null` as "no match" so default-deny logic fails closed.
  */
 export function normalizeRoutePath(rawPath: string): string | null {
+  // Encoded separators mean different things to the router (part of one
+  // segment) and to this classifier (a boundary after decoding). Fail closed.
+  if (/%2f|%5c/i.test(rawPath)) {
+    return null;
+  }
   let decoded: string;
   try {
     decoded = decodeURIComponent(rawPath);
@@ -43,8 +54,7 @@ export function normalizeRoutePath(rawPath: string): string | null {
   for (const segment of decoded.split('/')) {
     if (segment === '' || segment === '.') continue;
     if (segment === '..') {
-      segments.pop();
-      continue;
+      return null;
     }
     segments.push(segment);
   }

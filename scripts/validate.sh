@@ -19,6 +19,10 @@ echo
 echo "=== APP: dixie-bff (app/) checks ==="
 echo "--- typecheck"
 (cd app && npm run --silent typecheck)
+echo "--- lint"
+(cd app && npm run --silent lint)
+echo "--- build"
+(cd app && npm run --silent build)
 echo "--- unit + integration tests (includes docs/topology/protocol parity against root docs/)"
 (cd app && npm test)
 
