@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getAddress } from 'viem';
 import type { AccessPolicy } from '../types.js';
+import { matchesRoutePrefix } from '../utils/route-prefix.js';
 
 // DECISION: Allowlist as governance primitive (communitarian architecture)
 // The allowlist gate is not just an access control list — it's the first
@@ -308,16 +309,20 @@ export class AllowlistStore {
  * Allowlist middleware — blocks unauthorized requests.
  * Skips health and auth endpoints.
  */
+/**
+ * Endpoints with their own auth gates, exempt from the allowlist check.
+ * Matched at exact `/` route boundaries — raw startsWith matching would
+ * also skip near-prefix routes (`/api/auth` used to match `/api/autonomous`,
+ * leaving autonomous-mode routes outside the allowlist gate).
+ */
+const ALLOWLIST_SKIP_PREFIXES = ['/api/health', '/api/auth', '/api/admin'];
+
 export function createAllowlistMiddleware(store: AllowlistStore) {
   return createMiddleware(async (c, next) => {
     const pathname = new URL(c.req.url).pathname;
 
     // Skip allowlist check for endpoints with their own auth gates
-    if (
-      pathname.startsWith('/api/health') ||
-      pathname.startsWith('/api/auth') ||
-      pathname.startsWith('/api/admin')
-    ) {
+    if (matchesRoutePrefix(pathname, ALLOWLIST_SKIP_PREFIXES)) {
       await next();
       return;
     }

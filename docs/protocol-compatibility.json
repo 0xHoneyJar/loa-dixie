@@ -1,0 +1,10 @@
+{
+  "$comment": "Single source of truth for the advertised-protocol-version <-> Hounfour dependency mapping. tests/unit/protocol-version-parity.test.ts fails when runtime, docs, or the dependency drift from this file without an explicit update here.",
+  "advertised_protocol_version": "8.2.0",
+  "advertised_by": "app/src/services/protocol-version.ts (DIXIE_PROTOCOL_VERSION, X-Protocol-Version response header)",
+  "hounfour_package_version": "8.6.0",
+  "hounfour_dependency_ref": "github:0xHoneyJar/loa-hounfour#c041cdd4c0fc44aab34720a2721760cd828ff2df",
+  "status": "intentional-lag",
+  "reason": "Dixie advertises the protocol contract surface it implements: DynamicContract 8.2.0 (cycle-007, Sprint 76). The @0xhoneyjar/loa-hounfour package is consumed at 8.6.0 for additive (minor-version, backward-compatible) schema and validator changes that do not alter the advertised contract surface. Bumping the advertised version requires a deliberate contract-surface review, not a dependency bump.",
+  "update_procedure": "When DIXIE_PROTOCOL_VERSION or the Hounfour dependency changes: update this file, state the compatibility rationale in the PR description, and mention the mapping in release notes."
+}

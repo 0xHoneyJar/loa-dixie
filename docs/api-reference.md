@@ -124,6 +124,7 @@ Response:
 |--------|----------|-------------|
 | POST | `/api/auth/siwe` | Verify SIWE signature, check allowlist, issue JWT |
 | GET | `/api/auth/verify` | Validate JWT and return wallet address |
+| GET | `/api/auth/.well-known/jwks.json` | ES256 public signing key as a JWK Set (RFC 7517) |
 
 **POST /api/auth/siwe**
 
@@ -641,7 +642,7 @@ Response header: `X-Enrichment-Latency-Ms`.
 
 ---
 
-### /api/fleet -- Phase 2 (defined but not wired in server.ts)
+### /api/fleet -- Phase 2 (experimental; defined but not wired in server.ts)
 
 **Source**: `app/src/routes/fleet.ts`
 **Auth**: Operator ID + Operator Tier headers (set by upstream proxy)
@@ -692,7 +693,7 @@ Error (403): `SpawnDeniedError` when conviction tier limit exceeded (includes `t
 | Module | Mount Point | Endpoints | Auth | Status |
 |--------|-------------|-----------|------|--------|
 | health | `/api/health` | 2 | Public / Admin | Active |
-| auth | `/api/auth` | 2 | Public | Active |
+| auth | `/api/auth` | 3 | Public | Active |
 | admin | `/api/admin` | 3 | Admin key | Active |
 | chat | `/api/chat` | 1 | JWT | Active |
 | sessions | `/api/sessions` | 2 | JWT | Active |
@@ -706,8 +707,10 @@ Error (403): `SpawnDeniedError` when conviction tier limit exceeded (includes `t
 | learning | `/api/learning` | 2 | JWT + ownership | Active |
 | reputation | `/api/reputation` | 4 | JWT + builder+ / Admin | Active |
 | enrich | `/api/enrich` | 1 | JWT + builder+ | Active |
-| fleet | `/api/fleet` | 6 | Operator headers | **Not wired** |
-| **Total** | | **47** | | **41 active, 6 pending** |
+| fleet | `/api/fleet` | 6 | Operator headers | Experimental — **Not wired** |
+| **Total** | | **49** | | **43 active, 6 planned** |
+
+Totals include the root `/` status route, which is not an API module and is not listed above. Counts are generated from live route registration — see [docs/api-topology.json](api-topology.json) (`cd app && npm run topology:generate`); drift fails `app/tests/unit/route-topology-parity.test.ts`.
 
 ---
 

@@ -13,7 +13,13 @@ function baseConfig(): DixieConfig {
     jwtPrivateKey: 'test-jwt-secret-32-characters-long',
     jwtAlgorithm: 'HS256',
     jwtLegacyHs256Secret: null,
-    nodeEnv: 'production',
+    // 'test' (not 'production'): createDixieApp requires DATABASE_URL in
+    // production (reputation store), which this unit test cannot provide.
+    // The settlement-validator wiring under test is environment-independent —
+    // server.ts always passes validatePaymentHeader into createPaymentGate.
+    // Production fail-closed construction is covered by the payment
+    // middleware unit tests.
+    nodeEnv: 'test',
     logLevel: 'error',
     rateLimitRpm: 1000,
     otelEndpoint: null,

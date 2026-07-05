@@ -16,7 +16,7 @@ It sits between clients and the knowledge infrastructure, enforcing conviction-b
             |   (this repo)       |
             |                     |
             |  15-layer middleware |
-            |  47 API endpoints   |
+            |  43 active endpoints|
             |  5-tier conviction  |
             |  4 resource govs    |
             +----------+----------+
@@ -63,12 +63,14 @@ npm test                # run test suite
 
 ## API Overview
 
-Dixie exposes 16 route modules (47 endpoints total, 41 active). Protocol version `8.2.0` is advertised via the `X-Protocol-Version` response header on every request.
+Dixie exposes 15 API route modules serving 43 active endpoints (49 total including the 6 planned fleet endpoints). Counts are **generated from live route registration** — see [docs/api-topology.json](docs/api-topology.json) (`cd app && npm run topology:generate`); drift fails CI via `app/tests/unit/route-topology-parity.test.ts`. Protocol version `8.2.0` is advertised via the `X-Protocol-Version` response header on every request.
+
+> **Protocol vs package version**: the advertised protocol version (`8.2.0`) tracks the contract *surface* Dixie implements. The `@0xhoneyjar/loa-hounfour` contract package is consumed at `8.6.0` (additive minor versions, pinned by full commit SHA). The mapping is checked in [docs/protocol-compatibility.json](docs/protocol-compatibility.json) and enforced by `app/tests/unit/protocol-version-parity.test.ts` — unexplained drift fails CI.
 
 | Module | Mount Point | Endpoints | Auth | Description |
 |--------|-------------|-----------|------|-------------|
 | health | `/api/health` | 2 | Public / Admin | System health, governor status |
-| auth | `/api/auth` | 2 | Public | SIWE wallet auth, JWT issuance |
+| auth | `/api/auth` | 3 | Public | SIWE wallet auth, JWT issuance, JWKS |
 | admin | `/api/admin` | 3 | Admin key | Allowlist management |
 | chat | `/api/chat` | 1 | JWT | Chat message proxy to Finn |
 | sessions | `/api/sessions` | 2 | JWT | Session list and detail |
@@ -82,7 +84,7 @@ Dixie exposes 16 route modules (47 endpoints total, 41 active). Protocol version
 | learning | `/api/learning` | 2 | JWT + ownership | Compound learning insights |
 | reputation | `/api/reputation` | 4 | JWT + builder+ | Reputation query surface |
 | enrich | `/api/enrich` | 1 | JWT + builder+ | Review context enrichment |
-| fleet | `/api/fleet` | 6 | Operator | Fleet orchestration *(not wired)* |
+| fleet | `/api/fleet` | 6 | Operator | Fleet orchestration — **experimental / planned, not wired**; excluded from active counts |
 
 Full endpoint documentation: [docs/api-reference.md](docs/api-reference.md)
 
@@ -161,7 +163,7 @@ docs/
 | Document | Description |
 |----------|-------------|
 | [Architecture](docs/architecture.md) | System architecture and design patterns |
-| [API Reference](docs/api-reference.md) | All 47 endpoints with request/response schemas |
+| [API Reference](docs/api-reference.md) | All endpoints with request/response schemas (counts generated — see docs/api-topology.json) |
 | [Getting Started](docs/getting-started.md) | Setup guide and first steps |
 | [Operations Runbook](docs/operations/runbook.md) | Deployment, monitoring, incident response |
 | [Ecosystem Architecture](docs/ecosystem-architecture.md) | Cross-repo integration map |
