@@ -6,10 +6,17 @@ on:
     paths:
       - 'app/**'
       - '.github/workflows/ci.yml'
+      # Docs/protocol/topology parity is enforced by tests — docs-only
+      # drift must not bypass CI (README/api-reference/api-topology/
+      # protocol-compatibility are asserted against the code).
+      - 'README.md'
+      - 'docs/**'
   push:
     branches: [main]
     paths:
       - 'app/**'
+      - 'README.md'
+      - 'docs/**'
   workflow_dispatch:
 
 jobs:
@@ -32,15 +39,19 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
+      # Provenance runs BEFORE any dependency is fetched: a malicious/moved
+      # GitHub ref must be rejected before install-time lifecycle scripts can
+      # execute. The checker is a zero-dependency Node script, so it needs no
+      # node_modules.
+      - name: Dependency provenance (full-SHA pins, package.json + lockfile)
+        working-directory: app
+        run: node scripts/check-dependency-provenance.mjs
+
       - name: Install dependencies
         working-directory: app
         run: npm ci
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Dependency provenance (full-SHA pins for github: refs)
-        working-directory: app
-        run: npm run check:dependency-provenance
 
       - name: Typecheck
         working-directory: app
