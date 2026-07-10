@@ -1,0 +1,423 @@
+{
+  "$comment": "GENERATED from live route registration — do not edit by hand. Regenerate: cd app && npm run topology:generate. Parity: tests/unit/route-topology-parity.test.ts.",
+  "counts": {
+    "modules_active": 16,
+    "modules_planned": 1,
+    "endpoints_active": 43,
+    "endpoints_planned": 6,
+    "endpoints_total": 49,
+    "middleware_registrations": 18
+  },
+  "modules": [
+    {
+      "module": "admin",
+      "mount": "/api/admin",
+      "status": "active",
+      "endpoint_count": 3,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/admin/allowlist"
+        },
+        {
+          "method": "POST",
+          "path": "/api/admin/allowlist"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/admin/allowlist/:entry"
+        }
+      ]
+    },
+    {
+      "module": "agent",
+      "mount": "/api/agent",
+      "status": "active",
+      "endpoint_count": 7,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/agent/capabilities"
+        },
+        {
+          "method": "GET",
+          "path": "/api/agent/knowledge"
+        },
+        {
+          "method": "GET",
+          "path": "/api/agent/knowledge/priorities"
+        },
+        {
+          "method": "POST",
+          "path": "/api/agent/knowledge/priorities/vote"
+        },
+        {
+          "method": "POST",
+          "path": "/api/agent/query"
+        },
+        {
+          "method": "POST",
+          "path": "/api/agent/schedule"
+        },
+        {
+          "method": "GET",
+          "path": "/api/agent/self-knowledge"
+        }
+      ]
+    },
+    {
+      "module": "auth",
+      "mount": "/api/auth",
+      "status": "active",
+      "endpoint_count": 3,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/auth/.well-known/jwks.json"
+        },
+        {
+          "method": "POST",
+          "path": "/api/auth/siwe"
+        },
+        {
+          "method": "GET",
+          "path": "/api/auth/verify"
+        }
+      ]
+    },
+    {
+      "module": "autonomous",
+      "mount": "/api/autonomous",
+      "status": "active",
+      "endpoint_count": 4,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/autonomous/:nftId/audit"
+        },
+        {
+          "method": "GET",
+          "path": "/api/autonomous/:nftId/permissions"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/autonomous/:nftId/permissions"
+        },
+        {
+          "method": "GET",
+          "path": "/api/autonomous/:nftId/summary"
+        }
+      ]
+    },
+    {
+      "module": "chat",
+      "mount": "/api/chat",
+      "status": "active",
+      "endpoint_count": 1,
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/chat"
+        }
+      ]
+    },
+    {
+      "module": "enrich",
+      "mount": "/api/enrich",
+      "status": "active",
+      "endpoint_count": 1,
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/enrich/review-context"
+        }
+      ]
+    },
+    {
+      "module": "health",
+      "mount": "/api/health",
+      "status": "active",
+      "endpoint_count": 2,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/health"
+        },
+        {
+          "method": "GET",
+          "path": "/api/health/governance"
+        }
+      ]
+    },
+    {
+      "module": "identity",
+      "mount": "/api/identity",
+      "status": "active",
+      "endpoint_count": 1,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/identity/oracle"
+        }
+      ]
+    },
+    {
+      "module": "learning",
+      "mount": "/api/learning",
+      "status": "active",
+      "endpoint_count": 2,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/learning/:nftId/gaps"
+        },
+        {
+          "method": "GET",
+          "path": "/api/learning/:nftId/insights"
+        }
+      ]
+    },
+    {
+      "module": "memory",
+      "mount": "/api/memory",
+      "status": "active",
+      "endpoint_count": 4,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/memory/:nftId"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/memory/:nftId/:conversationId"
+        },
+        {
+          "method": "GET",
+          "path": "/api/memory/:nftId/history"
+        },
+        {
+          "method": "POST",
+          "path": "/api/memory/:nftId/seal"
+        }
+      ]
+    },
+    {
+      "module": "personality",
+      "mount": "/api/personality",
+      "status": "active",
+      "endpoint_count": 2,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/personality/:nftId"
+        },
+        {
+          "method": "GET",
+          "path": "/api/personality/:nftId/evolution"
+        }
+      ]
+    },
+    {
+      "module": "reputation",
+      "mount": "/api/reputation",
+      "status": "active",
+      "endpoint_count": 4,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/reputation/:nftId"
+        },
+        {
+          "method": "GET",
+          "path": "/api/reputation/:nftId/cohorts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/reputation/population"
+        },
+        {
+          "method": "GET",
+          "path": "/api/reputation/query"
+        }
+      ]
+    },
+    {
+      "module": "root",
+      "mount": "/",
+      "status": "active",
+      "endpoint_count": 1,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/"
+        }
+      ]
+    },
+    {
+      "module": "schedule",
+      "mount": "/api/schedule",
+      "status": "active",
+      "endpoint_count": 5,
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/schedule"
+        },
+        {
+          "method": "GET",
+          "path": "/api/schedule/:nftId"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/schedule/:scheduleId"
+        },
+        {
+          "method": "GET",
+          "path": "/api/schedule/:scheduleId/history"
+        },
+        {
+          "method": "POST",
+          "path": "/api/schedule/callback"
+        }
+      ]
+    },
+    {
+      "module": "sessions",
+      "mount": "/api/sessions",
+      "status": "active",
+      "endpoint_count": 2,
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/sessions"
+        },
+        {
+          "method": "GET",
+          "path": "/api/sessions/:id"
+        }
+      ]
+    },
+    {
+      "module": "ws-ticket",
+      "mount": "/api/ws/ticket",
+      "status": "active",
+      "endpoint_count": 1,
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/ws/ticket"
+        }
+      ]
+    },
+    {
+      "module": "fleet",
+      "mount": "/api/fleet",
+      "status": "planned",
+      "endpoint_count": 6,
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/fleet/spawn"
+        },
+        {
+          "method": "GET",
+          "path": "/api/fleet/status"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/fleet/tasks/:id"
+        },
+        {
+          "method": "GET",
+          "path": "/api/fleet/tasks/:id"
+        },
+        {
+          "method": "GET",
+          "path": "/api/fleet/tasks/:id/logs"
+        },
+        {
+          "method": "POST",
+          "path": "/api/fleet/tasks/:id/stop"
+        }
+      ]
+    }
+  ],
+  "middleware": [
+    {
+      "position": 1,
+      "path": "/*"
+    },
+    {
+      "position": 2,
+      "path": "/*"
+    },
+    {
+      "position": 3,
+      "path": "/*"
+    },
+    {
+      "position": 4,
+      "path": "/*"
+    },
+    {
+      "position": 5,
+      "path": "/api/*"
+    },
+    {
+      "position": 6,
+      "path": "/api/*"
+    },
+    {
+      "position": 7,
+      "path": "/*"
+    },
+    {
+      "position": 8,
+      "path": "/*"
+    },
+    {
+      "position": 9,
+      "path": "/api/*"
+    },
+    {
+      "position": 10,
+      "path": "/api/*"
+    },
+    {
+      "position": 11,
+      "path": "/api/*"
+    },
+    {
+      "position": 12,
+      "path": "/api/*"
+    },
+    {
+      "position": 13,
+      "path": "/api/*"
+    },
+    {
+      "position": 14,
+      "path": "/api/*"
+    },
+    {
+      "position": 15,
+      "path": "/api/*"
+    },
+    {
+      "position": 16,
+      "path": "/api/*"
+    },
+    {
+      "position": 17,
+      "path": "/api/admin/*"
+    },
+    {
+      "position": 18,
+      "path": "/api/agent/*"
+    }
+  ],
+  "conditional_modules": [
+    "/api/recall/intake (mounted only when DIXIE_RECALL_INTAKE_ENABLED)",
+    "/api/admission/intake (mounted only when the admission-wedge spike gates are enabled)"
+  ]
+}

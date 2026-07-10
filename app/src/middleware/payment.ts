@@ -1,4 +1,5 @@
 import { createMiddleware } from 'hono/factory';
+import { matchesRoutePrefix } from '../utils/route-prefix.js';
 
 // DECISION: x402 as the Conway-Ostrom bridge (economic plumbing under community governance)
 // See: grimoires/loa/context/adr-conway-positioning.md
@@ -17,15 +18,76 @@ export interface PaymentGateConfig {
   ) => Promise<boolean>;
 }
 
-/** Routes that are always free — everything else is protected (default-deny) */
-const FREE_PREFIXES = [
-  '/api/health', '/api/auth/', '/.well-known/', '/api/admin/',
-  '/api/reputation/', '/api/identity/',
+/** One payment-free prefix: why it is free, and which guards still apply. */
+export interface FreeRoutePolicyEntry {
+  /** Route prefix, matched at exact `/` boundaries after normalization. */
+  prefix: string;
+  /** Why this prefix is exempt from payment enforcement. */
+  reason: string;
+  /** Independent guards that still protect this prefix (payment-free ≠ unguarded). */
+  guards: readonly string[];
+}
+
+/**
+ * Payment-free route policy — the single inventory of payment exemptions.
+ *
+ * Everything NOT listed here is payment-protected (default-deny). Each entry
+ * documents why the exemption exists and which auth/abuse guards remain, so
+ * "payment-free" never silently becomes "capability-free". Adding a prefix
+ * here without corresponding coverage fails
+ * `tests/unit/middleware/free-route-auth-coverage.test.ts`.
+ *
+ * Position in the governance pipeline (ADR-001): the payment gate is
+ * position 12 — allowlist (community membership, position 11) has already
+ * run for every prefix except those in the allowlist's own skip list
+ * (health/auth/admin, which carry their own gates). Free-route policy is
+ * therefore a payment-layer exemption only; it never bypasses the earlier
+ * pipeline positions (rate limit, allowlist) or the routes' own guards.
+ *
+ * See: app/docs/payment-route-policy.md (behavior matrix + evidence).
+ */
+export const FREE_ROUTE_POLICY: readonly FreeRoutePolicyEntry[] = [
+  {
+    prefix: '/api/health',
+    reason: 'Liveness/readiness probes must work before payment negotiation.',
+    guards: ['rate limit', 'admin key on /api/health/governance'],
+  },
+  {
+    prefix: '/api/auth/',
+    reason: 'SIWE auth + JWKS must be reachable pre-payment to establish identity.',
+    guards: ['rate limit', 'SIWE signature verification'],
+  },
+  {
+    prefix: '/.well-known/',
+    reason: 'Public discovery metadata (e.g. JWKS) is free by design.',
+    guards: ['rate limit'],
+  },
+  {
+    prefix: '/api/admin/',
+    reason: 'Operator surface; billing operator actions is meaningless.',
+    guards: ['admin key (constant-time comparison)', 'rate limit'],
+  },
+  {
+    prefix: '/api/reputation/',
+    reason: 'Reputation query bridge consumed by loa-finn; gated by its own tiers.',
+    guards: ['allowlist (wallet/API key)', 'builder+ conviction tier', 'admin key on /population', 'rate limit'],
+  },
+  {
+    prefix: '/api/identity/',
+    reason: 'Identity read needed by clients before payment negotiation.',
+    guards: ['allowlist (wallet/API key)', 'JWT wallet extraction', 'rate limit'],
+  },
 ];
 
+/** Routes that are always free — everything else is protected (default-deny) */
+const FREE_PREFIXES = FREE_ROUTE_POLICY.map((entry) => entry.prefix);
+
 function isProtectedRoute(path: string): boolean {
-  // Default-deny: only routes in FREE_PREFIXES are exempt from payment
-  return !FREE_PREFIXES.some(prefix => path.startsWith(prefix));
+  // Default-deny: only routes in FREE_PREFIXES are exempt from payment.
+  // Matching normalizes the path and requires exact route boundaries, so
+  // near-prefix paths (e.g. /api/healthzzz) stay protected and malformed
+  // paths fail closed. See src/utils/route-prefix.ts.
+  return !matchesRoutePrefix(path, FREE_PREFIXES);
 }
 
 /**
