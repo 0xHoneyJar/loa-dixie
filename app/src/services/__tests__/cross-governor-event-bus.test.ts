@@ -12,6 +12,10 @@ import {
 } from '../cross-governor-event-bus.js';
 import type { FleetEvent, FleetEventType, FleetEventHandler } from '../cross-governor-event-bus.js';
 
+type EventBusLog = NonNullable<
+  NonNullable<ConstructorParameters<typeof CrossGovernorEventBus>[0]>['log']
+>;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -39,11 +43,11 @@ function createMockSignalEmitter(overrides: Partial<{ connected: boolean; publis
 
 describe('CrossGovernorEventBus', () => {
   let bus: CrossGovernorEventBus;
-  let mockLog: ReturnType<typeof vi.fn>;
+  let mockLog: EventBusLog;
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    mockLog = vi.fn();
+    mockLog = vi.fn<EventBusLog>();
     bus = new CrossGovernorEventBus({ log: mockLog });
   });
 

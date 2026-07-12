@@ -9,7 +9,7 @@
  *
  * @since cycle-012 — Sprint 88, Tasks T-3.5, T-3.6, T-3.7
  */
-import { describe, it, expect, vi, beforeEach, afterEach, type Mocked } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock, type Mocked } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mocks — node:child_process (same pattern as agent-spawner.test.ts)
@@ -65,15 +65,17 @@ import type { FleetTaskRecord, FleetTaskStatus } from '../../types/fleet.js';
 // ---------------------------------------------------------------------------
 
 /** Create a mock logger that captures all calls. */
-function createMockLogger(): MonitorLogger & {
-  info: ReturnType<typeof vi.fn>;
-  warn: ReturnType<typeof vi.fn>;
-  error: ReturnType<typeof vi.fn>;
-} {
+type MockLogger = {
+  info: Mock<MonitorLogger['info']>;
+  warn: Mock<MonitorLogger['warn']>;
+  error: Mock<MonitorLogger['error']>;
+};
+
+function createMockLogger(): MockLogger {
   return {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
+    info: vi.fn<MonitorLogger['info']>(),
+    warn: vi.fn<MonitorLogger['warn']>(),
+    error: vi.fn<MonitorLogger['error']>(),
   };
 }
 

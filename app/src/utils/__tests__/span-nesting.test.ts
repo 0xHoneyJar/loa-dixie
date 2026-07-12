@@ -12,14 +12,23 @@ import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { trace } from '@opentelemetry/api';
 
+function parentSpanId(span: object): string | undefined {
+  const compatibleSpan = span as {
+    parentSpanContext?: { spanId?: string };
+    parentSpanId?: string;
+  };
+  return compatibleSpan.parentSpanContext?.spanId ?? compatibleSpan.parentSpanId;
+}
+
 describe('span nesting', () => {
   let provider: NodeTracerProvider;
   let exporter: InMemorySpanExporter;
 
   beforeAll(() => {
     exporter = new InMemorySpanExporter();
-    provider = new NodeTracerProvider();
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+    provider = new NodeTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
     provider.register();
   });
 
@@ -57,10 +66,10 @@ describe('span nesting', () => {
     expect(authSpan!.spanContext().traceId).toBe(requestSpan!.spanContext().traceId);
 
     // Auth span's parent should be the request span
-    expect(authSpan!.parentSpanId).toBe(requestSpan!.spanContext().spanId);
+    expect(parentSpanId(authSpan!)).toBe(requestSpan!.spanContext().spanId);
 
     // Request span should have no parent (root span)
-    expect(requestSpan!.parentSpanId).toBeUndefined();
+    expect(parentSpanId(requestSpan!)).toBeUndefined();
   });
 
   it('three-level nesting forms correct chain', async () => {
@@ -89,9 +98,9 @@ describe('span nesting', () => {
     expect(inference.spanContext().traceId).toBe(traceId);
 
     // Parent chain: request ← auth ← inference
-    expect(request.parentSpanId).toBeUndefined();
-    expect(auth.parentSpanId).toBe(request.spanContext().spanId);
-    expect(inference.parentSpanId).toBe(auth.spanContext().spanId);
+    expect(parentSpanId(request)).toBeUndefined();
+    expect(parentSpanId(auth)).toBe(request.spanContext().spanId);
+    expect(parentSpanId(inference)).toBe(auth.spanContext().spanId);
   });
 
   it('span context IDs are valid W3C trace format', async () => {
