@@ -1,16 +1,10 @@
 name: CI
 
 on:
+  # CI is a required status check on main, so its context must be created for
+  # every pull request rather than being skipped by a path filter.
   pull_request:
     branches: [main]
-    paths:
-      - 'app/**'
-      - '.github/workflows/ci.yml'
-      # Docs/protocol/topology parity is enforced by tests — docs-only
-      # drift must not bypass CI (README/api-reference/api-topology/
-      # protocol-compatibility are asserted against the code).
-      - 'README.md'
-      - 'docs/**'
   push:
     branches: [main]
     paths:
