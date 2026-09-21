@@ -18,8 +18,9 @@ describe('span nesting', () => {
 
   beforeAll(() => {
     exporter = new InMemorySpanExporter();
-    provider = new NodeTracerProvider();
-    provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+    provider = new NodeTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
     provider.register();
   });
 
@@ -57,10 +58,10 @@ describe('span nesting', () => {
     expect(authSpan!.spanContext().traceId).toBe(requestSpan!.spanContext().traceId);
 
     // Auth span's parent should be the request span
-    expect(authSpan!.parentSpanId).toBe(requestSpan!.spanContext().spanId);
+    expect(authSpan!.parentSpanContext?.spanId).toBe(requestSpan!.spanContext().spanId);
 
     // Request span should have no parent (root span)
-    expect(requestSpan!.parentSpanId).toBeUndefined();
+    expect(requestSpan!.parentSpanContext).toBeUndefined();
   });
 
   it('three-level nesting forms correct chain', async () => {
@@ -89,9 +90,9 @@ describe('span nesting', () => {
     expect(inference.spanContext().traceId).toBe(traceId);
 
     // Parent chain: request ← auth ← inference
-    expect(request.parentSpanId).toBeUndefined();
-    expect(auth.parentSpanId).toBe(request.spanContext().spanId);
-    expect(inference.parentSpanId).toBe(auth.spanContext().spanId);
+    expect(request.parentSpanContext).toBeUndefined();
+    expect(auth.parentSpanContext?.spanId).toBe(request.spanContext().spanId);
+    expect(inference.parentSpanContext?.spanId).toBe(auth.spanContext().spanId);
   });
 
   it('span context IDs are valid W3C trace format', async () => {
