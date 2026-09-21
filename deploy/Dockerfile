@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:22-slim AS base
 WORKDIR /app
 ENV NODE_ENV=production
@@ -5,14 +6,18 @@ ENV NODE_ENV=production
 # --- Dependencies ---
 FROM base AS deps
 COPY app/package.json app/package-lock.json ./
-RUN npm ci --omit=dev
+RUN --mount=type=bind,source=app/.npmrc,target=/root/.npmrc \
+    --mount=type=secret,id=node_auth_token,env=NODE_AUTH_TOKEN,required=true \
+    npm ci --omit=dev
 
 # --- Build ---
 FROM base AS build
 COPY app/package.json app/package-lock.json ./
 # NODE_ENV=production (from base) causes npm to skip devDependencies.
 # Build needs @types/pg and other type declarations, so include dev deps here.
-RUN npm ci --include=dev
+RUN --mount=type=bind,source=app/.npmrc,target=/root/.npmrc \
+    --mount=type=secret,id=node_auth_token,env=NODE_AUTH_TOKEN,required=true \
+    npm ci --include=dev
 COPY app/tsconfig.json app/tsconfig.build.json ./
 COPY app/src/ ./src/
 RUN npx tsc -p tsconfig.build.json

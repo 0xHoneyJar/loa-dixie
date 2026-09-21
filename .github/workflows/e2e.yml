@@ -10,6 +10,7 @@ on:
       - 'app/**'
       - 'deploy/**'
       - 'tests/e2e/**'
+      - '.github/workflows/e2e.yml'
   workflow_dispatch:
 
 jobs:
@@ -43,7 +44,15 @@ jobs:
         working-directory: app
         run: npm run build
 
+      - name: Log in to GitHub Container Registry
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$NODE_AUTH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: Start staging compose
+        id: staging
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cp .env.example deploy/.env.staging
           # Override with CI-safe defaults
@@ -63,7 +72,7 @@ jobs:
             sleep 2
           done
           echo "Health check failed"
-          docker compose -f deploy/docker-compose.staging.yml logs dixie-bff --tail=50
+          docker compose -f deploy/docker-compose.staging.yml --env-file deploy/.env.staging logs dixie-bff --tail=50
           exit 1
         timeout-minutes: 3
 
@@ -72,19 +81,19 @@ jobs:
         run: npm run test:e2e
 
       - name: Collect logs on failure
-        if: failure()
+        if: failure() && (steps.staging.outcome == 'success' || steps.staging.outcome == 'failure')
         run: |
-          docker compose -f deploy/docker-compose.staging.yml logs --tail=100 > staging-logs.txt
+          docker compose -f deploy/docker-compose.staging.yml --env-file deploy/.env.staging logs --tail=100 > staging-logs.txt
           echo "=== Container Status ==="
-          docker compose -f deploy/docker-compose.staging.yml ps
+          docker compose -f deploy/docker-compose.staging.yml --env-file deploy/.env.staging ps
 
       - name: Upload logs on failure
-        if: failure()
+        if: failure() && (steps.staging.outcome == 'success' || steps.staging.outcome == 'failure')
         uses: actions/upload-artifact@v7
         with:
           name: staging-logs
           path: staging-logs.txt
 
       - name: Teardown
-        if: always()
-        run: docker compose -f deploy/docker-compose.staging.yml down -v
+        if: always() && (steps.staging.outcome == 'success' || steps.staging.outcome == 'failure')
+        run: docker compose -f deploy/docker-compose.staging.yml --env-file deploy/.env.staging down -v

@@ -1,22 +1,19 @@
 name: CI
 
 on:
+  # CI is a required status check on main, so its context must be created for
+  # every pull request rather than being skipped by a path filter.
   pull_request:
     branches: [main]
-    paths:
-      - 'app/**'
-      - '.github/workflows/ci.yml'
-      # Docs/protocol/topology parity is enforced by tests — docs-only
-      # drift must not bypass CI (README/api-reference/api-topology/
-      # protocol-compatibility are asserted against the code).
-      - 'README.md'
-      - 'docs/**'
   push:
     branches: [main]
     paths:
       - 'app/**'
       - 'README.md'
       - 'docs/**'
+      - 'deploy/**'
+      - '.dockerignore'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 jobs:
@@ -68,3 +65,21 @@ jobs:
       - name: Build
         working-directory: app
         run: npm run build
+
+      - name: Build production image
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          docker build -f deploy/Dockerfile
+          --secret id=node_auth_token,env=NODE_AUTH_TOKEN
+          -t dixie-ci .
+
+      - name: Smoke-test production image
+        run: |
+          docker run --rm --entrypoint node dixie-ci --input-type=module -e "
+            import { existsSync } from 'node:fs';
+            if (process.env.NODE_AUTH_TOKEN || existsSync('/root/.npmrc') || existsSync('/run/secrets/node_auth_token')) {
+              throw new Error('Build credentials must not be present in the runtime image');
+            }
+            await import('./dist/server.js');
+          "

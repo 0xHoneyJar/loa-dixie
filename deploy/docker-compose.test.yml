@@ -7,8 +7,10 @@ services:
   # Mock loa-finn — lightweight Hono server returning canned responses
   mock-finn:
     build:
-      context: ../app
-      dockerfile: ../deploy/Dockerfile
+      context: ..
+      dockerfile: deploy/Dockerfile
+      secrets:
+        - node_auth_token
     environment:
       PORT: "4000"
       FINN_URL: "http://localhost:4000"
@@ -39,8 +41,10 @@ services:
   # Dixie BFF — the service under test
   dixie-bff:
     build:
-      context: ../app
-      dockerfile: ../deploy/Dockerfile
+      context: ..
+      dockerfile: deploy/Dockerfile
+      secrets:
+        - node_auth_token
     environment:
       PORT: "3001"
       FINN_URL: "http://mock-finn:4000"
@@ -59,3 +63,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+secrets:
+  node_auth_token:
+    environment: NODE_AUTH_TOKEN
