@@ -25,6 +25,11 @@ updates:
           - "*"
     versioning-strategy: "increase"
     rebase-strategy: "auto"
+    # typescript-eslint 8.63 supports TypeScript <6.1. Revisit this bound
+    # when the parser and plugin support newer compiler versions.
+    ignore:
+      - dependency-name: "typescript"
+        versions: [">=6.1.0"]
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"

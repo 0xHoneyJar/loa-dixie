@@ -189,7 +189,8 @@ export class DefaultAgentSecretProvider implements AgentSecretProvider {
    */
   private scheduleCleanup(taskId: string): void {
     const delayMs = this.deps.cleanupDelayMs ?? 5000;
-    const timerFn = this.deps.setTimeout ?? globalThis.setTimeout;
+    const timerFn: NonNullable<SecretProviderDeps['setTimeout']> =
+      this.deps.setTimeout ?? globalThis.setTimeout;
 
     const timer = timerFn(() => {
       this.pendingCleanups.delete(taskId);
