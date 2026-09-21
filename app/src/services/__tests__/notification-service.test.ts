@@ -6,7 +6,7 @@
  *
  * @since cycle-012 — Sprint 92, Task T-7.7
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import {
   NotificationService,
 } from '../notification-service.js';
@@ -14,7 +14,11 @@ import type {
   FleetNotificationConfig,
   NotificationPayload,
   DeliveryResult,
+  NotificationServiceOptions,
 } from '../notification-service.js';
+
+type NotificationLog = NonNullable<NotificationServiceOptions['log']>;
+type NotificationLogMock = Mock<NotificationLog>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,14 +68,14 @@ function createMockFetch(response?: Partial<Response>) {
 function createService(opts: {
   pool?: ReturnType<typeof createMockPool>;
   fetch?: ReturnType<typeof createMockFetch>;
-  log?: ReturnType<typeof vi.fn>;
+  log?: NotificationLogMock;
   maxRetries?: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
 } = {}) {
   const pool = opts.pool ?? createMockPool();
   const mockFetch = opts.fetch ?? createMockFetch();
-  const log = opts.log ?? vi.fn();
+  const log: NotificationLogMock = opts.log ?? vi.fn<NotificationLog>();
 
   const service = new NotificationService({
     pool: pool as unknown as import('../../db/client.js').DbPool,
