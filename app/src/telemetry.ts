@@ -1,6 +1,6 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
-import { Resource } from '@opentelemetry/resources';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
 
@@ -12,10 +12,8 @@ export function initTelemetry(endpoint: string | null): NodeSDK | null {
   if (!endpoint) return null;
 
   const sdk = new NodeSDK({
-    resource: new Resource({ [ATTR_SERVICE_NAME]: 'dixie-bff' }),
-    spanProcessor: new BatchSpanProcessor(
-      new OTLPTraceExporter({ url: endpoint }),
-    ),
+    resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: 'dixie-bff' }),
+    spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter({ url: endpoint }))],
   });
   sdk.start();
   return sdk;
