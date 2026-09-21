@@ -7,6 +7,7 @@ name: Build & Push to ECR (Staging)
 
 permissions:
   contents: read
+  packages: read
   id-token: write
 
 on:
@@ -15,6 +16,7 @@ on:
     paths:
       - 'app/**'
       - 'deploy/Dockerfile'
+      - '.github/workflows/deploy-staging.yml'
   workflow_dispatch:
     inputs:
       image_tag:
@@ -69,9 +71,11 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ steps.resolve-tag.outputs.tag }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           docker build \
             -f deploy/Dockerfile \
+            --secret id=node_auth_token,env=NODE_AUTH_TOKEN \
             --label "git.sha=${{ github.sha }}" \
             --label "git.ref=${{ github.ref }}" \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \

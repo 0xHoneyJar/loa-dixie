@@ -89,8 +89,10 @@ services:
   # --- Dixie BFF (the service under test) ---
   dixie-bff:
     build:
-      context: ../app
-      dockerfile: ../deploy/Dockerfile
+      context: ..
+      dockerfile: deploy/Dockerfile
+      secrets:
+        - node_auth_token
     ports:
       - "3201:3001"
     environment:
@@ -127,3 +129,7 @@ services:
 volumes:
   knowledge-shared:
   dixie-data:
+
+secrets:
+  node_auth_token:
+    environment: NODE_AUTH_TOKEN
